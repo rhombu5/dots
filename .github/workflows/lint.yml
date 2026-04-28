@@ -1,0 +1,35 @@
+name: lint
+
+# Static checks against the chezmoi source tree. Catches Hyprland
+# binding conflicts (duplicate MOD+KEY, unknown dispatchers, malformed
+# bindd descriptions) before they reach a fresh apply.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate-hypr-binds:
+    name: validate-hypr-binds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run validator
+        run: |
+          chmod +x dot_local/bin/executable_validate-hypr-binds
+          HYPR_DIR=dot_config/hypr \
+            bash dot_local/bin/executable_validate-hypr-binds
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@master
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2034 -e SC2154
+        with:
+          severity: warning
+          scandir: '.'

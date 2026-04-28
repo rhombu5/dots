@@ -1,0 +1,13 @@
+# chezmoi state lives outside the source tree (~/.config/chezmoi/),
+# but a stray init can drop a config in-tree — ignore it.
+/chezmoi.toml
+/chezmoi.yaml
+
+# Editor / OS noise
+/.vscode/
+/.idea/
+.DS_Store
+Thumbs.db
+
+# Crash artifacts
+*.stackdump
