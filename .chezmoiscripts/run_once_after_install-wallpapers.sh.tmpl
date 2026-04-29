@@ -1,41 +1,59 @@
 #!/usr/bin/env bash
 # chezmoi run-once hook — populate ~/Pictures/Wallpapers/ from the user's
-# callisto repo on first apply. After the first successful run, chezmoi
-# tracks this script's hash; only re-runs if THIS script changes.
+# callisto repo on first apply. After the first SUCCESSFUL run, chezmoi
+# tracks this script's hash; only re-runs if the script's content changes.
+# A non-zero exit makes chezmoi retry on the next apply, which is what we
+# want for transient network failures.
 #
 # Source: https://github.com/fnrhombus/callisto/tree/main/static/wallpaper/linux
 # (top-level only; subfolders intentionally skipped per user direction.)
+#
+# Prior implementation used the GitHub anonymous REST API and kept hitting
+# the 60-req/h IP-based rate limit, which crashed the python parser. Shallow
+# + sparse clone bypasses that — git's smart-HTTP transport isn't subject
+# to the same quota as the REST API.
 
 set -euo pipefail
 
 dest="$HOME/Pictures/Wallpapers"
 mkdir -p "$dest"
 
-# If the dest dir already has wallpapers (user dropped some manually),
-# don't clobber. Just ensure at least the base set is present.
-api='https://api.github.com/repos/fnrhombus/callisto/contents/static/wallpaper/linux'
+tmp=$(mktemp -d -t callisto-XXXXXX)
+trap 'rm -rf "$tmp"' EXIT
 
-echo "wallpapers: fetching list from callisto repo..."
-mapfile -t files < <(curl -fsSL "$api" \
-    | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(e["download_url"]) for e in d if e["type"]=="file"]')
+if ! git clone --depth 1 --filter=blob:none --no-checkout \
+        https://github.com/fnrhombus/callisto.git "$tmp" >/dev/null 2>&1; then
+    echo "wallpapers: callisto clone failed — chezmoi will retry on next apply" >&2
+    exit 1
+fi
+git -C "$tmp" sparse-checkout init --cone >/dev/null
+git -C "$tmp" sparse-checkout set static/wallpaper/linux >/dev/null
+git -C "$tmp" checkout >/dev/null 2>&1
 
-if [[ "${#files[@]}" -eq 0 ]]; then
-    echo "wallpapers: no files returned from callisto API; skipping" >&2
-    exit 0
+src="$tmp/static/wallpaper/linux"
+if [[ ! -d "$src" ]]; then
+    echo "wallpapers: $src missing in callisto checkout" >&2
+    exit 1
 fi
 
-for url in "${files[@]}"; do
-    name=$(basename "$url")
+shopt -s nullglob nocaseglob
+for f in "$src"/*.{jpg,jpeg,png,webp}; do
+    name=$(basename "$f")
     target="$dest/$name"
     if [[ -f "$target" ]]; then
         echo "wallpapers: skip (exists) $name"
         continue
     fi
-    echo "wallpapers: fetching $name"
-    if ! curl -fsSL --output "$target" "$url"; then
-        echo "wallpapers: failed to fetch $url" >&2
-        rm -f "$target"
-    fi
+    echo "wallpapers: copying $name"
+    cp -- "$f" "$target"
 done
 
-echo "wallpapers: done — $(ls -1 "$dest" | wc -l) files in $dest"
+# Force retry-on-next-apply if the dest is still empty after the copy.
+# (Either callisto's wallpaper dir was empty, or every glob was a miss
+# due to a case nuance, or nothing matched the extension list — in any
+# of those, we'd rather have chezmoi retry than silently leave matugen
+# with nothing to seed from.)
+if ! compgen -G "$dest"/* >/dev/null; then
+    echo "wallpapers: dest still empty after copy — failing for retry" >&2
+    exit 1
+fi

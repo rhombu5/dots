@@ -1,0 +1,32 @@
+# Ghostty theme — STATIC FALLBACK used when matugen has never rendered.
+# matugen overwrites this file on first wallpaper-rotate; chezmoi's
+# `create_` prefix keeps the matugen output in place after that.
+#
+# Same VS Code Default Dark+ palette as the matugen template, with
+# cursor + selection accents pinned to a neutral Material You purple
+# (#6750A4 family) instead of being wallpaper-derived.
+
+palette = 0=#000000
+palette = 1=#cd3131
+palette = 2=#0dbc79
+palette = 3=#e5e510
+palette = 4=#2472c8
+palette = 5=#bc3fbc
+palette = 6=#11a8cd
+palette = 7=#e5e5e5
+palette = 8=#666666
+palette = 9=#f14c4c
+palette = 10=#23d18b
+palette = 11=#f5f543
+palette = 12=#3b8eea
+palette = 13=#d670d6
+palette = 14=#29b8db
+palette = 15=#e5e5e5
+
+background = #1e1e1e
+foreground = #d4d4d4
+
+cursor-color = #6750a4
+cursor-text = #ffffff
+selection-background = #4f378b
+selection-foreground = #eaddff
