@@ -31,7 +31,11 @@ if [[ -t 0 ]] && command -v gh &>/dev/null && gh auth status &>/dev/null \
 GITEOF
       fi
       _tmp=$(mktemp); printf '%s\n' "$_pubkey" > "$_tmp"
-      gh ssh-key add "$_tmp" --title "$(hostname) - arch" --type authentication 2>/dev/null || true
+      # $HOST is a zsh built-in; fall back to /etc/hostname or "arch" if for
+      # some reason it's not set. Avoids a hard dep on inetutils' `hostname`
+      # binary (which arch-setup §1 installs but isn't guaranteed everywhere).
+      _hn="${HOST:-$(cat /etc/hostname 2>/dev/null || echo arch)}"
+      gh ssh-key add "$_tmp" --title "${_hn} - arch" --type authentication 2>/dev/null || true
       gh ssh-key add "$_tmp" --type signing 2>/dev/null || true
       rm -f "$_tmp"
       echo "arch: wired SSH signing with pubkey from Bitwarden SSH agent."
