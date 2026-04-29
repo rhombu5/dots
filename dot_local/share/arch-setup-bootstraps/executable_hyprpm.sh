@@ -1,5 +1,6 @@
+#!/usr/bin/env zsh
 # Bootstraps hyprexpo + hyprgrass on first Hyprland-session shell.
-# Sourced by ~/.zshrc's `for f in ~/.zshrc.d/*(N); do source "$f"; done` loop.
+# Self-deletes once both plugins are listed.
 #
 # WHY THE MARKER:
 # `hyprpm update` and `hyprpm add` both invoke sudo internally (rebuild
@@ -12,15 +13,9 @@
 #
 # Marker lives in $XDG_RUNTIME_DIR (auto-wiped on logout). Effect:
 #   - At most one hyprpm install attempt per Hyprland session.
-#   - On success, subsequent shells in the same session skip the install
-#     block; just re-source the post-plugins configs (cheap, no sudo).
+#   - On full success, the script self-deletes — no future runs.
 #   - On failure, the rest of the session no-ops; next login gets one
 #     more attempt.
-#
-# This file is chezmoi-managed (rhombu5/dots/dot_zshrc.d/) and is
-# idempotent — does not self-delete, so `chezmoi apply` re-applying it
-# is a no-op.
-
 if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || ! command -v hyprpm >/dev/null; then
     return 0
 fi
@@ -31,21 +26,17 @@ hyprpm list 2>/dev/null | grep -q hyprexpo  && _have_hyprexpo=1
 hyprpm list 2>/dev/null | grep -q hyprgrass && _have_hyprgrass=1
 
 if (( _have_hyprexpo && _have_hyprgrass )); then
-    # Both plugins built. Source post-plugins.d configs once per session
-    # (hyprctl is cheap IPC, but no point doing it every shell).
-    _src_marker="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/arch-hyprpm-sourced"
-    if [[ ! -e "$_src_marker" ]]; then
-        mkdir -p "${_src_marker%/*}" 2>/dev/null
-        : > "$_src_marker"
-        for _plug in hyprexpo hyprgrass; do
-            if [[ -f "$HOME/.config/hypr/post-plugins.d/$_plug.conf" ]]; then
-                hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/$_plug.conf" >/dev/null 2>&1 || true
-            fi
-        done
-    fi
-    unset _src_marker _plug
+    # Both plugins built. Source post-plugins.d once per session, then
+    # self-delete so future shells skip the file entirely.
+    for _plug in hyprexpo hyprgrass; do
+        if [[ -f "$HOME/.config/hypr/post-plugins.d/$_plug.conf" ]]; then
+            hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/$_plug.conf" >/dev/null 2>&1 || true
+        fi
+    done
+    rm -f ~/.local/share/arch-setup-bootstraps/hyprpm.sh
+    unset _plug
 else
-    # At least one plugin missing — try to install. Marker prevents the rest
+    # At least one plugin missing — try install. Marker prevents the rest
     # of the session's shells from re-attempting and re-PIN-prompting.
     _marker="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/arch-hyprpm-bootstrap.attempted"
     if [[ ! -e "$_marker" ]]; then
@@ -66,8 +57,14 @@ else
                 hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/$_plug.conf" >/dev/null 2>&1 || true
             fi
         done
+        # Self-delete only if BOTH plugins ended up loaded.
+        if hyprpm list 2>/dev/null | grep -q hyprexpo \
+           && hyprpm list 2>/dev/null | grep -q hyprgrass; then
+            rm -f ~/.local/share/arch-setup-bootstraps/hyprpm.sh
+        fi
+        unset _plug
     fi
-    unset _marker _plug
+    unset _marker
 fi
 
 unset _have_hyprexpo _have_hyprgrass
