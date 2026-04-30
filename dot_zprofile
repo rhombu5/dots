@@ -12,6 +12,17 @@
 #   - WAYLAND_DISPLAY/DISPLAY must be unset (we're outside any session).
 #
 # Manual override: log into tty2-6 (Ctrl+Alt+F2..F6) and just run zsh.
+#
+# We use `uwsm start hyprland-uwsm.desktop` rather than bare `exec Hyprland`
+# so systemd properly manages the graphical-session.target lifecycle (env
+# import, dependent units' activation, clean shutdown on logout). Hyprland
+# itself prints "highly discouraged unless debugging" if launched without
+# uwsm. Falls back to bare exec if uwsm isn't installed (e.g. before the
+# next postinstall run that adds it to §1's pacman list).
 if [[ "$(tty)" == /dev/tty1 && -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
-    exec Hyprland
+    if command -v uwsm >/dev/null && [[ -f /usr/share/wayland-sessions/hyprland-uwsm.desktop ]]; then
+        exec uwsm start hyprland-uwsm.desktop
+    else
+        exec Hyprland
+    fi
 fi
