@@ -29,7 +29,6 @@ fi
 # HEAD crashes Hyprland 0.54.3 in onKeyPress).
 plugins=(
     "hyprgrass:hyprgrass"
-    "hyprscrolling:hyprscrolling"
 )
 
 for entry in "${plugins[@]}"; do

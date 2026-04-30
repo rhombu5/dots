@@ -1,15 +1,11 @@
 #!/bin/sh
-# hypr-layout-toggle — cycle between dwindle and scrolling (hyprwm/hyprscrolling).
+# hypr-layout-toggle — cycle between dwindle and scrolling.
 #
 # Bound to Super+Alt+S in binds.conf.
 #
-# Asks Hyprland for the current layout, flips to the other one. The
-# hyprscrolling plugin must be enabled (`hyprpm enable hyprscrolling`);
-# if it isn't, the keyword call to set layout=scrolling errors loudly.
-#
-# Replaces the abandoned dawsers/hyprscroller wiring (last commit 2024,
-# only supports Hyprland up to 0.48.1). hyprwm/hyprscrolling is the
-# official replacement, actively maintained, supports 0.54.x.
+# Hyprland 0.54+ ships scrolling as a CORE layout (no plugin needed).
+# The keyword call below is just a config-time keyword update — works
+# instantly, no reload required.
 
 set -e
 
@@ -23,6 +19,6 @@ esac
 if hyprctl keyword general:layout "$target" >/dev/null 2>&1; then
     notify-send -t 1500 "Hyprland layout" "→ $target" 2>/dev/null || true
 else
-    notify-send -u critical -t 3000 "Hyprland layout" "Failed to set layout=$target. Is the hyprscrolling plugin enabled? Try: hyprpm enable hyprscrolling" 2>/dev/null || true
+    notify-send -u critical -t 3000 "Hyprland layout" "Failed to set layout=$target." 2>/dev/null || true
     exit 1
 fi
