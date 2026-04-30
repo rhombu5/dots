@@ -110,10 +110,19 @@ format_bind() {
     printf '[%-13s] %-40s   %s\n' "$category" "$rhs" "$combo"
 }
 
-hyprctl binds -j 2>/dev/null \
-  | jq -r '.[] | [.modmask, .key, (.description // ""), .dispatcher, (.arg // "")] | @tsv' \
-  | while IFS=$'\t' read -r modmask key description dispatcher arg; do
-        format_bind "$modmask" "$key" "$description" "$dispatcher" "$arg"
-    done \
-  | sort \
-  | fuzzel --dmenu --width 100 --lines 20 --prompt "Hyprland binds: " >/dev/null
+# First entry is a pinned reminder of where the binds live, so anyone
+# poking around the cheatsheet has a one-key path to "open the file
+# and edit." No GUI keybind editor exists for Hyprland — the source
+# of truth is the conf file. Selecting it dismisses (we don't auto-
+# launch an editor; the user might prefer code/helix/$EDITOR).
+{
+    printf '[%-13s] %-40s   %s\n' "Source" "~/.config/hypr/binds.conf  (edit to add/remove)" "—"
+    printf '[%-13s] %-40s   %s\n' "Source" "$ chezmoi edit ~/.config/hypr/binds.conf" "—"
+
+    hyprctl binds -j 2>/dev/null \
+      | jq -r '.[] | [.modmask, .key, (.description // ""), .dispatcher, (.arg // "")] | @tsv' \
+      | while IFS=$'\t' read -r modmask key description dispatcher arg; do
+            format_bind "$modmask" "$key" "$description" "$dispatcher" "$arg"
+        done \
+      | sort
+} | fuzzel --dmenu --width 100 --lines 20 --prompt "Hyprland binds: " >/dev/null
