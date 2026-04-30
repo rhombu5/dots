@@ -1,0 +1,24 @@
+#!/bin/sh
+# hypr-layout-toggle — cycle between dwindle and scroller (hyprscroller).
+#
+# Bound to Super+Alt+S in binds.conf.
+#
+# Asks Hyprland for the current layout, flips to the other one. The
+# scroller plugin must be enabled (hyprpm enable scroller); if it isn't,
+# the keyword call to set layout=scroller errors loudly.
+
+set -e
+
+current=$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // "dwindle"')
+
+case "$current" in
+    scroller) target=dwindle ;;
+    *)        target=scroller ;;
+esac
+
+if hyprctl keyword general:layout "$target" >/dev/null 2>&1; then
+    notify-send -t 1500 "Hyprland layout" "→ $target" 2>/dev/null || true
+else
+    notify-send -u critical -t 3000 "Hyprland layout" "Failed to set layout=$target. Is the scroller plugin enabled? Try: hyprpm enable scroller" 2>/dev/null || true
+    exit 1
+fi
