@@ -44,8 +44,8 @@ import time
 SENSOR_NAME = "hinge"
 HINGE_LABEL = "hinge"
 
-UPPER_DEG = 200          # cross above this → enter tablet mode
-LOWER_DEG = 160          # cross below this → exit to laptop mode
+UPPER_DEG = 190          # cross above this → enter tablet mode (±10° around 180°)
+LOWER_DEG = 170          # cross below this → exit to laptop mode
 POLL_S = 0.10            # 10 Hz, matches in_angl_sampling_frequency
 REDISCOVER_S = 5         # if the IIO path goes away (suspend/resume),
                          # rescan after this long
