@@ -5,5 +5,5 @@
 # scroller (hyprscroller plugin). Counterpart to if-tilemode — see
 # that file for design notes.
 
-[ "$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // empty')" = "scroller" ] || exit 0
+[ "$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // empty')" = "scrolling" ] || exit 0
 exec hyprctl dispatch "$@"
