@@ -80,7 +80,7 @@ known_dispatchers=(
     # dwindle-layout dispatchers (Dwindle-Layout.md)
     togglesplit splitratio pseudo layoutmsg
     # plugin dispatchers
-    hyprexpo:expo
+    overview:toggle overview:open overview:close
 )
 
 is_known() {

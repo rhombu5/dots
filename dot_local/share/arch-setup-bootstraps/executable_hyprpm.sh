@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Bootstraps hyprexpo + hyprgrass on first Hyprland-session shell.
+# Bootstraps Hyprspace + hyprgrass on first Hyprland-session shell.
 # Self-deletes once both plugins are listed.
 #
 # WHY THE MARKER:
@@ -20,15 +20,17 @@ if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || ! command -v hyprpm >/dev/null
     return 0
 fi
 
-_have_hyprexpo=0
+# Hyprspace upstream uses a capital H; grep case-insensitively so we
+# match whatever case `hyprpm list` actually prints.
+_have_hyprspace=0
 _have_hyprgrass=0
-hyprpm list 2>/dev/null | grep -q hyprexpo  && _have_hyprexpo=1
-hyprpm list 2>/dev/null | grep -q hyprgrass && _have_hyprgrass=1
+hyprpm list 2>/dev/null | grep -qi hyprspace && _have_hyprspace=1
+hyprpm list 2>/dev/null | grep -q  hyprgrass && _have_hyprgrass=1
 
-if (( _have_hyprexpo && _have_hyprgrass )); then
+if (( _have_hyprspace && _have_hyprgrass )); then
     # Both plugins built. Source post-plugins.d once per session, then
     # self-delete so future shells skip the file entirely.
-    for _plug in hyprexpo hyprgrass; do
+    for _plug in hyprspace hyprgrass; do
         if [[ -f "$HOME/.config/hypr/post-plugins.d/$_plug.conf" ]]; then
             hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/$_plug.conf" >/dev/null 2>&1 || true
         fi
@@ -43,23 +45,23 @@ else
         mkdir -p "${_marker%/*}" 2>/dev/null
         : > "$_marker"
         hyprpm update >/dev/null 2>&1 || true
-        if (( ! _have_hyprexpo )); then
-            hyprpm add https://github.com/hyprwm/hyprland-plugins 2>/dev/null \
-                && hyprpm enable hyprexpo 2>/dev/null
+        if (( ! _have_hyprspace )); then
+            hyprpm add https://github.com/KZDKM/Hyprspace 2>/dev/null \
+                && hyprpm enable Hyprspace 2>/dev/null
         fi
         if (( ! _have_hyprgrass )); then
             hyprpm add https://github.com/horriblename/hyprgrass 2>/dev/null \
                 && hyprpm enable hyprgrass 2>/dev/null
         fi
-        for _plug in hyprexpo hyprgrass; do
-            if hyprpm list 2>/dev/null | grep -q "$_plug" \
+        for _plug in hyprspace hyprgrass; do
+            if hyprpm list 2>/dev/null | grep -qi "$_plug" \
                && [[ -f "$HOME/.config/hypr/post-plugins.d/$_plug.conf" ]]; then
                 hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/$_plug.conf" >/dev/null 2>&1 || true
             fi
         done
         # Self-delete only if BOTH plugins ended up loaded.
-        if hyprpm list 2>/dev/null | grep -q hyprexpo \
-           && hyprpm list 2>/dev/null | grep -q hyprgrass; then
+        if hyprpm list 2>/dev/null | grep -qi hyprspace \
+           && hyprpm list 2>/dev/null | grep -q  hyprgrass; then
             rm -f ~/.local/share/arch-setup-bootstraps/hyprpm.sh
         fi
         unset _plug
@@ -67,4 +69,4 @@ else
     unset _marker
 fi
 
-unset _have_hyprexpo _have_hyprgrass
+unset _have_hyprspace _have_hyprgrass
