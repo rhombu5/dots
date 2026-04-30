@@ -50,7 +50,9 @@ declare -a issues=()
 #
 # Removed since prior list (no longer real dispatchers in current wiki):
 #   fakefullscreen (→ fullscreenstate), setcursor, pinwindow (→ pin),
-#   workspaceopt, reload (the latter is a hyprctl keyword, not a dispatcher).
+#   workspaceopt, reload (the latter is a hyprctl keyword, not a dispatcher),
+#   togglesplit + swapsplit (→ `layoutmsg, togglesplit` / `layoutmsg, swapsplit`;
+#   bare forms now silently no-op with stderr "removed - use layoutmsg").
 known_dispatchers=(
     # exec / passes / signals
     exec execr pass sendshortcut sendkeystate signal signalwindow
@@ -78,7 +80,7 @@ known_dispatchers=(
     dpms forceidle setprop tagwindow toggleswallow
     submap event global forcerendererreload exit
     # dwindle-layout dispatchers (Dwindle-Layout.md)
-    togglesplit splitratio pseudo layoutmsg
+    splitratio pseudo layoutmsg
     # plugin dispatchers
     overview:toggle overview:open overview:close
 )
