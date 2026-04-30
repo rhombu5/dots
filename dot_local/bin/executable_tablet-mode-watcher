@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""
+tablet-mode-watcher — poll the hinge angle on the Inspiron 7786 (or
+any laptop with a `hinge` IIO sensor) and call
+~/.local/bin/tablet-mode-toggle when the angle crosses 180° in either
+direction.
+
+Why an angle daemon and not a SW_TABLET_MODE udev rule:
+  - The kernel does not emit udev events for EV_SW value changes on
+    an existing input device — udev only sees device add/remove. So
+    no udev rule keying on ENV{SW_TABLET_MODE} can fire on transitions.
+  - The firmware-set SW_TABLET_MODE threshold on the 7786 is around
+    360° (full-fold), not 180°. To get 180° behaviour we need to
+    read the hinge angle directly.
+  See arch-setup/docs/tablet-mode-investigation.md for the full trace
+  (kernel logs, evtest, sysfs dump) that drove this design.
+
+Hardware notes (7786, captured 2026-04-30):
+  - The hid-sensor-hub driver creates an IIO device named "hinge"
+    (typically /sys/bus/iio/devices/iio:device8) with three labelled
+    angle channels:
+       in_angl0_raw → "hinge"    ← relative angle between halves; 0..360
+       in_angl1_raw → "screen"   ← screen-half tilt; not what we want
+       in_angl2_raw → "keyboard" ← keyboard-half tilt; not what we want
+  - Reading any single _raw attribute round-robins through internal
+    state — only one channel returns a fresh value per sample period;
+    the other two return 0. So a 0 read is "no fresh sample"; ignore
+    it and keep the last real value.
+  - in_angl_sampling_frequency is 10 Hz on this hardware. We poll
+    just slightly faster (POLL_S = 0.1 s) so we don't miss transitions
+    during a quick fold.
+
+Hysteresis (UPPER_DEG / LOWER_DEG) prevents flicker if the angle
+hovers right at 180° while the user adjusts the screen — once we've
+entered tablet mode, we don't fall back to laptop until the angle
+drops below LOWER_DEG, and vice versa.
+"""
+
+import os
+import subprocess
+import sys
+import time
+
+SENSOR_NAME = "hinge"
+HINGE_LABEL = "hinge"
+
+UPPER_DEG = 200          # cross above this → enter tablet mode
+LOWER_DEG = 160          # cross below this → exit to laptop mode
+POLL_S = 0.10            # 10 Hz, matches in_angl_sampling_frequency
+REDISCOVER_S = 5         # if the IIO path goes away (suspend/resume),
+                         # rescan after this long
+
+TOGGLE = os.path.expanduser("~/.local/bin/tablet-mode-toggle")
+IIO_BASE = "/sys/bus/iio/devices"
+
+
+def log(msg: str) -> None:
+    print(f"[tablet-mode-watcher] {msg}", file=sys.stderr, flush=True)
+
+
+def find_hinge_channel():
+    """Return (raw_path, scale_path) for the in_angl* channel labelled
+    "hinge", or (None, None) if no matching IIO device exists yet."""
+    try:
+        entries = sorted(os.listdir(IIO_BASE))
+    except FileNotFoundError:
+        return None, None
+    for entry in entries:
+        if not entry.startswith("iio:device"):
+            continue
+        dev = f"{IIO_BASE}/{entry}"
+        try:
+            with open(f"{dev}/name") as f:
+                name = f.read().strip()
+        except OSError:
+            continue
+        if name != SENSOR_NAME:
+            continue
+        # Scan in_angl{0,1,2}_label for the one that says "hinge".
+        for i in range(8):  # generous upper bound; usually 0..2
+            label_path = f"{dev}/in_angl{i}_label"
+            raw_path = f"{dev}/in_angl{i}_raw"
+            if not os.path.exists(label_path):
+                continue
+            try:
+                with open(label_path) as f:
+                    label = f.read().strip()
+            except OSError:
+                continue
+            if label == HINGE_LABEL and os.path.exists(raw_path):
+                scale_path = f"{dev}/in_angl_scale"
+                return raw_path, scale_path
+    return None, None
+
+
+def read_angle(raw_path: str, scale_path: str):
+    """Read the channel's raw value and convert to degrees using the
+    sensor's scale (radians per LSB on this driver). Return None if
+    the read fails or the value is 0 (round-robin sentinel)."""
+    try:
+        with open(raw_path) as f:
+            raw = int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+    if raw == 0:
+        return None
+    try:
+        with open(scale_path) as f:
+            scale = float(f.read().strip())
+    except (OSError, ValueError):
+        scale = 1.0
+    # Empirically on this driver scale is in radians/LSB but the
+    # values come back as integer degrees already (a 360° fold reads
+    # raw=360, not raw=2π). The scale field exists but isn't applied
+    # by the driver to _raw. Treat raw as degrees directly; if a
+    # future kernel changes that, the conversion lands here.
+    _ = scale  # unused — see comment
+    return float(raw)
+
+
+def apply(value: int) -> None:
+    log(f"applying state={value}")
+    try:
+        subprocess.run([TOGGLE, str(value)], check=False, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        log(f"tablet-mode-toggle invocation failed: {e}")
+
+
+def main() -> int:
+    state = None       # None | 0 | 1
+    last_angle = None  # last non-stale reading
+    raw_path = scale_path = None
+
+    while True:
+        if not raw_path or not os.path.exists(raw_path):
+            raw_path, scale_path = find_hinge_channel()
+            if not raw_path:
+                log(f"no hinge IIO sensor yet; retrying in {REDISCOVER_S}s")
+                time.sleep(REDISCOVER_S)
+                continue
+            log(f"watching {raw_path}")
+
+        angle = read_angle(raw_path, scale_path)
+        if angle is not None:
+            last_angle = angle
+            new_state = state
+            if angle >= UPPER_DEG:
+                new_state = 1
+            elif angle <= LOWER_DEG:
+                new_state = 0
+            # else: in the hysteresis band → keep current state
+            if new_state != state and new_state is not None:
+                log(f"angle={angle:.1f}° crosses threshold; state {state} → {new_state}")
+                apply(new_state)
+                state = new_state
+        time.sleep(POLL_S)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(0)

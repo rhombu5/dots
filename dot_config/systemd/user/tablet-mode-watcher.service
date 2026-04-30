@@ -1,0 +1,23 @@
+[Unit]
+Description=Watch SW_TABLET_MODE on the 2-in-1's switch input device
+# Only meaningful inside a Wayland/Hyprland session — at greeter time
+# there's no compositor for the toggle script to call hyprctl against.
+ConditionEnvironment=WAYLAND_DISPLAY
+# Pull in graphical-session.target so we run after Hyprland has
+# imported its env into the user session manager (HYPRLAND_INSTANCE_SIGNATURE,
+# WAYLAND_DISPLAY) — without that the toggle script's hyprctl calls
+# fail with "(3) failed to get the current hyprland version".
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/tablet-mode-watcher
+# Restart freely — the daemon's outer loop already handles transient
+# device-not-yet-present and EOF cases, so a crash that escapes that
+# loop is genuinely unexpected; we want it back up immediately.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
