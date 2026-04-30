@@ -1,0 +1,17 @@
+# ~/.zprofile — sourced for zsh login shells.
+#
+# Auto-launch Hyprland on tty1. After a TTY login on tty1, exec into
+# Hyprland; on any other tty (tty2-6, ssh, ghostty), do nothing — the
+# shell continues normally.
+#
+# `exec` replaces the shell with Hyprland. When Hyprland exits, the
+# tty is left at the login prompt (agetty respawns).
+#
+# Conditions:
+#   - tty must be /dev/tty1 (not 2-6, not pseudo-terminals).
+#   - WAYLAND_DISPLAY/DISPLAY must be unset (we're outside any session).
+#
+# Manual override: log into tty2-6 (Ctrl+Alt+F2..F6) and just run zsh.
+if [[ "$(tty)" == /dev/tty1 && -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
+    exec Hyprland
+fi
