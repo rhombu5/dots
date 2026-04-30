@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# hypr-plugins-on-login — enable Hyprland plugins + source per-plugin
+# config inside an active Hyprland session. Called from exec.conf as
+# `exec-once`.
+#
+# Why this lives outside hyprpm: `hyprpm enable` writes state.toml AND
+# calls `hyprctl plugin load`, which requires HYPRLAND_INSTANCE_SIGNATURE
+# in the env — i.e., a live session. postinstall.sh runs from a TTY where
+# no session exists; it can `hyprpm update && hyprpm add` (which only
+# needs sudo + hyprland headers), but `enable` has to wait until first
+# login. This script bridges that gap, runs once per session, idempotent
+# on re-runs (hyprpm enable on an already-enabled plugin is a no-op).
+#
+# `hyprpm enable` does NOT need sudo — it just talks to the running
+# compositor — so this never triggers a TPM-PIN prompt, even with pinpam
+# wired into the sudo PAM stack.
+
+set -u
+
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || ! command -v hyprpm >/dev/null; then
+    exit 0
+fi
+
+# Plugins we want loaded each session. KEY = plugin display name as
+# `hyprpm list` reports (case-insensitive grep match), VALUE = filename
+# stem in ~/.config/hypr/post-plugins.d/<stem>.conf.
+#
+# Hyprspace is intentionally absent — see plugins.conf for why (current
+# HEAD crashes Hyprland 0.54.3 in onKeyPress).
+plugins=(
+    "hyprgrass:hyprgrass"
+)
+
+for entry in "${plugins[@]}"; do
+    name="${entry%%:*}"
+    conf="${entry##*:}"
+
+    # Only act if hyprpm has the plugin built (was added by postinstall §13).
+    if ! hyprpm list 2>/dev/null | grep -qi "$name"; then
+        continue
+    fi
+
+    # Idempotent — running enable on an already-enabled plugin is a no-op.
+    hyprpm enable "$name" >/dev/null 2>&1 || true
+
+    if [[ -f "$HOME/.config/hypr/post-plugins.d/${conf}.conf" ]]; then
+        hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/${conf}.conf" >/dev/null 2>&1 || true
+    fi
+done
