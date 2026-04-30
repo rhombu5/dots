@@ -41,7 +41,8 @@ done < <(grep -hE '^\s*source\s*=' "$entry" 2>/dev/null \
 # Grammar (Hyprland docs): bind[flags] = MOD, KEY, dispatcher[, args]
 # `set -u` errors on first access of an empty associative array; explicit
 # init bypasses that.
-declare -A seen_bind=()  # key = "MOD|KEY", value = "file:line"
+declare -A seen_bind=()       # key = "MOD|KEY", value = "first file"
+declare -A seen_dispatcher=() # key = "MOD|KEY|dispatcher|arg", value = "file"
 declare -a issues=()
 
 # Known good dispatchers — refreshed against
@@ -87,6 +88,11 @@ known_dispatchers=(
 
 is_known() {
     local d="$1"
+    # Plugin-namespaced dispatchers (anything containing `:`) are presumed
+    # valid — we can't track every plugin's dispatcher list. Examples:
+    # `overview:toggle`, `scroller:movefocus`, `scroller:cyclesize`,
+    # `hyprgrass:swipe`, etc.
+    [[ "$d" == *:* ]] && return 0
     for k in "${known_dispatchers[@]}"; do
         [[ "$d" == "$k" ]] && return 0
     done
@@ -123,11 +129,26 @@ for f in "${files[@]}"; do
         # but the (MOD, KEY) pair check still applies.
         composite="${mod}|${key}"
 
-        if [[ -n "${seen_bind[$composite]:-}" ]]; then
-            issues+=("DUP   $composite  ←  ${seen_bind[$composite]}  +  ${f}")
+        # DUP-bind policy (revised 2026-04-30):
+        # Hyprland fires ALL bindings matching a (MOD, KEY) chord, in
+        # registration order — verified live with three test binds on
+        # SUPER+ALT+Z. So multiple bindings on the same chord are a
+        # legitimate pattern (used by the hyprscroller wiring: one bind
+        # per layout, gated by ~/.local/bin/if-tilemode / if-scrollmode).
+        #
+        # We still want to catch the COPY-PASTE bug (same dispatcher AND
+        # same arg duplicated by mistake), so the dedup key is widened
+        # to include dispatcher+arg. Only an exact (MOD, KEY, dispatcher, arg)
+        # repeat is flagged DUP.
+        rest_trimmed=$(echo "${rest:-}" | xargs)
+        full_key="${composite}|${dispatcher}|${rest_trimmed}"
+        if [[ -n "${seen_dispatcher[$full_key]:-}" ]]; then
+            issues+=("DUP   $composite → ${dispatcher} ${rest_trimmed}  ←  ${seen_dispatcher[$full_key]}  +  ${f}")
         else
-            seen_bind[$composite]="${f}"
+            seen_dispatcher[$full_key]="${f}"
         fi
+        # Track plain (MOD, KEY) for cheatsheet count only (no error).
+        seen_bind[$composite]="${f}"
 
         if ! is_known "$dispatcher"; then
             issues+=("UNK   ${composite} → ${dispatcher}  in  ${f}")
