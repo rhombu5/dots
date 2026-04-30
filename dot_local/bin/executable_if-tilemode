@@ -1,0 +1,17 @@
+#!/bin/sh
+# if-tilemode <hyprctl-dispatch-args...>
+#
+# Run `hyprctl dispatch <args>` ONLY if the current Hyprland layout is
+# dwindle (i.e. tile mode). Used in binds.conf alongside if-scrollmode
+# so a single chord can do different things in dwindle vs scroller
+# layout — verified 2026-04-30 that Hyprland fires ALL matching binds,
+# so paired bindings work as expected.
+#
+# Latency: one hyprctl getoption call (~3-5ms) + one jq invocation
+# (~10-20ms). Per-keystroke this is fine for focus/move/resize binds.
+#
+# Idempotent no-op when layout doesn't match — silent exit 0 so PAM /
+# Hyprland doesn't see a "failed" dispatch.
+
+[ "$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // empty')" = "dwindle" ] || exit 0
+exec hyprctl dispatch "$@"
