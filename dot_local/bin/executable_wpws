@@ -283,12 +283,37 @@ def push_keywords(palette: dict[str, str]) -> None:
     )
 
 
-def set_wallpaper(output: str, path: Path) -> None:
-    # `-t none` swaps instantly — no fade. The default `simple` transition
-    # is a 2-step fade that takes ~half a second and looks laggy when
-    # paired with the instant accent push.
+# In-memory: per-output last-seen workspace ID. Used to decide pan direction.
+_LAST_WS_PER_OUTPUT: dict[str, int] = {}
+
+
+def set_wallpaper(output: str, path: Path, ws_id: int) -> None:
+    """Swap the wallpaper for `output`. Pans left or right based on whether
+    `ws_id` is higher or lower than the previous workspace seen on this
+    output — matches Hyprland's workspace slide animation. Special
+    workspaces (negative IDs) and first-time switches are instant."""
+    prev = _LAST_WS_PER_OUTPUT.get(output)
+    _LAST_WS_PER_OUTPUT[output] = ws_id
+
+    if prev is None or ws_id == prev or ws_id < 1 or prev < 1:
+        cmd = ["awww", "img", "-t", "none", "-o", output, str(path)]
+    else:
+        # Pan to match `animation = workspaces, 1, 3, smoothIn, slide`:
+        #   - 0.3s duration (Hyprland encodes 3 deciseconds)
+        #   - smoothIn bezier (0.25, 0.46, 0.45, 0.94)
+        #   - direction: higher ws id = view pans right (new wallpaper
+        #     enters from right), lower = left.
+        direction = "right" if ws_id > prev else "left"
+        cmd = [
+            "awww", "img",
+            "-t", direction,
+            "--transition-duration", "0.3",
+            "--transition-fps", "60",
+            "--transition-bezier", "0.25,0.46,0.45,0.94",
+            "-o", output, str(path),
+        ]
     subprocess.run(
-        ["awww", "img", "-t", "none", "-o", output, str(path)],
+        cmd,
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -308,7 +333,7 @@ def apply(ws_id: int, output: str, cfg: dict, signal_consumers: bool = True) -> 
         return
     palette = palette_cached(wp)
     write_theme(palette, themes_dir(cfg))
-    set_wallpaper(output, wp)
+    set_wallpaper(output, wp, ws_id)
     push_keywords(palette)
     if signal_consumers:
         run_hooks(cfg)
