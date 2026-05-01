@@ -19,7 +19,7 @@ Always make **immediate, atomic commits and push**. One logical change per commi
 
 - **`~/src/`** — code I edit or could commit to. Personal projects, forks I'm working on, anything where I'm a contributor. Default for "I'm hacking on this."
 - **`~/.local/src/`** — third-party source I'm cloning to build/install at user scope (analog of `/usr/local/src/` for $HOME). I'm a *user* of it, not an editor. Use when upstream's pattern is "git clone && make install" and the build artifact lands in `~/.local/`. Keeps `~/src/` from filling up with build trees I never touch.
-- **`/opt/<vendor>/`** — pre-built third-party application bundles installed system-wide (FHS convention: one self-contained dir per product). Rare for raw clones; usually only when upstream ships a tarball you'd otherwise extract there.
+- **`/opt/`** — third-party application bundles installed system-wide (FHS convention: one self-contained dir per product). Path is just `/opt/{repo}@{user}+{workspace}` — no `<vendor>` layer, since `@user` already gives the provider namespace FHS wants. Rare for raw clones; usually only when upstream ships a tarball you'd otherwise extract there.
 - **`/tmp/`** — throwaway exploration. Use `mktemp -d` so concurrent clones don't collide.
 
 If you can't tell which category the repo falls into → **ask me** before cloning.
