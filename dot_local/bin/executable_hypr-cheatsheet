@@ -23,6 +23,12 @@ if ! command -v hyprctl >/dev/null; then
     exit 1
 fi
 
+# Active layout drives category labels for layout-specific dispatchers
+# (layoutmsg → scrolling-only; togglesplit → dwindle-only). Binds that
+# silently no-op in the current layout get an "(off)" suffix so the
+# user can see what's actually firing right now.
+LAYOUT=$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // ""')
+
 mods_to_label() {
     case "$1" in
         0)   echo "" ;;
@@ -43,32 +49,56 @@ mods_to_label() {
     esac
 }
 
-# Derive a category from the dispatcher + arg + key. Used to group
-# related bindings in the cheatsheet output. Categories are short so
-# the bracketed prefix doesn't crowd the description column.
-#
-# Vim-style hjkl variants of focus / move / resize get their own
-# parenthesized suffix so they cluster separately from the arrow-key
-# versions in the alphabetical sort.
+# Derive a category from the dispatcher + arg. Used to group related
+# bindings in the cheatsheet output. Categories are short so the
+# bracketed prefix doesn't crowd the description column.
 categorize() {
-    local dispatcher="$1" arg="$2" key="$3"
-    local vim_suffix=""
-    case "$key" in
-        h|j|k|l) vim_suffix=" (vim)" ;;
+    local dispatcher="$1" arg="$2" description="$3"
+    local bucket=""
+    # Description prefix wins over dispatcher heuristics — lets a bind
+    # opt into a category by naming itself. Sub-categories nest with a
+    # second colon: "Layout: Mode: …" → [Layout:Mode]. More-specific
+    # patterns must come first so they win against the bare "layout*".
+    case "${description,,}" in
+        "layout: mode:"*)           echo "Layout:Mode"        ; return ;;
+        "layout: misc:"*)           echo "Layout:Misc"        ; return ;;
+        "layout: focus: window:"*)  echo "Layout:Focus:Window"; return ;;
+        "layout: focus: tabs:"*)    echo "Layout:Focus:Tabs"  ; return ;;
+        "layout: focus:"*)          echo "Layout:Focus"       ; return ;;
+        "layout: move: window:"*)   echo "Layout:Move:Window" ; return ;;
+        "layout: move:"*)           echo "Layout:Move"        ; return ;;
+        "layout: resize:"*)         echo "Layout:Resize"      ; return ;;
+        layout*)                    echo "Layout"             ; return ;;
     esac
     case "$dispatcher" in
-        killactive|togglefloating|togglesplit|togglegroup|fullscreen|pin)
+        layoutmsg)
+            # layoutmsg routes to whichever layout is active, so the
+            # arg tells us which layout the bind is *for*: togglesplit /
+            # swapsplit / preselect are dwindle-only; swapcol is the
+            # scrolling-layout analogue of movewindow l/r and goes into
+            # Layout:Move; the rest (colresize, promote, togglefit, fit)
+            # are scrolling-only column manipulation.
+            local target
+            case "$arg" in
+                togglesplit*|swapsplit*|preselect*) target="dwindle"  ; bucket="Layout:Dwindle" ;;
+                "swapcol "*|promote*)               target="scrolling"; bucket="Layout:Move"    ;;
+                "colresize "*)                      target="scrolling"; bucket="Layout:Resize"  ;;
+                *)                                  target="scrolling"; bucket="Layout:Scroll"  ;;
+            esac
+            if [[ "$LAYOUT" == "$target" ]]; then echo "$bucket"
+            else echo "$bucket (off)"; fi ;;
+        killactive|togglefloating|togglegroup|fullscreen|pin)
             echo "Window" ;;
         movefocus)
-            echo "Focus${vim_suffix}" ;;
+            echo "Layout:Focus:Window" ;;
         movewindow|movewindowpixel|moveactive)
-            echo "Move${vim_suffix}" ;;
+            echo "Layout:Move:Window" ;;
         resizewindow|resizeactive|resizewindowpixel)
-            echo "Resize${vim_suffix}" ;;
+            echo "Layout:Resize" ;;
         workspace|movetoworkspace|movetoworkspacesilent|togglespecialworkspace)
             echo "Workspace" ;;
         submap)
-            echo "Mode" ;;
+            echo "Layout:Mode" ;;
         exec)
             case "$arg" in
                 *swayosd-client*|*playerctl*)        echo "Media" ;;
@@ -101,13 +131,32 @@ format_bind() {
     else
         rhs="$dispatcher $arg"
     fi
-    category=$(categorize "$dispatcher" "$arg" "$key")
+    category=$(categorize "$dispatcher" "$arg" "$description")
 
-    # Two-column layout: "[Cat] Description" then "MODS+KEY".
-    # The leading category prefix means a `sort` puts everything in
-    # the same group together, and within a group sorts by description
-    # — which is what the user wants to scan against.
-    printf '[%-13s] %-40s   %s\n' "$category" "$rhs" "$combo"
+    # Layout-inactive binds (the "(off)" suffix categorize() emits for
+    # layoutmsg targeting the wrong layout) are dropped entirely —
+    # showing them just adds noise for binds that won't fire.
+    [[ "$category" == *" (off)" ]] && return
+
+    # Strip category-redundant prefixes from the rhs so a row doesn't
+    # read "[Layout:Focus] Focus window left". Two conventions:
+    #   1. Category-path prefix: "Layout:Mode" → strip "Layout: Mode: "
+    #      (every ":" in the category becomes ": " in the description).
+    #   2. Legacy form for movefocus/movewindow descriptions, which
+    #      don't carry the Layout: prefix — strip "<last> window "
+    #      (e.g. category "Layout:Focus" + "Focus window left" → "left").
+    local path_prefix="${category//:/: }: "
+    local last_token="${category##*:}"
+    shopt -s nocasematch
+    if   [[ "$rhs" == "$path_prefix"* ]];                                   then rhs="${rhs:${#path_prefix}}"
+    elif [[ "$rhs" =~ ^${last_token}[[:space:]]+window[[:space:]]+(.+)$ ]]; then rhs="${BASH_REMATCH[1]}"
+    fi
+    shopt -u nocasematch
+
+    # Two-column layout: "[Cat] Description" then "MODS+KEY". The
+    # leading category prefix means `sort` puts everything in the same
+    # group together, and within a group sorts by description.
+    printf '[%-20s] %-40s   %s\n' "$category" "$rhs" "$combo"
 }
 
 # First entry is a pinned reminder of where the binds live, so anyone
@@ -122,6 +171,10 @@ format_bind() {
     hyprctl binds -j 2>/dev/null \
       | jq -r '.[] | [.modmask, .key, (.description // ""), .dispatcher, (.arg // "")] | @tsv' \
       | while IFS=$'\t' read -r modmask key description dispatcher arg; do
+            # Hide hjkl vim-movement duplicates — the arrow-key versions
+            # already cover Focus/Move/Resize and the vim variants just
+            # double the row count.
+            case "$key" in h|j|k|l) continue ;; esac
             format_bind "$modmask" "$key" "$description" "$dispatcher" "$arg"
         done \
       | sort
