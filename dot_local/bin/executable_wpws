@@ -178,65 +178,96 @@ def run_hooks(cfg: dict) -> None:
 
 # -------- stitch + hyprlax ------------------------------------------------
 
-# Maximum workspace slots in the stitched canvas. Bounded both by the
-# user's expected workspace range and by GL_MAX_TEXTURE_SIZE (typically
-# 16384 — anything wider triggers GL_INVALID_VALUE on draw and renders
-# black). Per-monitor cap is computed in num_slots() below.
-NUM_SLOTS_MAX = 9
-GL_TEXTURE_SAFE_WIDTH = 16384
+# Number of workspace slots in the stitched canvas. 9 covers Hyprland's
+# typical 1..9 keyboard binds; the canvas is halved (per-slot 960×540
+# instead of 1920×1080) to keep the total width under GL_MAX_TEXTURE_SIZE
+# (typically 16384 — anything wider renders solid grey from GL_INVALID_VALUE).
+# Half-res is fine because hyprlax samples through `fit = "fit_height"`
+# which scales the layer back up to monitor size; the perceptible quality
+# loss on a 1920×1080 panel is negligible for chrome wallpaper.
+NUM_SLOTS = 9
+SLOT_SCALE = 0.5
 
 
-def num_slots(mw: int) -> int:
-    """How many monitor-width slots fit in a single GL texture, capped at
-    the user's expected workspace range. For a 1920px monitor: 8 slots
-    (ws 1-8 covered; ws 9 wraps off the canvas)."""
-    return max(1, min(NUM_SLOTS_MAX, GL_TEXTURE_SAFE_WIDTH // max(1, mw)))
+def slot_sequence(pool: list[Path], offset: int, n: int) -> list[Path]:
+    """Wallpaper for canvas slots 0..n-1. Slot i = pool[(i + offset) %
+    len(pool)] — straight rotation. Workspace alignment is handled by
+    hyprlax's `tile.x = true` (canvas wraps cyclically) so we don't
+    need the start-ws anchoring tricks anymore."""
+    return [pool[(i + offset) % len(pool)] for i in range(n)]
 
 
-def slot_sequence(pool: list[Path], offset: int, start_ws: int, n: int) -> list[Path]:
-    """Return the wallpaper for canvas slots 0..n-1, where slot i is the
-    wallpaper for ws (start_ws + i). Hyprlax anchors its viewport at
-    canvas offset 0 = whatever ws was active when it launched, so
-    aligning canvas[0] with that ws makes wallpaper-and-accent agree
-    without any bounce/dispatch trick."""
-    return [pool[(start_ws + i - 1 + offset) % len(pool)] for i in range(n)]
-
-
-def stitch_key(pool: list[Path], offset: int, mw: int, mh: int, start_ws: int) -> str:
-    seq = slot_sequence(pool, offset, start_ws, num_slots(mw))
-    src = "|".join(p.name for p in seq) + f"|{mw}x{mh}|s{start_ws}"
+def stitch_key(pool: list[Path], offset: int, mw: int, mh: int) -> str:
+    seq = slot_sequence(pool, offset, NUM_SLOTS)
+    src = "|".join(p.name for p in seq) + f"|{mw}x{mh}|n{NUM_SLOTS}|s{SLOT_SCALE}"
     return hashlib.sha256(src.encode()).hexdigest()[:16]
 
 
-def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int, start_ws: int) -> Path:
-    """Build (or return cached) wide image: num_slots(mw) wallpapers
-    crop-fit to monitor size, concatenated horizontally, starting with
-    the wallpaper for `start_ws` at slot 0. Cached at
-    ~/.cache/wpws/wide/<key>.png. Atomic — writes to a .partial file and
-    renames into place so a killed daemon can't leave a corrupt cache."""
+def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int) -> Path:
+    """Build (or return cached) wide image: NUM_SLOTS wallpapers crop-fit
+    to (mw, mh) × SLOT_SCALE, concatenated horizontally. Cached at
+    ~/.cache/wpws/wide/<key>.png. Atomic write."""
     if not pool:
         raise RuntimeError("wpws: cannot stitch — pool is empty")
-    out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh, start_ws)}.png"
+    out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh)}.png"
     if out.exists():
         return out
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".partial.png")
     tmp.unlink(missing_ok=True)
 
-    seq = slot_sequence(pool, offset, start_ws, num_slots(mw))
+    sw = max(1, int(mw * SLOT_SCALE))
+    sh = max(1, int(mh * SLOT_SCALE))
+    seq = slot_sequence(pool, offset, NUM_SLOTS)
     args = ["magick"]
     for p in seq:
         args += [
             "(", str(p),
-            "-resize", f"{mw}x{mh}^",
+            "-resize", f"{sw}x{sh}^",
             "-gravity", "center",
-            "-extent", f"{mw}x{mh}",
+            "-extent", f"{sw}x{sh}",
             ")",
         ]
     args += ["+append", str(tmp)]
     subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     tmp.replace(out)
     return out
+
+
+# Surgical update of two specific keys in the chezmoi-managed
+# ~/.config/hyprlax/hyprlax.toml. Replaces the line containing `path = ...`
+# (presumed to be the layer path) and the line containing
+# `shift_percent = ...`. Leaves everything else alone, including comments
+# and any other hand-tuned settings.
+def update_hyprlax_toml(wide: Path, n_slots: int) -> tuple[bool, bool]:
+    """Returns (path_updated, shift_updated). False means the key wasn't
+    present and the user should add it manually."""
+    toml = expand("~/.config/hyprlax/hyprlax.toml")
+    if not toml.exists():
+        return (False, False)
+    pct = 100.0 / n_slots
+    new_path_line = f'path = "{wide}"\n'
+    new_shift_line = f'shift_percent = {pct:.5f}\n'
+    path_ok = shift_ok = False
+    out_lines = []
+    for line in toml.read_text().splitlines(keepends=True):
+        s = line.lstrip()
+        # Match `path = "..."` (uncommented). Comments preserved.
+        if not path_ok and (s.startswith('path =') or s.startswith('path=')) \
+                and not s.startswith('#'):
+            indent = line[: len(line) - len(s)]
+            out_lines.append(indent + new_path_line)
+            path_ok = True
+            continue
+        if not shift_ok and (s.startswith('shift_percent =') or s.startswith('shift_percent=')) \
+                and not s.startswith('#'):
+            indent = line[: len(line) - len(s)]
+            out_lines.append(indent + new_shift_line)
+            shift_ok = True
+            continue
+        out_lines.append(line)
+    toml.write_text(''.join(out_lines))
+    return (path_ok, shift_ok)
 
 
 # wpws used to generate ~/.config/hyprlax/hyprlax.toml and respawn
@@ -423,17 +454,12 @@ def apply_accent(ws_id: int, cfg: dict) -> None:
 def stitch_only(cfg: dict) -> Path | None:
     """Build (or fetch from cache) the wide canvas. Does NOT touch
     hyprlax — the user wires that themselves via the chezmoi-managed
-    ~/.config/hyprlax/hyprlax.toml. Returns the path so callers can
-    print it / symlink it."""
+    ~/.config/hyprlax/hyprlax.toml."""
     pool = list_pool(cfg)
     if not pool:
         return None
     mon = focused_monitor()
-    try:
-        start_ws, _ = focused_ws_and_output()
-    except Exception:  # noqa: BLE001
-        start_ws = 1
-    return stitch_wide(pool, read_offset(), mon["width"], mon["height"], start_ws)
+    return stitch_wide(pool, read_offset(), mon["width"], mon["height"])
 
 
 # -------- subcommands ----------------------------------------------------
@@ -501,13 +527,35 @@ def cmd_rotate(cfg: dict) -> None:
 
 
 def cmd_stitch(cfg: dict) -> None:
-    """Stitch (or fetch from cache) the wide canvas using the current
-    pool + offset and print its path. The user wires this into
-    ~/.config/hyprlax/hyprlax.toml's layer.path."""
+    """Stitch the wide canvas, then surgically update path +
+    shift_percent in ~/.config/hyprlax/hyprlax.toml. Reload hyprlax
+    yourself to pick up the new image:
+        pkill hyprlax; setsid -f hyprlax --config ~/.config/hyprlax/hyprlax.toml </dev/null >/dev/null 2>&1"""
     out = stitch_only(cfg)
     if out is None:
         sys.exit(f"wpws: pool empty: {cfg['pool']['dir']}")
-    print(out)
+    pct = 100.0 / NUM_SLOTS
+    path_ok, shift_ok = update_hyprlax_toml(out, NUM_SLOTS)
+    print(f"canvas:        {out}")
+    print(f"slots:         {NUM_SLOTS}")
+    print(f"shift_percent: {pct:.5f}  (= 100 / {NUM_SLOTS})")
+    if not path_ok or not shift_ok:
+        warnings = []
+        if not path_ok:
+            warnings.append("`path = \"...\"` line in [[global.layers]]")
+        if not shift_ok:
+            warnings.append("`shift_percent = ...` line in [global]")
+        print(file=sys.stderr)
+        print(
+            "warning: hyprlax.toml didn't have the expected key(s) — couldn't update:",
+            file=sys.stderr,
+        )
+        for w in warnings:
+            print(f"  - {w}", file=sys.stderr)
+        print(
+            "  Add them by hand and re-run `wpws stitch` so future updates land.",
+            file=sys.stderr,
+        )
 
 
 def cmd_status(cfg: dict) -> None:
