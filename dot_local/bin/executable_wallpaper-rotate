@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wallpaper-rotate — pick next wallpaper from ~/Pictures/Wallpapers/,
+# wallpaper-rotate — pick next wallpaper from ~/.local/share/wallpapers/,
 # set via awww, regenerate matugen palette, preserve dark/light mode.
 #
 # Modes:
@@ -26,7 +26,7 @@
 
 set -euo pipefail
 
-wp_dir="$HOME/Pictures/Wallpapers"
+wp_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wallpapers"
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/matugen"
 mode_file="${cache_dir}/mode"
 wp_file="${cache_dir}/last-wallpaper"

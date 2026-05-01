@@ -128,11 +128,23 @@ def write_offset(n: int) -> None:
 # -------- pool + assignment ----------------------------------------------
 
 def list_pool(cfg: dict) -> list[Path]:
+    """All wallpapers in `pool.dir` (alphabetical). Used by accent
+    extraction, matugen seeding, etc."""
     d = expand(cfg["pool"]["dir"])
     if not d.is_dir():
         return []
     exts = {e.lower() for e in cfg["pool"]["extensions"]}
     return sorted(p for p in d.iterdir() if p.is_file() and p.suffix.lower() in exts)
+
+
+def list_picks(cfg: dict) -> list[Path]:
+    """Subset of the pool used by `wpws stitch` (the slot order in the
+    canvas). Falls back to the full pool when `pool.picks` is unset."""
+    picks = cfg.get("pool", {}).get("picks") or []
+    if not picks:
+        return list_pool(cfg)
+    d = expand(cfg["pool"]["dir"])
+    return [d / name for name in picks]
 
 
 def wallpaper_for(ws_id: int, pool: list[Path], offset: int) -> Path | None:
@@ -178,49 +190,49 @@ def run_hooks(cfg: dict) -> None:
 
 # -------- stitch + hyprlax ------------------------------------------------
 
-# Number of workspace slots in the stitched canvas. 9 covers Hyprland's
-# typical 1..9 keyboard binds; the canvas is halved (per-slot 960×540
-# instead of 1920×1080) to keep the total width under GL_MAX_TEXTURE_SIZE
-# (typically 16384 — anything wider renders solid grey from GL_INVALID_VALUE).
-# Half-res is fine because hyprlax samples through `fit = "fit_height"`
-# which scales the layer back up to monitor size; the perceptible quality
-# loss on a 1920×1080 panel is negligible for chrome wallpaper.
-NUM_SLOTS = 9
-SLOT_SCALE = 0.5
+# GL_MAX_TEXTURE_SIZE — anything wider renders solid grey from
+# GL_INVALID_VALUE on draw. 16384 is the typical cap; intentionally
+# leaving 4 px of headroom at 16380 so even-pixel slot widths land safely.
+GL_TEXTURE_SAFE_WIDTH = 16384
 
 
-def slot_sequence(pool: list[Path], offset: int, n: int) -> list[Path]:
-    """Wallpaper for canvas slots 0..n-1. Slot i = pool[(i + offset) %
-    len(pool)] — straight rotation. Workspace alignment is handled by
-    hyprlax's `tile.x = true` (canvas wraps cyclically) so we don't
-    need the start-ws anchoring tricks anymore."""
-    return [pool[(i + offset) % len(pool)] for i in range(n)]
+def slot_dimensions(mw: int, mh: int, n: int) -> tuple[int, int]:
+    """Return (slot_w, slot_h) — the largest per-slot size that keeps
+    the total stitched canvas (n slots wide) under GL_TEXTURE_SAFE_WIDTH.
+    Aspect ratio of the monitor is preserved. Slot widths are rounded to
+    even pixels to keep things sane for samplers."""
+    full_w = n * mw
+    if full_w <= GL_TEXTURE_SAFE_WIDTH:
+        return mw, mh
+    sw = (GL_TEXTURE_SAFE_WIDTH // n) & ~1  # largest even <= max/n
+    sh = max(1, sw * mh // mw)
+    return sw, sh
 
 
-def stitch_key(pool: list[Path], offset: int, mw: int, mh: int) -> str:
-    seq = slot_sequence(pool, offset, NUM_SLOTS)
-    src = "|".join(p.name for p in seq) + f"|{mw}x{mh}|n{NUM_SLOTS}|s{SLOT_SCALE}"
+def stitch_key(picks: list[Path], mw: int, mh: int) -> str:
+    n = len(picks)
+    sw, sh = slot_dimensions(mw, mh, n)
+    src = "|".join(p.name for p in picks) + f"|{mw}x{mh}|n{n}|slot{sw}x{sh}"
     return hashlib.sha256(src.encode()).hexdigest()[:16]
 
 
-def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int) -> Path:
-    """Build (or return cached) wide image: NUM_SLOTS wallpapers crop-fit
-    to (mw, mh) × SLOT_SCALE, concatenated horizontally. Cached at
-    ~/.cache/wpws/wide/<key>.png. Atomic write."""
-    if not pool:
-        raise RuntimeError("wpws: cannot stitch — pool is empty")
-    out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh)}.png"
+def stitch_wide(picks: list[Path], mw: int, mh: int) -> Path:
+    """Build (or return cached) wide image: each pick crop-fit to the
+    largest slot dimensions that still fit GL_TEXTURE_SAFE_WIDTH,
+    concatenated horizontally in the order given. Atomic write."""
+    if not picks:
+        raise RuntimeError("wpws: cannot stitch — pick list is empty")
+    n = len(picks)
+    sw, sh = slot_dimensions(mw, mh, n)
+    out = CACHE_ROOT / "wide" / f"{stitch_key(picks, mw, mh)}.png"
     if out.exists():
         return out
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".partial.png")
     tmp.unlink(missing_ok=True)
 
-    sw = max(1, int(mw * SLOT_SCALE))
-    sh = max(1, int(mh * SLOT_SCALE))
-    seq = slot_sequence(pool, offset, NUM_SLOTS)
     args = ["magick"]
-    for p in seq:
+    for p in picks:
         args += [
             "(", str(p),
             "-resize", f"{sw}x{sh}^",
@@ -437,12 +449,15 @@ def write_theme(palette: dict[str, str], target_dir: Path) -> None:
 # -------- accent application (no wallpaper change — hyprlax owns that) ---
 
 def apply_accent(ws_id: int, cfg: dict) -> None:
-    pool = list_pool(cfg)
-    if not pool:
+    """Pull the accent palette from the wallpaper VISIBLE on ws_id —
+    i.e., from `picks` (rotated by offset), not the raw `pool`. With
+    hyprlax's tile.x=true cyclic canvas, ws N shows
+    rotated_picks(cfg)[(ws_id - 1) % len(picks)] — accent indexes the
+    same way, so wallpaper and accent agree."""
+    picks = rotated_picks(cfg)
+    if not picks:
         return
-    wp = wallpaper_for(ws_id, pool, read_offset())
-    if wp is None:
-        return
+    wp = picks[(ws_id - 1) % len(picks)]
     palette = palette_cached(wp)
     write_theme(palette, themes_dir(cfg))
     push_keywords(palette)
@@ -451,15 +466,27 @@ def apply_accent(ws_id: int, cfg: dict) -> None:
     (CACHE_ROOT / "current").write_text(f"{ws_id}\t{wp}\n")
 
 
-def stitch_only(cfg: dict) -> Path | None:
-    """Build (or fetch from cache) the wide canvas. Does NOT touch
-    hyprlax — the user wires that themselves via the chezmoi-managed
-    ~/.config/hyprlax/hyprlax.toml."""
-    pool = list_pool(cfg)
-    if not pool:
+def rotated_picks(cfg: dict) -> list[Path]:
+    """Picks rotated by the current offset. Slot 0 of the canvas =
+    picks[offset]. ws N's accent + visible wallpaper both index into
+    this list at (N-1) — so wallpaper-and-accent agree by construction."""
+    picks = list_picks(cfg)
+    if not picks:
+        return []
+    off = read_offset() % len(picks)
+    return picks[off:] + picks[:off]
+
+
+def stitch_only(cfg: dict) -> tuple[Path, int] | None:
+    """Build (or fetch from cache) the wide canvas using the configured
+    `pool.picks` (or the full pool when picks is unset), rotated by the
+    current offset. Returns the canvas path and slot count."""
+    picks = rotated_picks(cfg)
+    if not picks:
         return None
     mon = focused_monitor()
-    return stitch_wide(pool, read_offset(), mon["width"], mon["height"])
+    out = stitch_wide(picks, mon["width"], mon["height"])
+    return out, len(picks)
 
 
 # -------- subcommands ----------------------------------------------------
@@ -531,14 +558,15 @@ def cmd_stitch(cfg: dict) -> None:
     shift_percent in ~/.config/hyprlax/hyprlax.toml. Reload hyprlax
     yourself to pick up the new image:
         pkill hyprlax; setsid -f hyprlax --config ~/.config/hyprlax/hyprlax.toml </dev/null >/dev/null 2>&1"""
-    out = stitch_only(cfg)
-    if out is None:
-        sys.exit(f"wpws: pool empty: {cfg['pool']['dir']}")
-    pct = 100.0 / NUM_SLOTS
-    path_ok, shift_ok = update_hyprlax_toml(out, NUM_SLOTS)
+    result = stitch_only(cfg)
+    if result is None:
+        sys.exit(f"wpws: pool/picks empty: {cfg['pool']['dir']}")
+    out, n = result
+    pct = 100.0 / n
+    path_ok, shift_ok = update_hyprlax_toml(out, n)
     print(f"canvas:        {out}")
-    print(f"slots:         {NUM_SLOTS}")
-    print(f"shift_percent: {pct:.5f}  (= 100 / {NUM_SLOTS})")
+    print(f"slots:         {n}")
+    print(f"shift_percent: {pct:.5f}  (= 100 / {n})")
     if not path_ok or not shift_ok:
         warnings = []
         if not path_ok:
@@ -568,16 +596,21 @@ def cmd_status(cfg: dict) -> None:
         ws, wp = cur.read_text().strip().split("\t", 1)
         print(f"focused ws: {ws}")
         print(f"wallpaper:  {wp}")
-    if pool:
+    picks = rotated_picks(cfg)
+    print(f"picks size: {len(picks)} ({'== pool' if len(picks) == len(pool) and set(picks) == set(pool) else 'subset'})")
+    if picks:
         mon = focused_monitor()
-        key = stitch_key(pool, read_offset(), mon["width"], mon["height"])
-        wide = CACHE_ROOT / "wide" / f"{key}.png"
+        wide = CACHE_ROOT / "wide" / f"{stitch_key(picks, mon['width'], mon['height'])}.png"
         print(f"wide cache: {wide} ({'present' if wide.exists() else 'will-build'})")
         print()
-        print("workspace -> wallpaper assignment (with current offset):")
-        for i in range(1, min(len(pool), 9) + 1):
-            wp = wallpaper_for(i, pool, read_offset())
-            print(f"  ws {i}: {wp.name if wp else '(none)'}")
+        print("canvas slot -> wallpaper -> accent (with current offset):")
+        for i, p in enumerate(picks):
+            try:
+                pal = palette_cached(p)
+                accent = f"#{pal['primary']}"
+            except Exception:  # noqa: BLE001
+                accent = "?"
+            print(f"  slot {i} (ws {i+1}): {accent}  {p.name}")
 
 
 def cmd_theme(args: list[str], cfg: dict) -> None:

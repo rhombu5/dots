@@ -7,10 +7,26 @@
 [pool]
 # Directory of wallpaper files. Sorted alphabetically; workspace N maps to
 # pool[(N - 1 + offset) % len(pool)]. Tilde and $HOME expanded.
-dir = "~/Pictures/Wallpapers"
+dir = "~/.local/share/wallpapers"
 
 # File extensions considered. Case-insensitive.
 extensions = [".jpg", ".jpeg", ".png", ".webp"]
+
+# Subset used when stitching the wide canvas (`wpws stitch`). When set,
+# only these wallpapers are concatenated into the panning canvas; the
+# full `pool` is still available for accent extraction and matugen seeds.
+# Filenames are relative to `pool.dir`. Order here = canvas slot order.
+picks = [
+  "arch_logo_abstract_bluegreen.jpg",
+  "arch_logo_on_lightblue.png",
+  "archlinux_over_mountains.png",
+  "i_use_arch_btw-logo.png",
+  "linux_godfather.jpg",
+  "linux_on_a_clif.jpg",
+  "linux_terminal_wallpaper.png",
+  "makepkg_not_war.webp",
+  "rmrf_fixes_all.jpg",
+]
 
 [targets]
 # Where to write the dynamic theme files. Consumers should @import / source /
