@@ -1,0 +1,10 @@
+# Sourced by EVERY zsh invocation (login or not, interactive or not).
+# Anything heavy belongs in .zshrc — keep this file fast.
+
+# Route SSH agent traffic to the Bitwarden Desktop agent socket if it
+# exists. Lives here (not .zshrc.d/) so non-interactive shells —
+# cron jobs, systemd user units, Claude Code's captured shell-snapshot —
+# also get SSH_AUTH_SOCK. Safe no-op when Bitwarden isn't running.
+if [[ -S "$HOME/.bitwarden-ssh-agent.sock" ]]; then
+    export SSH_AUTH_SOCK="$HOME/.bitwarden-ssh-agent.sock"
+fi
