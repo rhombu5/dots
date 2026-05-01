@@ -187,13 +187,17 @@ def stitch_key(pool: list[Path], offset: int, mw: int, mh: int) -> str:
 def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int) -> Path:
     """Build (or return cached) wide image: pool wallpapers crop-fit to
     monitor size, concatenated horizontally, in pool-rotated-by-offset
-    order. Cached at ~/.cache/wpws/wide/<key>.png."""
+    order. Cached at ~/.cache/wpws/wide/<key>.png. Atomic — writes to a
+    .partial file and renames into place so a killed daemon can't leave
+    a corrupt cache entry."""
     if not pool:
         raise RuntimeError("wpws: cannot stitch — pool is empty")
     out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh)}.png"
     if out.exists():
         return out
     out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".partial.png")
+    tmp.unlink(missing_ok=True)
 
     rotated = pool[offset % len(pool):] + pool[:offset % len(pool)]
     args = ["magick"]
@@ -205,21 +209,24 @@ def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int) -> Path:
             "-extent", f"{mw}x{mh}",
             ")",
         ]
-    args += ["+append", str(out)]
+    args += ["+append", str(tmp)]
     subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    tmp.replace(out)
     return out
 
 
-def ensure_hyprlax(wide: Path, shift_px: int, cfg: dict) -> None:
+def ensure_hyprlax(wide: Path, cfg: dict) -> None:
     """Kill any existing hyprlax (and any straggler awww-daemon from the
-    pre-hyprlax era), then spawn fresh on `wide`."""
+    pre-hyprlax era), then spawn fresh on `wide`. Shift is 1.0 (one full
+    screen per workspace) since each tile in the stitched canvas is exactly
+    monitor-width."""
     subprocess.run(["pkill", "hyprlax"], check=False)
     subprocess.run(["pkill", "-f", "awww-daemon"], check=False)
     time.sleep(0.1)
     subprocess.Popen(
         [
             "hyprlax", str(wide),
-            "--shift", str(shift_px),
+            "--shift", "1.0",
             "--duration", str(cfg["hyprlax"]["duration"]),
             "--easing", str(cfg["hyprlax"]["easing"]),
         ],
@@ -411,7 +418,7 @@ def restitch_and_restart(cfg: dict) -> None:
         return
     mon = focused_monitor()
     wide = stitch_wide(pool, read_offset(), mon["width"], mon["height"])
-    ensure_hyprlax(wide, mon["width"], cfg)
+    ensure_hyprlax(wide, cfg)
 
 
 # -------- subcommands ----------------------------------------------------
