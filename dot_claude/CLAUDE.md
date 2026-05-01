@@ -1,5 +1,7 @@
 # Tom's Claude Code rules
 
+When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`).
+
 ## System changes go to both the live system AND the dotfiles repo
 
 When instructed to make any system preference, configuration, or other persistent change: apply it to the actual running system AND mirror it into the appropriate repo — usually the chezmoi dotfiles repo at `~/.local/share/chezmoi` (`git@github.com:rhombu5/dots.git`), or the arch-setup repo for bootstrap-level changes.
@@ -36,3 +38,20 @@ If you can't tell which category the repo falls into → **ask me** before cloni
 ## Always clone via SSH
 
 Use `git@<host>:<user>/<repo>.git` URLs, never `https://`. The SSH agent is Bitwarden Desktop (socket at `~/.bitwarden-ssh-agent.sock`); if a non-interactive shell doesn't have `SSH_AUTH_SOCK` set, prepend `SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock` to the git command — don't bypass signing.
+
+## New projects follow the same clone-path rules
+
+When asked to start a new project (anything I might eventually push to GitHub), pick its directory using the same `{repo}@{user}+{workspace}` rule and the same `~/src/` vs `~/.local/src/` vs `/opt/` axis as for clones. Decide the GitHub owner *up front* — see the next section — so the folder name reflects where it'll live.
+
+## My GitHub user/orgs
+
+| Owner | Use for | Notes |
+|---|---|---|
+| **`fnrhombus`** | My current personal username. Published or anticipated-published projects. | Default for "I expect this to have value to other people." |
+| **`rhombu5`** | Personal projects not intended to be useful to anyone else. | Default for dotfiles, machine-specific scripts, throwaways. |
+| **`rhom6us`** | An old username turned org. Holds projects I'm undecided about, kept so old links keep resolving. | **Never place anything new here.** |
+| **`rhombus-redux`** | React/Flux tooling. | Don't use unless I tell you to. |
+| **`rhombus-toolkit`** | General tooling projects. | Don't use unless I tell you to. |
+| **`rewso`** | A company I used to work for. | **Never use.** |
+
+`fnrhombus/arch-setup` properly belongs under `rhombu5` — it's an oversight on my part that I'll fix eventually. Don't pattern-match off that location when picking owners for new repos.
