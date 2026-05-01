@@ -1,19 +1,31 @@
 #!/usr/bin/env bash
-# hypr-plugins-on-login — enable Hyprland plugins + source per-plugin
+# hypr-plugins-on-login — load Hyprland plugins + source per-plugin
 # config inside an active Hyprland session. Called from exec.conf as
 # `exec-once`.
 #
-# Why this lives outside hyprpm: `hyprpm enable` writes state.toml AND
-# calls `hyprctl plugin load`, which requires HYPRLAND_INSTANCE_SIGNATURE
-# in the env — i.e., a live session. postinstall.sh runs from a TTY where
-# no session exists; it can `hyprpm update && hyprpm add` (which only
-# needs sudo + hyprland headers), but `enable` has to wait until first
-# login. This script bridges that gap, runs once per session, idempotent
-# on re-runs (hyprpm enable on an already-enabled plugin is a no-op).
+# Why this lives outside hyprpm: hyprpm's load path needs
+# HYPRLAND_INSTANCE_SIGNATURE to talk to the compositor — i.e., a live
+# session. postinstall.sh runs from a TTY where no session exists; it
+# can `hyprpm update && hyprpm add` (which only need sudo + hyprland
+# headers) but actually loading the .so has to wait until first login.
+# This script bridges that gap, runs once per session, idempotent on
+# re-runs.
 #
-# `hyprpm enable` does NOT need sudo — it just talks to the running
-# compositor — so this never triggers a TPM-PIN prompt, even with pinpam
-# wired into the sudo PAM stack.
+# hyprpm operates user-scoped (no sudo) — never triggers a TPM-PIN
+# prompt, even with pinpam wired into the sudo PAM stack.
+#
+# Two-phase design:
+#   1. Per-plugin `hyprpm enable` — flips state.toml on first-ever
+#      login (no-op afterwards). Errors swallowed: this fails harmlessly
+#      with "Failed to write plugin state" if something owns the cache
+#      file root:root (a known regression after sudo-built warm-ups
+#      from postinstall.sh §13). The reload below recovers anyway.
+#   2. Single trailing `hyprpm reload` — "Ensure all enabled plugins
+#      are loaded". This is the load primitive — `enable` on an
+#      already-enabled plugin does NOT call `hyprctl plugin load` and
+#      so does NOT load the .so into the running compositor. Without
+#      this reload, plugins that were enabled in a previous session
+#      (state.toml says enabled = true) silently fail to load.
 
 set -u
 
@@ -37,15 +49,32 @@ plugins=(
 
 for entry in "${plugins[@]}"; do
     name="${entry%%:*}"
-    conf="${entry##*:}"
 
     # Only act if hyprpm has the plugin built (was added by postinstall §13).
     if ! hyprpm list 2>/dev/null | grep -qi "$name"; then
         continue
     fi
 
-    # Idempotent — running enable on an already-enabled plugin is a no-op.
+    # Phase 1: ensure state.toml says enabled. No-op (and harmless
+    # write-state errors) if already enabled — phase 2 recovers.
     hyprpm enable "$name" >/dev/null 2>&1 || true
+done
+
+# Phase 2: actually load any enabled-but-not-yet-loaded .so into the
+# live compositor. This is the line that was missing and caused
+# Hyprspace to silently fail to load on session start.
+hyprpm reload >/dev/null 2>&1 || true
+
+# Phase 3: source per-plugin config inside the live session, AFTER the
+# .so is loaded (so dispatchers like `overview:toggle` are registered
+# before bindd lines reference them).
+for entry in "${plugins[@]}"; do
+    name="${entry%%:*}"
+    conf="${entry##*:}"
+
+    if ! hyprpm list 2>/dev/null | grep -qi "$name"; then
+        continue
+    fi
 
     if [[ -f "$HOME/.config/hypr/post-plugins.d/${conf}.conf" ]]; then
         hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/${conf}.conf" >/dev/null 2>&1 || true
