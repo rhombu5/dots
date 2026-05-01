@@ -18,7 +18,7 @@ shift_percent = 11.11111
 input = "workspace"
 
 [[global.layers]]
-path = "/home/tom/.cache/wpws/wide-handpicked-half.png"
+path = "/home/tom/.cache/wpws/wide/85e63a24805dde9e.png"
 # shift_multiplier = 1 #{ x = 0.5, y = 0 }
 scale = 1.0
 fit = "fit_height"
