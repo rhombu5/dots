@@ -178,39 +178,52 @@ def run_hooks(cfg: dict) -> None:
 
 # -------- stitch + hyprlax ------------------------------------------------
 
-# Number of workspace slots in the stitched canvas. Covers Hyprland's
-# typical 1..9 workspaces; pool wraps if smaller. Could be config later.
-NUM_SLOTS = 9
+# Maximum workspace slots in the stitched canvas. Bounded both by the
+# user's expected workspace range and by GL_MAX_TEXTURE_SIZE (typically
+# 16384 — anything wider triggers GL_INVALID_VALUE on draw and renders
+# black). Per-monitor cap is computed in num_slots() below.
+NUM_SLOTS_MAX = 9
+GL_TEXTURE_SAFE_WIDTH = 16384
 
 
-def slot_sequence(pool: list[Path], offset: int, n: int) -> list[Path]:
-    """Return the wallpaper for slots 1..n (matching wpws's per-workspace
-    assignment, so canvas slot i holds wallpaper_for(i+1))."""
-    return [pool[(i + offset) % len(pool)] for i in range(n)]
+def num_slots(mw: int) -> int:
+    """How many monitor-width slots fit in a single GL texture, capped at
+    the user's expected workspace range. For a 1920px monitor: 8 slots
+    (ws 1-8 covered; ws 9 wraps off the canvas)."""
+    return max(1, min(NUM_SLOTS_MAX, GL_TEXTURE_SAFE_WIDTH // max(1, mw)))
 
 
-def stitch_key(pool: list[Path], offset: int, mw: int, mh: int) -> str:
-    seq = slot_sequence(pool, offset, NUM_SLOTS)
-    src = "|".join(p.name for p in seq) + f"|{mw}x{mh}"
+def slot_sequence(pool: list[Path], offset: int, start_ws: int, n: int) -> list[Path]:
+    """Return the wallpaper for canvas slots 0..n-1, where slot i is the
+    wallpaper for ws (start_ws + i). Hyprlax anchors its viewport at
+    canvas offset 0 = whatever ws was active when it launched, so
+    aligning canvas[0] with that ws makes wallpaper-and-accent agree
+    without any bounce/dispatch trick."""
+    return [pool[(start_ws + i - 1 + offset) % len(pool)] for i in range(n)]
+
+
+def stitch_key(pool: list[Path], offset: int, mw: int, mh: int, start_ws: int) -> str:
+    seq = slot_sequence(pool, offset, start_ws, num_slots(mw))
+    src = "|".join(p.name for p in seq) + f"|{mw}x{mh}|s{start_ws}"
     return hashlib.sha256(src.encode()).hexdigest()[:16]
 
 
-def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int) -> Path:
-    """Build (or return cached) wide image: NUM_SLOTS wallpapers crop-fit to
-    monitor size, concatenated horizontally, in workspace order (slot i =
-    wallpaper for ws i+1, with pool wraparound). Cached at
+def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int, start_ws: int) -> Path:
+    """Build (or return cached) wide image: num_slots(mw) wallpapers
+    crop-fit to monitor size, concatenated horizontally, starting with
+    the wallpaper for `start_ws` at slot 0. Cached at
     ~/.cache/wpws/wide/<key>.png. Atomic — writes to a .partial file and
     renames into place so a killed daemon can't leave a corrupt cache."""
     if not pool:
         raise RuntimeError("wpws: cannot stitch — pool is empty")
-    out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh)}.png"
+    out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh, start_ws)}.png"
     if out.exists():
         return out
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".partial.png")
     tmp.unlink(missing_ok=True)
 
-    seq = slot_sequence(pool, offset, NUM_SLOTS)
+    seq = slot_sequence(pool, offset, start_ws, num_slots(mw))
     args = ["magick"]
     for p in seq:
         args += [
@@ -236,37 +249,30 @@ def write_hyprlax_config(wide: Path, cfg: dict) -> Path:
     `shift` in the TOML is **pixels** per workspace (the docs are
     ambiguous; `--debug` output is the truth: shift=100 → 100px per
     workspace, confirmed by Offset deltas of 100). The CLI `--shift`
-    uses percent of screen — different from the TOML field. To pan one
-    full screen-width per workspace, set shift = monitor_width.
+    uses percent of screen — different from the TOML field.
 
-    Hyprlax anchors at whichever workspace is active when it starts
-    (workspace at start = canvas offset 0). The canvas is laid out in
-    workspace order (slot i = wallpaper for ws i+1) — slot 0 must show
-    on ws 1. To compensate for the anchor being whatever ws the daemon
-    happens to start on, pre-shift the viewport via `uv_offset.x =
-    (start_ws - 1) / NUM_SLOTS`. After that, hyprlax's per-workspace
-    pan lands on the right slot for every workspace ID."""
+    Hyprlax then DIVIDES every offset by content_scale (~1.30 in our
+    case — probably some internal HiDPI/parallax oversample factor)
+    before sampling the texture. So to actually pan one full screen-
+    width of texture per workspace, multiply the shift up by that
+    factor: shift = monitor_width * 1.30 ≈ monitor_width * 13/10."""
     cfg_dir = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "hyprlax"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     out = cfg_dir / "hyprlax.toml"
     duration = cfg["hyprlax"]["duration"]
     easing = cfg["hyprlax"]["easing"]
     mw = focused_monitor()["width"]
-    try:
-        start_ws, _ = focused_ws_and_output()
-    except Exception:  # noqa: BLE001
-        start_ws = 1
-    uv_x = max(0.0, min(1.0, (start_ws - 1) / NUM_SLOTS))
+    # 1.30 = empirical content_scale hyprlax 2.2.2 applies. Probably an
+    # internal oversample factor for parallax smoothness.
+    shift_px = round(mw * 1.30)
     out.write_text(
         f'# Generated by wpws — do not edit by hand. Regenerated on every\n'
-        f'# rotate / pool change. uv_offset.x compensates for hyprlax\n'
-        f'# anchoring at the workspace that was active when it started\n'
-        f'# (currently ws {start_ws} of {NUM_SLOTS}).\n'
+        f'# rotate / pool change.\n'
         f'[global]\n'
         f'fps = 60\n'
         f'duration = {duration}\n'
         f'easing = "{easing}"\n'
-        f'shift = {mw}\n'
+        f'shift = {shift_px}\n'
         f'input = "workspace"\n'
         f'\n'
         f'[[global.layers]]\n'
@@ -274,16 +280,16 @@ def write_hyprlax_config(wide: Path, cfg: dict) -> Path:
         f'shift_multiplier = 1.0\n'
         f'fit = "fit_height"\n'
         f'align = {{ x = 0.0, y = 0.5 }}\n'
-        f'uv_offset = {{ x = {uv_x:.6f}, y = 0.0 }}\n'
     )
     return out
 
 
 def ensure_hyprlax(wide: Path, cfg: dict) -> None:
-    """Kill any existing hyprlax (and any straggler awww-daemon from the
-    pre-hyprlax era), then spawn fresh with the wpws-generated config.
-    fit=fit_height keeps the wide image at native horizontal resolution so
-    the per-workspace shift actually pans across the texture."""
+    """Kill any existing hyprlax (and any straggler awww-daemon), then
+    spawn fresh with the wpws-generated config. Hyprlax anchors its
+    viewport at whatever workspace is active when it launches — the
+    canvas was already stitched starting with that ws's wallpaper, so
+    the alignment is automatic."""
     toml_path = write_hyprlax_config(wide, cfg)
     subprocess.run(["pkill", "hyprlax"], check=False)
     subprocess.run(["pkill", "-f", "awww-daemon"], check=False)
@@ -472,12 +478,17 @@ def apply_accent(ws_id: int, cfg: dict) -> None:
 
 def restitch_and_restart(cfg: dict) -> None:
     """Build (or fetch from cache) the wide canvas for the current pool +
-    offset, then kick hyprlax onto it."""
+    offset, with the canvas's first slot aligned to the focused workspace
+    so hyprlax's automatic anchor-at-current-ws matches."""
     pool = list_pool(cfg)
     if not pool:
         return
     mon = focused_monitor()
-    wide = stitch_wide(pool, read_offset(), mon["width"], mon["height"])
+    try:
+        start_ws, _ = focused_ws_and_output()
+    except Exception:  # noqa: BLE001
+        start_ws = 1
+    wide = stitch_wide(pool, read_offset(), mon["width"], mon["height"], start_ws)
     ensure_hyprlax(wide, cfg)
 
 
