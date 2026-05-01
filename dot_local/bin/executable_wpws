@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
 """wpws — per-workspace wallpaper + dynamic accent for Hyprland.
 
-Usage:
-  wpws daemon            Run the IPC listener (long-running). Started via
-                         exec-once in hyprland's exec.conf.
-  wpws switch <ws> [out] Apply wallpaper + accent for workspace `ws` on
-                         output `out` (defaults to focused output).
-  wpws rotate            Increment the offset (shifts every workspace's
-                         wallpaper by 1) and re-apply current state.
-  wpws status            Print current state.
-  wpws theme <image>     Pre-warm the palette cache for one wallpaper.
+Architecture:
+  * Wallpaper:  one wide stitched canvas (all pool images crop-fit to
+                monitor size, concatenated horizontally, rotated by
+                offset). Displayed via `hyprlax`, which pans the
+                viewport by one monitor-width per workspace switch.
+                Going from ws 1 → ws 5 sweeps through 2, 3, 4 in the
+                same duration as a single-step pan — windows take the
+                straight path, wallpaper takes the scenic route.
+  * Accent:     extracted from the *original* per-workspace wallpaper
+                (not the stitched canvas) by a tiny PIL dominant-color
+                routine. Pushed live via `hyprctl keyword` (borders +
+                groupbar) and atomic-mv'd into ~/.config/themes/
+                accent.{css,conf,ini} (waybar, swaync, fuzzel).
+  * matugen     still owns the slow path — full M3 palette for GTK,
+                Qt, helix, ghostty, tmux, yazi, zathura, hyprlock,
+                regreet — fired by ~/.local/bin/wallpaper-rotate.
 
-Config: ~/.config/wpws/config.toml (optional). Defaults are sane.
-
-Design:
-  * Slow path = matugen via wallpaper-rotate (full M3 palette → all themes).
-  * Fast path = this daemon. Extracts a dominant color from the wallpaper
-    (~10ms with PIL), derives a 5-slot mini-palette, writes accent.css/
-    .conf/.ini under ~/.config/themes/, and pushes Hyprland keywords live
-    via `hyprctl keyword` (no reload). Per-wallpaper palette cached at
-    ~/.cache/wpws/themes/<sha256(path)>/palette.json.
+Subcommands:
+  daemon            Long-running. Started by exec-once in exec.conf.
+  switch <ws> [out] Apply accent for workspace `ws`.
+  rotate            Increment offset → restitch + restart hyprlax.
+  status            Print current state + assignment table.
+  theme <image>     Pre-warm the palette cache for one wallpaper.
 """
 
 from __future__ import annotations
@@ -28,7 +32,6 @@ import colorsys
 import hashlib
 import json
 import os
-import shlex
 import socket
 import subprocess
 import sys
@@ -58,12 +61,18 @@ DEFAULT_CONFIG: dict = {
     "debounce": {
         "min_interval_seconds": 0.05,
     },
+    "hyprlax": {
+        # Total animation duration in seconds. Constant regardless of
+        # workspace jump distance — see hyprlax `--duration`.
+        "duration": "0.3",
+        # Easing curve. linear / sine / expo / elastic / etc per hyprlax docs.
+        "easing": "expo",
+    },
 }
 
 # Hyprland keywords pushed live on every accent update. Templates support
 # {primary}, {on_primary}, {primary_container}, {on_primary_container},
-# {secondary}, {tertiary}, {error}. Each template = one full `keyword`
-# argument; daemon joins with " ; " for `hyprctl --batch`.
+# {secondary}, {tertiary}, {error}.
 HYPR_KEYWORDS = [
     "general:col.active_border rgb({primary}) rgb({tertiary}) 45deg",
     "group:col.border_active rgb({primary}) rgb({tertiary}) 45deg",
@@ -79,13 +88,16 @@ def expand(p: str) -> Path:
 
 
 def load_config() -> dict:
-    cfg = {k: dict(v) for k, v in DEFAULT_CONFIG.items()}
+    cfg = {k: dict(v) if isinstance(v, dict) else v for k, v in DEFAULT_CONFIG.items()}
     f = CONFIG_DIR / "config.toml"
     if f.exists():
         with open(f, "rb") as fh:
             user = tomllib.load(fh)
         for section, values in user.items():
-            cfg.setdefault(section, {}).update(values)
+            if isinstance(values, dict):
+                cfg.setdefault(section, {}).update(values)
+            else:
+                cfg[section] = values
     return cfg
 
 
@@ -123,14 +135,102 @@ def list_pool(cfg: dict) -> list[Path]:
     return sorted(p for p in d.iterdir() if p.is_file() and p.suffix.lower() in exts)
 
 
-def wallpaper_for(ws_id: int, cfg: dict) -> Path | None:
-    pool = list_pool(cfg)
+def wallpaper_for(ws_id: int, pool: list[Path], offset: int) -> Path | None:
     if not pool:
         return None
-    return pool[(ws_id - 1 + read_offset()) % len(pool)]
+    return pool[(ws_id - 1 + offset) % len(pool)]
 
 
-# -------- palette extraction ---------------------------------------------
+# -------- hyprland helpers -----------------------------------------------
+
+def hyprctl_json(*args: str):
+    out = subprocess.check_output(["hyprctl", "-j", *args], text=True)
+    return json.loads(out)
+
+
+def focused_ws_and_output() -> tuple[int, str]:
+    aw = hyprctl_json("activeworkspace")
+    return int(aw["id"]), aw["monitor"]
+
+
+def focused_monitor() -> dict:
+    monitors = hyprctl_json("monitors")
+    for m in monitors:
+        if m.get("focused"):
+            return m
+    return monitors[0] if monitors else {"width": 1920, "height": 1080, "name": ""}
+
+
+def push_keywords(palette: dict[str, str]) -> None:
+    parts = [f"keyword {tpl.format(**palette)}" for tpl in HYPR_KEYWORDS]
+    subprocess.run(
+        ["hyprctl", "--batch", " ; ".join(parts)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def run_hooks(cfg: dict) -> None:
+    for hook in cfg["reload"]["hooks"]:
+        subprocess.run(["sh", "-c", hook], check=False)
+
+
+# -------- stitch + hyprlax ------------------------------------------------
+
+def stitch_key(pool: list[Path], offset: int, mw: int, mh: int) -> str:
+    rotated = pool[offset % len(pool):] + pool[:offset % len(pool)]
+    src = "|".join(p.name for p in rotated) + f"|{mw}x{mh}"
+    return hashlib.sha256(src.encode()).hexdigest()[:16]
+
+
+def stitch_wide(pool: list[Path], offset: int, mw: int, mh: int) -> Path:
+    """Build (or return cached) wide image: pool wallpapers crop-fit to
+    monitor size, concatenated horizontally, in pool-rotated-by-offset
+    order. Cached at ~/.cache/wpws/wide/<key>.png."""
+    if not pool:
+        raise RuntimeError("wpws: cannot stitch — pool is empty")
+    out = CACHE_ROOT / "wide" / f"{stitch_key(pool, offset, mw, mh)}.png"
+    if out.exists():
+        return out
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    rotated = pool[offset % len(pool):] + pool[:offset % len(pool)]
+    args = ["magick"]
+    for p in rotated:
+        args += [
+            "(", str(p),
+            "-resize", f"{mw}x{mh}^",
+            "-gravity", "center",
+            "-extent", f"{mw}x{mh}",
+            ")",
+        ]
+    args += ["+append", str(out)]
+    subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return out
+
+
+def ensure_hyprlax(wide: Path, shift_px: int, cfg: dict) -> None:
+    """Kill any existing hyprlax (and any straggler awww-daemon from the
+    pre-hyprlax era), then spawn fresh on `wide`."""
+    subprocess.run(["pkill", "hyprlax"], check=False)
+    subprocess.run(["pkill", "-f", "awww-daemon"], check=False)
+    time.sleep(0.1)
+    subprocess.Popen(
+        [
+            "hyprlax", str(wide),
+            "--shift", str(shift_px),
+            "--duration", str(cfg["hyprlax"]["duration"]),
+            "--easing", str(cfg["hyprlax"]["easing"]),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+# -------- palette extraction (per original wallpaper) --------------------
 
 def _hex(rgb: tuple[int, int, int]) -> str:
     r, g, b = rgb
@@ -138,35 +238,29 @@ def _hex(rgb: tuple[int, int, int]) -> str:
 
 
 def _rel_luminance_simple(r: int, g: int, b: int) -> float:
-    """Cheap perceptual luminance (used to pick black vs white for on-color)."""
     return 0.299 * r / 255 + 0.587 * g / 255 + 0.114 * b / 255
 
 
 def _rel_luminance_wcag(r: int, g: int, b: int) -> float:
-    """WCAG relative luminance — used for contrast-ratio gating."""
     def chan(c: int) -> float:
         x = c / 255
         return x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
     return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
 
 
-def _contrast_ratio(rgb_a: tuple[int, int, int], rgb_b: tuple[int, int, int]) -> float:
+def _contrast_ratio(rgb_a, rgb_b) -> float:
     la, lb = _rel_luminance_wcag(*rgb_a), _rel_luminance_wcag(*rgb_b)
     lighter, darker = (la, lb) if la > lb else (lb, la)
     return (lighter + 0.05) / (darker + 0.05)
 
 
-# Reference background (static.conf $background = rgb(1e1e1e)). Anything
-# accent-y must clear a WCAG contrast threshold against this so the user
-# can actually see it on the active-window border / waybar pill outline.
 _BG_RGB: tuple[int, int, int] = (0x1e, 0x1e, 0x1e)
-_MIN_CONTRAST = 4.5  # WCAG AA for normal text. Plenty for chrome.
+_MIN_CONTRAST = 4.5
 
 
 def _boost_for_contrast(r: int, g: int, b: int) -> tuple[int, int, int]:
-    """Raise the color's lightness in HSL space until WCAG contrast against
-    the dark background reaches _MIN_CONTRAST. Caps at L=0.92 so we don't
-    blow it out to white. Hue + saturation preserved."""
+    """Raise lightness in HSL until WCAG contrast vs the dark background
+    clears _MIN_CONTRAST. Hue + saturation preserved. Caps at L=0.92."""
     h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
     rgb = (r, g, b)
     while _contrast_ratio(rgb, _BG_RGB) < _MIN_CONTRAST and l < 0.92:
@@ -177,8 +271,7 @@ def _boost_for_contrast(r: int, g: int, b: int) -> tuple[int, int, int]:
 
 
 def extract_palette(wallpaper: Path) -> dict[str, str]:
-    """Return a flat dict of {slot_name: rrggbb} (lowercase, no #)."""
-    from PIL import Image  # imported lazily so `wpws --help` is fast
+    from PIL import Image
 
     img = Image.open(wallpaper).convert("RGB").resize((100, 100))
     quantized = img.quantize(colors=8).convert("RGB")
@@ -188,7 +281,6 @@ def extract_palette(wallpaper: Path) -> dict[str, str]:
         count, rgb = item
         r, g, b = rgb
         h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-        # Skip near-greys and extremes; prefer mid-light, saturated colors.
         if s < 0.15 or l < 0.15 or l > 0.9:
             return -1
         return s * (1 - abs(0.55 - l)) * count
@@ -198,28 +290,18 @@ def extract_palette(wallpaper: Path) -> dict[str, str]:
         if score(best) < 0:
             best = max(counts, key=lambda c: c[0])
     else:
-        best = (1, (147, 205, 246))  # neutral fallback (M3 default-ish blue)
+        best = (1, (147, 205, 246))
 
     r, g, b = best[1]
-    # Boost lightness if the dominant color is too dark to read against
-    # the dark background (#1e1e1e). Without this, dark wallpapers yield
-    # near-invisible accent borders / pills.
     r, g, b = _boost_for_contrast(r, g, b)
     h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
 
-    # primary_container: darker + desaturated variant of primary, used as
-    # fill (active workspace pill, tab fill). Contrast against text on it
-    # is handled via on_container choice below.
     cr, cg, cb = colorsys.hls_to_rgb(h, max(0.18, l * 0.45), s * 0.6)
     container = (int(cr * 255), int(cg * 255), int(cb * 255))
 
-    # on_primary / on_primary_container: white-or-black for contrast.
     on_primary = (0, 0, 0) if _rel_luminance_simple(r, g, b) > 0.55 else (255, 255, 255)
     on_container = (255, 255, 255) if _rel_luminance_simple(*container) <= 0.55 else (0, 0, 0)
 
-    # secondary, tertiary: hue-rotate primary by +30° / +60° at lower S.
-    # Tertiary is the second stop of col.active_border — boost it too so
-    # the gradient stays legible end-to-end.
     sh = (h + 1 / 12) % 1.0
     th = (h + 1 / 6) % 1.0
     sr, sg, sb = colorsys.hls_to_rgb(sh, l, s * 0.7)
@@ -304,71 +386,32 @@ def write_theme(palette: dict[str, str], target_dir: Path) -> None:
         tmp.replace(target_dir / name)
 
 
-# -------- hyprland helpers -----------------------------------------------
+# -------- accent application (no wallpaper change — hyprlax owns that) ---
 
-def hyprctl_json(*args: str):
-    out = subprocess.check_output(["hyprctl", "-j", *args], text=True)
-    return json.loads(out)
-
-
-def focused_ws_and_output() -> tuple[int, str]:
-    aw = hyprctl_json("activeworkspace")
-    return int(aw["id"]), aw["monitor"]
-
-
-def push_keywords(palette: dict[str, str]) -> None:
-    parts = [f"keyword {tpl.format(**palette)}" for tpl in HYPR_KEYWORDS]
-    subprocess.run(
-        ["hyprctl", "--batch", " ; ".join(parts)],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
-# In-memory: per-output last-seen workspace ID. Used to decide pan direction.
-_LAST_WS_PER_OUTPUT: dict[str, int] = {}
-
-
-def set_wallpaper(output: str, path: Path, ws_id: int) -> None:
-    """Swap the wallpaper for `output`. Instant — no transition.
-
-    Earlier attempt at a kill-awww+respawn trick to leverage Hyprland's
-    layersIn/layersOut animations (per hyprwm/Hyprland#5507) for a real
-    panning slide proved too racy: respawn timing collided with rapid
-    workspace events and dropped wallpaper updates. awww's built-in -t
-    transitions are wipes (one image revealed under the other) which
-    isn't what 'pan with windows' means visually. Live with instant
-    until either Hyprland implements layer-participation in workspace
-    slides, or we move to a daemon that supports true two-image slide."""
-    _LAST_WS_PER_OUTPUT[output] = ws_id
-    subprocess.run(
-        ["awww", "img", "-t", "none", "-o", output, str(path)],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
-def run_hooks(cfg: dict) -> None:
-    for hook in cfg["reload"]["hooks"]:
-        subprocess.run(["sh", "-c", hook], check=False)
-
-
-# -------- apply ----------------------------------------------------------
-
-def apply(ws_id: int, output: str, cfg: dict, signal_consumers: bool = True) -> None:
-    wp = wallpaper_for(ws_id, cfg)
+def apply_accent(ws_id: int, cfg: dict) -> None:
+    pool = list_pool(cfg)
+    if not pool:
+        return
+    wp = wallpaper_for(ws_id, pool, read_offset())
     if wp is None:
         return
     palette = palette_cached(wp)
     write_theme(palette, themes_dir(cfg))
-    set_wallpaper(output, wp, ws_id)
     push_keywords(palette)
-    if signal_consumers:
-        run_hooks(cfg)
+    run_hooks(cfg)
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-    (CACHE_ROOT / "current").write_text(f"{ws_id}\t{output}\t{wp}\n")
+    (CACHE_ROOT / "current").write_text(f"{ws_id}\t{wp}\n")
+
+
+def restitch_and_restart(cfg: dict) -> None:
+    """Build (or fetch from cache) the wide canvas for the current pool +
+    offset, then kick hyprlax onto it."""
+    pool = list_pool(cfg)
+    if not pool:
+        return
+    mon = focused_monitor()
+    wide = stitch_wide(pool, read_offset(), mon["width"], mon["height"])
+    ensure_hyprlax(wide, mon["width"], cfg)
 
 
 # -------- subcommands ----------------------------------------------------
@@ -379,14 +422,21 @@ def cmd_daemon(cfg: dict) -> None:
         sys.exit("wpws: HYPRLAND_INSTANCE_SIGNATURE not set; run inside Hyprland.")
     sock_path = RUNTIME / "hypr" / sig / ".socket2.sock"
 
-    # Initial apply for whatever's focused right now.
+    # Boot: ensure the wide canvas is built and hyprlax is up.
     try:
-        ws, mon = focused_ws_and_output()
-        apply(ws, mon, cfg)
+        restitch_and_restart(cfg)
     except Exception as e:  # noqa: BLE001
-        print(f"wpws: initial apply failed: {e}", file=sys.stderr)
+        print(f"wpws: restitch_and_restart failed: {e}", file=sys.stderr)
 
-    # IPC loop. socket2 emits one event per line as `<event>>><payload>`.
+    # Initial accent push for the focused workspace.
+    try:
+        ws, _ = focused_ws_and_output()
+        apply_accent(ws, cfg)
+    except Exception as e:  # noqa: BLE001
+        print(f"wpws: initial accent apply failed: {e}", file=sys.stderr)
+
+    # Listen for workspace events; on each, update accent (hyprlax handles
+    # the wallpaper pan itself via its own IPC listener).
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(str(sock_path))
     f = s.makefile("r")
@@ -398,7 +448,7 @@ def cmd_daemon(cfg: dict) -> None:
         if not line or ">>" not in line:
             continue
         event, payload = line.split(">>", 1)
-        if event not in ("workspacev2", "focusedmon"):
+        if event != "workspacev2":
             continue
         now = time.monotonic()
         if now - last < debounce:
@@ -406,25 +456,17 @@ def cmd_daemon(cfg: dict) -> None:
             continue
         last = now
         try:
-            if event == "workspacev2":
-                # payload: "<id>,<name>"
-                ws_id = int(payload.split(",", 1)[0])
-                _, mon = focused_ws_and_output()
-            else:  # focusedmon
-                # payload: "<mon>,<ws_name>"
-                mon, ws_name = payload.split(",", 1)
-                ws_id = int(ws_name) if ws_name.isdigit() else focused_ws_and_output()[0]
-            apply(ws_id, mon, cfg)
+            ws_id = int(payload.split(",", 1)[0])
+            apply_accent(ws_id, cfg)
         except Exception as e:  # noqa: BLE001
-            print(f"wpws: event {event} handling failed: {e}", file=sys.stderr)
+            print(f"wpws: event handling failed: {e}", file=sys.stderr)
 
 
 def cmd_switch(args: list[str], cfg: dict) -> None:
     if not args:
         sys.exit("usage: wpws switch <ws> [output]")
     ws_id = int(args[0])
-    output = args[1] if len(args) > 1 else focused_ws_and_output()[1]
-    apply(ws_id, output, cfg)
+    apply_accent(ws_id, cfg)
 
 
 def cmd_rotate(cfg: dict) -> None:
@@ -432,10 +474,9 @@ def cmd_rotate(cfg: dict) -> None:
     if not pool:
         sys.exit(f"wpws: pool empty: {cfg['pool']['dir']}")
     write_offset((read_offset() + 1) % len(pool))
-    # Re-apply on every output.
-    for m in hyprctl_json("monitors"):
-        ws_id = int(m["activeWorkspace"]["id"])
-        apply(ws_id, m["name"], cfg, signal_consumers=(m.get("focused", False)))
+    restitch_and_restart(cfg)
+    ws, _ = focused_ws_and_output()
+    apply_accent(ws, cfg)
 
 
 def cmd_status(cfg: dict) -> None:
@@ -445,14 +486,18 @@ def cmd_status(cfg: dict) -> None:
     print(f"offset:     {read_offset()}")
     cur = CACHE_ROOT / "current"
     if cur.exists():
-        ws, mon, wp = cur.read_text().strip().split("\t", 2)
-        print(f"focused:    ws={ws} output={mon}")
+        ws, wp = cur.read_text().strip().split("\t", 1)
+        print(f"focused ws: {ws}")
         print(f"wallpaper:  {wp}")
     if pool:
+        mon = focused_monitor()
+        key = stitch_key(pool, read_offset(), mon["width"], mon["height"])
+        wide = CACHE_ROOT / "wide" / f"{key}.png"
+        print(f"wide cache: {wide} ({'present' if wide.exists() else 'will-build'})")
         print()
         print("workspace -> wallpaper assignment (with current offset):")
         for i in range(1, min(len(pool), 9) + 1):
-            wp = wallpaper_for(i, cfg)
+            wp = wallpaper_for(i, pool, read_offset())
             print(f"  ws {i}: {wp.name if wp else '(none)'}")
 
 
