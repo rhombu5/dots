@@ -25,10 +25,14 @@ fi
 # `hyprpm list` reports (case-insensitive grep match), VALUE = filename
 # stem in ~/.config/hypr/post-plugins.d/<stem>.conf.
 #
-# Hyprspace is intentionally absent — see plugins.conf for why (current
-# HEAD crashes Hyprland 0.54.3 in onKeyPress).
+# Hyprspace is built from the 0xl30/Hyprspace fork (PR #229 against
+# KZDKM/Hyprspace) — the upstream HEAD post-PR-#223 crashes Hyprland
+# 0.54.3 immediately on enable (issues #226/#227, fixed by PR #229
+# which is open as of 2026-04-30). If the PR ever merges upstream,
+# repoint hyprpm back at KZDKM/Hyprspace.
 plugins=(
     "hyprgrass:hyprgrass"
+    "Hyprspace:hyprspace"
 )
 
 for entry in "${plugins[@]}"; do
