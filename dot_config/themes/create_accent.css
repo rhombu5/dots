@@ -1,0 +1,18 @@
+/* Accent color slots — overwritten on every wallpaper change.
+ *
+ * Source of truth at runtime is wpws-daemon (per-workspace) or matugen
+ * (full theme regen via wallpaper-rotate). The chezmoi-shipped version
+ * is just a neutral bootstrap default so the file always exists when
+ * waybar/swaync first import it.
+ *
+ * `create_` prefix means chezmoi creates this on first apply only,
+ * never overwrites it afterwards — matugen / wpws own it from then on. */
+
+@define-color primary             #93cdf6;
+@define-color on-primary          #00344c;
+@define-color primary-container   #004c6c;
+@define-color on-primary-container #c8e6ff;
+@define-color secondary           #b6c9d8;
+@define-color tertiary            #cdc0e9;
+@define-color error               #ffb4ab;
+@define-color on-error            #690005;

@@ -1,0 +1,432 @@
+#!/usr/bin/env python3
+"""wpws — per-workspace wallpaper + dynamic accent for Hyprland.
+
+Usage:
+  wpws daemon            Run the IPC listener (long-running). Started via
+                         exec-once in hyprland's exec.conf.
+  wpws switch <ws> [out] Apply wallpaper + accent for workspace `ws` on
+                         output `out` (defaults to focused output).
+  wpws rotate            Increment the offset (shifts every workspace's
+                         wallpaper by 1) and re-apply current state.
+  wpws status            Print current state.
+  wpws theme <image>     Pre-warm the palette cache for one wallpaper.
+
+Config: ~/.config/wpws/config.toml (optional). Defaults are sane.
+
+Design:
+  * Slow path = matugen via wallpaper-rotate (full M3 palette → all themes).
+  * Fast path = this daemon. Extracts a dominant color from the wallpaper
+    (~10ms with PIL), derives a 5-slot mini-palette, writes accent.css/
+    .conf/.ini under ~/.config/themes/, and pushes Hyprland keywords live
+    via `hyprctl keyword` (no reload). Per-wallpaper palette cached at
+    ~/.cache/wpws/themes/<sha256(path)>/palette.json.
+"""
+
+from __future__ import annotations
+
+import colorsys
+import hashlib
+import json
+import os
+import shlex
+import socket
+import subprocess
+import sys
+import time
+import tomllib
+from pathlib import Path
+
+HOME = Path.home()
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "wpws"
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "wpws"
+
+DEFAULT_CONFIG: dict = {
+    "pool": {
+        "dir": str(HOME / "Pictures" / "Wallpapers"),
+        "extensions": [".jpg", ".jpeg", ".png", ".webp"],
+    },
+    "targets": {
+        "themes_dir": str(HOME / ".config" / "themes"),
+    },
+    "reload": {
+        "hooks": [
+            "pkill -SIGUSR2 waybar 2>/dev/null || true",
+            "swaync-client --reload-css 2>/dev/null || true",
+        ],
+    },
+    "debounce": {
+        "min_interval_seconds": 0.05,
+    },
+}
+
+# Hyprland keywords pushed live on every accent update. Templates support
+# {primary}, {on_primary}, {primary_container}, {on_primary_container},
+# {secondary}, {tertiary}, {error}. Each template = one full `keyword`
+# argument; daemon joins with " ; " for `hyprctl --batch`.
+HYPR_KEYWORDS = [
+    "general:col.active_border rgb({primary}) rgb({tertiary}) 45deg",
+    "group:col.border_active rgb({primary}) rgb({tertiary}) 45deg",
+    "group:groupbar:col.active rgb({primary_container})",
+    "group:groupbar:text_color rgb({on_primary_container})",
+]
+
+
+# -------- config + paths -------------------------------------------------
+
+def expand(p: str) -> Path:
+    return Path(os.path.expanduser(os.path.expandvars(p)))
+
+
+def load_config() -> dict:
+    cfg = {k: dict(v) for k, v in DEFAULT_CONFIG.items()}
+    f = CONFIG_DIR / "config.toml"
+    if f.exists():
+        with open(f, "rb") as fh:
+            user = tomllib.load(fh)
+        for section, values in user.items():
+            cfg.setdefault(section, {}).update(values)
+    return cfg
+
+
+def themes_dir(cfg: dict) -> Path:
+    return expand(cfg["targets"]["themes_dir"])
+
+
+def cache_for(wallpaper: Path) -> Path:
+    h = hashlib.sha256(str(wallpaper.resolve()).encode()).hexdigest()
+    return CACHE_ROOT / "themes" / h
+
+
+def read_offset() -> int:
+    f = CACHE_ROOT / "offset"
+    if not f.exists():
+        return 0
+    try:
+        return int(f.read_text().strip() or "0")
+    except ValueError:
+        return 0
+
+
+def write_offset(n: int) -> None:
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    (CACHE_ROOT / "offset").write_text(str(n))
+
+
+# -------- pool + assignment ----------------------------------------------
+
+def list_pool(cfg: dict) -> list[Path]:
+    d = expand(cfg["pool"]["dir"])
+    if not d.is_dir():
+        return []
+    exts = {e.lower() for e in cfg["pool"]["extensions"]}
+    return sorted(p for p in d.iterdir() if p.is_file() and p.suffix.lower() in exts)
+
+
+def wallpaper_for(ws_id: int, cfg: dict) -> Path | None:
+    pool = list_pool(cfg)
+    if not pool:
+        return None
+    return pool[(ws_id - 1 + read_offset()) % len(pool)]
+
+
+# -------- palette extraction ---------------------------------------------
+
+def _hex(rgb: tuple[int, int, int]) -> str:
+    r, g, b = rgb
+    return f"{r:02x}{g:02x}{b:02x}"
+
+
+def _rel_luminance(r: int, g: int, b: int) -> float:
+    return 0.299 * r / 255 + 0.587 * g / 255 + 0.114 * b / 255
+
+
+def extract_palette(wallpaper: Path) -> dict[str, str]:
+    """Return a flat dict of {slot_name: rrggbb} (lowercase, no #)."""
+    from PIL import Image  # imported lazily so `wpws --help` is fast
+
+    img = Image.open(wallpaper).convert("RGB").resize((100, 100))
+    quantized = img.quantize(colors=8).convert("RGB")
+    counts = quantized.getcolors(maxcolors=256) or []
+
+    def score(item):
+        count, rgb = item
+        r, g, b = rgb
+        h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        # Skip near-greys and extremes; prefer mid-light, saturated colors.
+        if s < 0.15 or l < 0.15 or l > 0.9:
+            return -1
+        return s * (1 - abs(0.55 - l)) * count
+
+    if counts:
+        best = max(counts, key=score)
+        if score(best) < 0:
+            best = max(counts, key=lambda c: c[0])
+    else:
+        best = (1, (147, 205, 246))  # neutral fallback (M3 default-ish blue)
+
+    r, g, b = best[1]
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+
+    # primary_container: darker + desaturated variant of primary.
+    cr, cg, cb = colorsys.hls_to_rgb(h, max(0.18, l * 0.45), s * 0.6)
+    container = (int(cr * 255), int(cg * 255), int(cb * 255))
+
+    # on_primary / on_primary_container: white-or-black for contrast.
+    on_primary = (0, 0, 0) if _rel_luminance(r, g, b) > 0.55 else (255, 255, 255)
+    on_container = (255, 255, 255) if _rel_luminance(*container) <= 0.55 else (0, 0, 0)
+
+    # secondary, tertiary: hue-rotate primary by +30° / +60° at lower S.
+    sh = (h + 1 / 12) % 1.0
+    th = (h + 1 / 6) % 1.0
+    sr, sg, sb = colorsys.hls_to_rgb(sh, l, s * 0.7)
+    tr, tg, tb = colorsys.hls_to_rgb(th, l, s * 0.7)
+    secondary = (int(sr * 255), int(sg * 255), int(sb * 255))
+    tertiary = (int(tr * 255), int(tg * 255), int(tb * 255))
+
+    return {
+        "primary": _hex((r, g, b)),
+        "on_primary": _hex(on_primary),
+        "primary_container": _hex(container),
+        "on_primary_container": _hex(on_container),
+        "secondary": _hex(secondary),
+        "tertiary": _hex(tertiary),
+        "error": "ffb4ab",
+        "on_error": "690005",
+    }
+
+
+def palette_cached(wallpaper: Path) -> dict[str, str]:
+    cdir = cache_for(wallpaper)
+    pjson = cdir / "palette.json"
+    if pjson.exists():
+        try:
+            return json.loads(pjson.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    palette = extract_palette(wallpaper)
+    cdir.mkdir(parents=True, exist_ok=True)
+    pjson.write_text(json.dumps(palette))
+    return palette
+
+
+# -------- theme files (atomic writes) ------------------------------------
+
+def render_css(p: dict[str, str]) -> str:
+    return (
+        f"@define-color primary             #{p['primary']};\n"
+        f"@define-color on-primary          #{p['on_primary']};\n"
+        f"@define-color primary-container   #{p['primary_container']};\n"
+        f"@define-color on-primary-container #{p['on_primary_container']};\n"
+        f"@define-color secondary           #{p['secondary']};\n"
+        f"@define-color tertiary            #{p['tertiary']};\n"
+        f"@define-color error               #{p['error']};\n"
+        f"@define-color on-error            #{p['on_error']};\n"
+    )
+
+
+def render_conf(p: dict[str, str]) -> str:
+    return (
+        f"$primary              = rgb({p['primary']})\n"
+        f"$on_primary           = rgb({p['on_primary']})\n"
+        f"$primary_container    = rgb({p['primary_container']})\n"
+        f"$on_primary_container = rgb({p['on_primary_container']})\n"
+        f"$secondary            = rgb({p['secondary']})\n"
+        f"$tertiary             = rgb({p['tertiary']})\n"
+        f"$error                = rgb({p['error']})\n"
+    )
+
+
+def render_ini(p: dict[str, str]) -> str:
+    return (
+        "[colors]\n"
+        f"match={p['primary']}ff\n"
+        f"selection={p['primary_container']}ff\n"
+        f"selection-text={p['on_primary_container']}ff\n"
+        f"selection-match={p['primary']}ff\n"
+        f"border={p['primary']}ff\n"
+    )
+
+
+def write_theme(palette: dict[str, str], target_dir: Path) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    files = {
+        "accent.css": render_css(palette),
+        "accent.conf": render_conf(palette),
+        "accent.ini": render_ini(palette),
+    }
+    for name, content in files.items():
+        tmp = target_dir / f".{name}.tmp"
+        tmp.write_text(content)
+        tmp.replace(target_dir / name)
+
+
+# -------- hyprland helpers -----------------------------------------------
+
+def hyprctl_json(*args: str):
+    out = subprocess.check_output(["hyprctl", "-j", *args], text=True)
+    return json.loads(out)
+
+
+def focused_ws_and_output() -> tuple[int, str]:
+    aw = hyprctl_json("activeworkspace")
+    return int(aw["id"]), aw["monitor"]
+
+
+def push_keywords(palette: dict[str, str]) -> None:
+    parts = [f"keyword {tpl.format(**palette)}" for tpl in HYPR_KEYWORDS]
+    subprocess.run(
+        ["hyprctl", "--batch", " ; ".join(parts)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def set_wallpaper(output: str, path: Path) -> None:
+    subprocess.run(
+        ["awww", "img", "-o", output, str(path)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def run_hooks(cfg: dict) -> None:
+    for hook in cfg["reload"]["hooks"]:
+        subprocess.run(["sh", "-c", hook], check=False)
+
+
+# -------- apply ----------------------------------------------------------
+
+def apply(ws_id: int, output: str, cfg: dict, signal_consumers: bool = True) -> None:
+    wp = wallpaper_for(ws_id, cfg)
+    if wp is None:
+        return
+    palette = palette_cached(wp)
+    write_theme(palette, themes_dir(cfg))
+    set_wallpaper(output, wp)
+    push_keywords(palette)
+    if signal_consumers:
+        run_hooks(cfg)
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    (CACHE_ROOT / "current").write_text(f"{ws_id}\t{output}\t{wp}\n")
+
+
+# -------- subcommands ----------------------------------------------------
+
+def cmd_daemon(cfg: dict) -> None:
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    if not sig:
+        sys.exit("wpws: HYPRLAND_INSTANCE_SIGNATURE not set; run inside Hyprland.")
+    sock_path = RUNTIME / "hypr" / sig / ".socket2.sock"
+
+    # Initial apply for whatever's focused right now.
+    try:
+        ws, mon = focused_ws_and_output()
+        apply(ws, mon, cfg)
+    except Exception as e:  # noqa: BLE001
+        print(f"wpws: initial apply failed: {e}", file=sys.stderr)
+
+    # IPC loop. socket2 emits one event per line as `<event>>><payload>`.
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(str(sock_path))
+    f = s.makefile("r")
+
+    debounce = float(cfg["debounce"]["min_interval_seconds"])
+    last = 0.0
+    for raw in f:
+        line = raw.strip()
+        if not line or ">>" not in line:
+            continue
+        event, payload = line.split(">>", 1)
+        if event not in ("workspacev2", "focusedmon"):
+            continue
+        now = time.monotonic()
+        if now - last < debounce:
+            last = now
+            continue
+        last = now
+        try:
+            if event == "workspacev2":
+                # payload: "<id>,<name>"
+                ws_id = int(payload.split(",", 1)[0])
+                _, mon = focused_ws_and_output()
+            else:  # focusedmon
+                # payload: "<mon>,<ws_name>"
+                mon, ws_name = payload.split(",", 1)
+                ws_id = int(ws_name) if ws_name.isdigit() else focused_ws_and_output()[0]
+            apply(ws_id, mon, cfg)
+        except Exception as e:  # noqa: BLE001
+            print(f"wpws: event {event} handling failed: {e}", file=sys.stderr)
+
+
+def cmd_switch(args: list[str], cfg: dict) -> None:
+    if not args:
+        sys.exit("usage: wpws switch <ws> [output]")
+    ws_id = int(args[0])
+    output = args[1] if len(args) > 1 else focused_ws_and_output()[1]
+    apply(ws_id, output, cfg)
+
+
+def cmd_rotate(cfg: dict) -> None:
+    pool = list_pool(cfg)
+    if not pool:
+        sys.exit(f"wpws: pool empty: {cfg['pool']['dir']}")
+    write_offset((read_offset() + 1) % len(pool))
+    # Re-apply on every output.
+    for m in hyprctl_json("monitors"):
+        ws_id = int(m["activeWorkspace"]["id"])
+        apply(ws_id, m["name"], cfg, signal_consumers=(m.get("focused", False)))
+
+
+def cmd_status(cfg: dict) -> None:
+    pool = list_pool(cfg)
+    print(f"pool dir:   {cfg['pool']['dir']}")
+    print(f"pool size:  {len(pool)}")
+    print(f"offset:     {read_offset()}")
+    cur = CACHE_ROOT / "current"
+    if cur.exists():
+        ws, mon, wp = cur.read_text().strip().split("\t", 2)
+        print(f"focused:    ws={ws} output={mon}")
+        print(f"wallpaper:  {wp}")
+    if pool:
+        print()
+        print("workspace -> wallpaper assignment (with current offset):")
+        for i in range(1, min(len(pool), 9) + 1):
+            wp = wallpaper_for(i, cfg)
+            print(f"  ws {i}: {wp.name if wp else '(none)'}")
+
+
+def cmd_theme(args: list[str], cfg: dict) -> None:
+    if not args:
+        sys.exit("usage: wpws theme <image>")
+    wp = expand(args[0])
+    if not wp.is_file():
+        sys.exit(f"wpws: not a file: {wp}")
+    palette = palette_cached(wp)
+    print(json.dumps(palette, indent=2))
+
+
+# -------- entry ----------------------------------------------------------
+
+def main() -> None:
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
+    cfg = load_config()
+    cmd, args = sys.argv[1], sys.argv[2:]
+    handlers = {
+        "daemon": lambda: cmd_daemon(cfg),
+        "switch": lambda: cmd_switch(args, cfg),
+        "rotate": lambda: cmd_rotate(cfg),
+        "status": lambda: cmd_status(cfg),
+        "theme": lambda: cmd_theme(args, cfg),
+    }
+    if cmd not in handlers:
+        sys.exit(f"wpws: unknown command: {cmd!r}\n{__doc__}")
+    handlers[cmd]()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,15 @@
+/* Static color slots — VS Code Default Dark+ palette.
+ * Imported by waybar/style.css and swaync/style.css *before* accent.css.
+ * Owned by chezmoi, never regenerated.
+ *
+ * Pair with accent.css (matugen + wpws-managed) for the dynamic accent slots. */
+
+@define-color background        #1e1e1e;
+@define-color on-background     #d4d4d4;
+@define-color surface           #252526;
+@define-color surface-container #2d2d30;
+@define-color surface-high      #3c3c3c;
+@define-color on-surface        #d4d4d4;
+@define-color on-surface-muted  #969696;
+@define-color outline           #3c3c3c;
+@define-color outline-variant   #464647;

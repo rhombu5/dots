@@ -1,6 +1,12 @@
-/* waybar — top-level styling. Colors come from colors.css (matugen-rendered). */
+/* waybar — top-level styling.
+ *
+ * Color slots split across two files:
+ *   ~/.config/themes/static.css  chezmoi-managed, never regenerated
+ *   ~/.config/themes/accent.css  matugen on full regen, wpws on workspace switch
+ * SIGUSR2 reloads CSS without restarting waybar. */
 
-@import url("colors.css");
+@import url("../themes/static.css");
+@import url("../themes/accent.css");
 
 * {
     font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", monospace;

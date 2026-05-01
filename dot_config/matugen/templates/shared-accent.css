@@ -1,0 +1,12 @@
+/* Accent slots — matugen-rendered. Output: ~/.config/themes/accent.css.
+ * Static greys live in ~/.config/themes/static.css (chezmoi-managed).
+ * Both are @import'd by waybar/style.css and swaync/style.css. */
+
+@define-color primary             {{colors.primary.default.hex}};
+@define-color on-primary          {{colors.on_primary.default.hex}};
+@define-color primary-container   {{colors.primary_container.default.hex}};
+@define-color on-primary-container {{colors.on_primary_container.default.hex}};
+@define-color secondary           {{colors.secondary.default.hex}};
+@define-color tertiary            {{colors.tertiary.default.hex}};
+@define-color error               {{colors.error.default.hex}};
+@define-color on-error            {{colors.on_error.default.hex}};

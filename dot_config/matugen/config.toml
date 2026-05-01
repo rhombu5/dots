@@ -11,19 +11,25 @@ custom_colors = {}
 
 # ---- Component templates ----
 
-[templates.waybar]
-input_path = "~/.config/matugen/templates/waybar.css"
-output_path = "~/.config/waybar/colors.css"
-post_hook = "pkill -SIGUSR2 waybar 2>/dev/null || true"
+# --- Shared accent (waybar + swaync + fuzzel + Hyprland borders/groupbar) ---
+# These three writes go to ~/.config/themes/accent.{css,conf,ini}, the same
+# files wpws-daemon writes on per-workspace switches. The split: matugen on
+# full regen (slow path, gives the M3 palette to all the static themes too);
+# wpws on per-workspace switch (fast dominant-color extractor, only writes
+# these three files + pushes hyprctl keywords).
+[templates.shared-accent-css]
+input_path = "~/.config/matugen/templates/shared-accent.css"
+output_path = "~/.config/themes/accent.css"
+post_hook = "pkill -SIGUSR2 waybar 2>/dev/null; swaync-client --reload-css 2>/dev/null; true"
 
-[templates.swaync]
-input_path = "~/.config/matugen/templates/swaync.css"
-output_path = "~/.config/swaync/colors.css"
-post_hook = "swaync-client --reload-css 2>/dev/null || true"
+[templates.shared-accent-conf]
+input_path = "~/.config/matugen/templates/shared-accent.conf"
+output_path = "~/.config/themes/accent.conf"
+post_hook = "hyprctl reload 2>/dev/null && [ -x ~/.local/bin/hypr-plugins-on-login ] && ~/.local/bin/hypr-plugins-on-login || true"
 
-[templates.fuzzel]
-input_path = "~/.config/matugen/templates/fuzzel.ini"
-output_path = "~/.config/fuzzel/colors.ini"
+[templates.shared-accent-ini]
+input_path = "~/.config/matugen/templates/shared-accent.ini"
+output_path = "~/.config/themes/accent.ini"
 # fuzzel re-reads on every launch; no reload hook needed.
 
 [templates.ghostty]
@@ -31,11 +37,6 @@ input_path = "~/.config/matugen/templates/ghostty-theme"
 output_path = "~/.config/ghostty/themes/matugen"
 # Ghostty config references theme = matugen; live reload via SIGUSR2.
 post_hook = "pkill -SIGUSR2 ghostty 2>/dev/null || true"
-
-[templates.hypr-colors]
-input_path = "~/.config/matugen/templates/hypr-colors.conf"
-output_path = "~/.config/hypr/colors.conf"
-post_hook = "hyprctl reload 2>/dev/null || true"
 
 [templates.hyprlock]
 input_path = "~/.config/matugen/templates/hyprlock.conf"
