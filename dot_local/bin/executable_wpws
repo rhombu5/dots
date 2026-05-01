@@ -284,8 +284,11 @@ def push_keywords(palette: dict[str, str]) -> None:
 
 
 def set_wallpaper(output: str, path: Path) -> None:
+    # `-t none` swaps instantly — no fade. The default `simple` transition
+    # is a 2-step fade that takes ~half a second and looks laggy when
+    # paired with the instant accent push.
     subprocess.run(
-        ["awww", "img", "-o", output, str(path)],
+        ["awww", "img", "-t", "none", "-o", output, str(path)],
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
