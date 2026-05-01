@@ -137,8 +137,43 @@ def _hex(rgb: tuple[int, int, int]) -> str:
     return f"{r:02x}{g:02x}{b:02x}"
 
 
-def _rel_luminance(r: int, g: int, b: int) -> float:
+def _rel_luminance_simple(r: int, g: int, b: int) -> float:
+    """Cheap perceptual luminance (used to pick black vs white for on-color)."""
     return 0.299 * r / 255 + 0.587 * g / 255 + 0.114 * b / 255
+
+
+def _rel_luminance_wcag(r: int, g: int, b: int) -> float:
+    """WCAG relative luminance — used for contrast-ratio gating."""
+    def chan(c: int) -> float:
+        x = c / 255
+        return x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
+    return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
+
+
+def _contrast_ratio(rgb_a: tuple[int, int, int], rgb_b: tuple[int, int, int]) -> float:
+    la, lb = _rel_luminance_wcag(*rgb_a), _rel_luminance_wcag(*rgb_b)
+    lighter, darker = (la, lb) if la > lb else (lb, la)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+# Reference background (static.conf $background = rgb(1e1e1e)). Anything
+# accent-y must clear a WCAG contrast threshold against this so the user
+# can actually see it on the active-window border / waybar pill outline.
+_BG_RGB: tuple[int, int, int] = (0x1e, 0x1e, 0x1e)
+_MIN_CONTRAST = 4.5  # WCAG AA for normal text. Plenty for chrome.
+
+
+def _boost_for_contrast(r: int, g: int, b: int) -> tuple[int, int, int]:
+    """Raise the color's lightness in HSL space until WCAG contrast against
+    the dark background reaches _MIN_CONTRAST. Caps at L=0.92 so we don't
+    blow it out to white. Hue + saturation preserved."""
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    rgb = (r, g, b)
+    while _contrast_ratio(rgb, _BG_RGB) < _MIN_CONTRAST and l < 0.92:
+        l = min(0.92, l + 0.04)
+        nr, ng, nb = colorsys.hls_to_rgb(h, l, s)
+        rgb = (int(nr * 255), int(ng * 255), int(nb * 255))
+    return rgb
 
 
 def extract_palette(wallpaper: Path) -> dict[str, str]:
@@ -166,23 +201,31 @@ def extract_palette(wallpaper: Path) -> dict[str, str]:
         best = (1, (147, 205, 246))  # neutral fallback (M3 default-ish blue)
 
     r, g, b = best[1]
+    # Boost lightness if the dominant color is too dark to read against
+    # the dark background (#1e1e1e). Without this, dark wallpapers yield
+    # near-invisible accent borders / pills.
+    r, g, b = _boost_for_contrast(r, g, b)
     h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
 
-    # primary_container: darker + desaturated variant of primary.
+    # primary_container: darker + desaturated variant of primary, used as
+    # fill (active workspace pill, tab fill). Contrast against text on it
+    # is handled via on_container choice below.
     cr, cg, cb = colorsys.hls_to_rgb(h, max(0.18, l * 0.45), s * 0.6)
     container = (int(cr * 255), int(cg * 255), int(cb * 255))
 
     # on_primary / on_primary_container: white-or-black for contrast.
-    on_primary = (0, 0, 0) if _rel_luminance(r, g, b) > 0.55 else (255, 255, 255)
-    on_container = (255, 255, 255) if _rel_luminance(*container) <= 0.55 else (0, 0, 0)
+    on_primary = (0, 0, 0) if _rel_luminance_simple(r, g, b) > 0.55 else (255, 255, 255)
+    on_container = (255, 255, 255) if _rel_luminance_simple(*container) <= 0.55 else (0, 0, 0)
 
     # secondary, tertiary: hue-rotate primary by +30° / +60° at lower S.
+    # Tertiary is the second stop of col.active_border — boost it too so
+    # the gradient stays legible end-to-end.
     sh = (h + 1 / 12) % 1.0
     th = (h + 1 / 6) % 1.0
     sr, sg, sb = colorsys.hls_to_rgb(sh, l, s * 0.7)
     tr, tg, tb = colorsys.hls_to_rgb(th, l, s * 0.7)
-    secondary = (int(sr * 255), int(sg * 255), int(sb * 255))
-    tertiary = (int(tr * 255), int(tg * 255), int(tb * 255))
+    secondary = _boost_for_contrast(int(sr * 255), int(sg * 255), int(sb * 255))
+    tertiary = _boost_for_contrast(int(tr * 255), int(tg * 255), int(tb * 255))
 
     return {
         "primary": _hex((r, g, b)),
