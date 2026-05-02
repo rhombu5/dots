@@ -1,0 +1,47 @@
+{
+    "//": "Override of /etc/wleave/layout.json — routes Logout/Shutdown/Reboot through hyprshutdown so apps get a chance to flush state before Hyprland exits. Lock/Suspend/Hibernate stay on their own paths since the session resumes (no graceful close needed). hyprshutdown's --post-cmd runs once Hyprland has cleanly exited.",
+    "buttons": [
+        {
+            "label": "lock",
+            "action": "loginctl lock-session",
+            "text": "Lock",
+            "keybind": "l",
+            "icon": "/usr/share/wleave/icons/lock.svg"
+        },
+        {
+            "label": "hibernate",
+            "action": "systemctl hibernate",
+            "text": "Hibernate",
+            "keybind": "h",
+            "icon": "/usr/share/wleave/icons/hibernate.svg"
+        },
+        {
+            "label": "logout",
+            "action": "hyprshutdown",
+            "text": "Logout",
+            "keybind": "e",
+            "icon": "/usr/share/wleave/icons/logout.svg"
+        },
+        {
+            "label": "shutdown",
+            "action": "hyprshutdown --post-cmd 'systemctl poweroff'",
+            "text": "Shutdown",
+            "keybind": "s",
+            "icon": "/usr/share/wleave/icons/shutdown.svg"
+        },
+        {
+            "label": "suspend",
+            "action": "systemctl suspend",
+            "text": "Suspend",
+            "keybind": "u",
+            "icon": "/usr/share/wleave/icons/suspend.svg"
+        },
+        {
+            "label": "reboot",
+            "action": "hyprshutdown --post-cmd 'systemctl reboot'",
+            "text": "Reboot",
+            "keybind": "r",
+            "icon": "/usr/share/wleave/icons/reboot.svg"
+        }
+    ]
+}
