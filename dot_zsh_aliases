@@ -17,31 +17,34 @@ alias cat='bat --paging=never'
 cclaude() {
     local -a paths passthrough injected
     local arg
+    local skip_mcp=0 skip_settings=0
 
     for arg in "$@"; do
-        if [[ "$arg" == --* ]]; then
-            passthrough+=("$arg")
-        else
-            paths+=("$arg")
-        fi
+        case "$arg" in
+            -m|--no-mcp)      skip_mcp=1 ;;
+            -s|--no-settings) skip_settings=1 ;;
+            --*)              passthrough+=("$arg") ;;
+            *)                paths+=("$arg") ;;
+        esac
     done
 
     if (( ${#paths[@]} == 0 )); then
-        echo "cclaude: usage: cclaude <path> [paths...] [--claude-flags...]" >&2
+        echo "cclaude: usage: cclaude <path> [paths...] [-m|--no-mcp] [-s|--no-settings] [--claude-flags...]" >&2
         return 1
     fi
 
     # --setting-sources is explicit; don't override it with auto --settings.
-    local settings_locked=0
     for arg in "${passthrough[@]}"; do
-        [[ "$arg" == --setting-sources* ]] && { settings_locked=1; break }
+        [[ "$arg" == --setting-sources* ]] && { skip_settings=1; break }
     done
 
     local d
     for d in "${paths[@]:1}"; do
         injected+=(--add-dir "$d")
-        [[ -f "$d/.mcp.json" ]] && injected+=(--mcp-config "$d/.mcp.json")
-        if (( ! settings_locked )) && [[ -f "$d/.claude/settings.json" ]]; then
+        if (( ! skip_mcp )) && [[ -f "$d/.mcp.json" ]]; then
+            injected+=(--mcp-config "$d/.mcp.json")
+        fi
+        if (( ! skip_settings )) && [[ -f "$d/.claude/settings.json" ]]; then
             injected+=(--settings "$d/.claude/settings.json")
         fi
     done
