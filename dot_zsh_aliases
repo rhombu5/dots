@@ -15,12 +15,38 @@ alias cat='bat --paging=never'
 
 # --- claude ---
 cclaude() {
-    if [[ -z "$1" ]]; then
-        echo "cclaude: usage: cclaude <path> [claude-args...]" >&2
+    local -a paths passthrough injected
+    local arg
+
+    for arg in "$@"; do
+        if [[ "$arg" == --* ]]; then
+            passthrough+=("$arg")
+        else
+            paths+=("$arg")
+        fi
+    done
+
+    if (( ${#paths[@]} == 0 )); then
+        echo "cclaude: usage: cclaude <path> [paths...] [--claude-flags...]" >&2
         return 1
     fi
-    local dir="$1"; shift
-    ( cd -- "$dir" && claude --dangerously-skip-permissions "$@" )
+
+    # --setting-sources is explicit; don't override it with auto --settings.
+    local settings_locked=0
+    for arg in "${passthrough[@]}"; do
+        [[ "$arg" == --setting-sources* ]] && { settings_locked=1; break }
+    done
+
+    local d
+    for d in "${paths[@]:1}"; do
+        injected+=(--add-dir "$d")
+        [[ -f "$d/.mcp.json" ]] && injected+=(--mcp-config "$d/.mcp.json")
+        if (( ! settings_locked )) && [[ -f "$d/.claude/settings.json" ]]; then
+            injected+=(--settings "$d/.claude/settings.json")
+        fi
+    done
+
+    ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" )
 }
 
 # --- mc: make directory and cd into it ---
