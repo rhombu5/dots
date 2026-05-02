@@ -24,6 +24,13 @@
     "hide-on-action": true,
     "script-fail-notify": true,
 
+    "scripts": {
+        "critical-sound": {
+            "exec": "paplay /usr/share/sounds/freedesktop/stereo/dialog-warning.oga >/dev/null 2>&1 || true",
+            "urgency": "Critical"
+        }
+    },
+
     "widgets": [
         "title",
         "dnd",

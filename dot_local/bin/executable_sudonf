@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# sudonf — sudo with a desktop notification while it waits for auth.
+#
+# The terminal bell isn't audible in this user's setup, so we fire a Critical
+# notify-send before sudo (also gives swaync something to play a sound on per
+# the `critical-sound` script in ~/.config/swaync/config.json). Once sudo
+# returns — success OR failure — we dismiss the notification by ID via
+# swaync's CloseNotification D-Bus method, so it doesn't pile up.
+#
+# Usage: sudonf '<message shown in the notification>' <sudo args...>
+set -u
+
+if [[ $# -lt 2 ]]; then
+    echo "usage: $0 '<notification message>' <sudo args...>" >&2
+    exit 64
+fi
+
+msg=$1
+shift
+
+nid=$(notify-send -u critical -p -a sudo 'sudo' "$msg" 2>/dev/null) || nid=
+
+sudo "$@"
+rc=$?
+
+if [[ -n $nid ]]; then
+    busctl --user call \
+        org.erikreider.swaync.cc /org/erikreider/swaync/cc \
+        org.erikreider.swaync.cc CloseNotification u "$nid" >/dev/null 2>&1 || true
+fi
+
+exit $rc
