@@ -14,7 +14,15 @@ alias tree='eza --tree --icons'
 alias cat='bat --paging=never'
 
 # --- claude ---
-alias cclaude='claude --dangerously-skip-permissions'
+cclaude() {
+    if [[ -z "$1" ]]; then
+        echo "cclaude: usage: cclaude <path> [claude-args...]" >&2
+        return 1
+    fi
+    local dir="$1"; shift
+    cd -- "$dir" || return $?
+    claude --dangerously-skip-permissions "$@"
+}
 
 # --- mc: make directory and cd into it ---
 mc() { mkdir -p "$1" && cd "$1"; }
