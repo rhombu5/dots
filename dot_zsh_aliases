@@ -14,7 +14,7 @@ alias tree='eza --tree --icons'
 alias cat='bat --paging=never'
 
 # --- claude ---
-alias cclaude='claude --dangerously-skip-permissions --chrome --brief'
+alias cclaude='claude --dangerously-skip-permissions'
 
 # --- mc: make directory and cd into it ---
 mc() { mkdir -p "$1" && cd "$1"; }
