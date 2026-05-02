@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Lid switch handler. Wired from Hyprland `binddl` in ~/.config/hypr/binds.conf.
+# Owns ALL lid behavior; logind defers via /etc/systemd/logind.conf.d/10-lid.conf
+# (Handle*=ignore across the board).
 #
-# AC behavior is owned by this script:
-#   - external monitor attached  → disable eDP-1 (re-enabled on lid open)
-#   - no external monitor        → systemctl hibernate
-# Battery behavior is owned by systemd-logind via /etc/systemd/logind.conf.d/10-lid.conf
-# (HandleLidSwitch=hibernate). On battery this script is a no-op so the two don't race.
+# Rule: hibernate on lid close, UNLESS we're on AC AND an external monitor is
+# attached — in that case disable eDP-1 (re-enabled on lid open).
 set -euo pipefail
 
 action=${1:-}
@@ -24,8 +23,7 @@ external_attached() {
 
 case $action in
     close)
-        on_ac || exit 0
-        if external_attached; then
+        if on_ac && external_attached; then
             hyprctl keyword monitor "$internal,disable"
         else
             systemctl hibernate
