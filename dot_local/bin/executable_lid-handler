@@ -12,7 +12,10 @@ action=${1:-}
 internal=eDP-1
 
 on_ac() {
-    [[ "$(<"/sys/class/power_supply/AC/online" 2>/dev/null)" == 1 ]]
+    # NB: don't be tempted to write `$(<file 2>/dev/null)` — bash's fast-read
+    # idiom returns empty when any redirection is appended, so the test silently
+    # always fails. Use `cat` so error suppression works.
+    [[ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" == 1 ]]
 }
 
 external_attached() {
