@@ -17,7 +17,7 @@
         "tray",
         "custom/notifications",
         "custom/network",
-        "wireplumber",
+        "pulseaudio",
         "battery",
         "custom/theme-toggle",
         "custom/power"
@@ -86,7 +86,7 @@
         "on-click-right": "nm-connection-editor"
     },
 
-    "wireplumber": {
+    "pulseaudio": {
         "format": "{icon}  {volume}%",
         "format-muted": "  muted",
         "format-icons": ["", "", ""],
