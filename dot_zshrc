@@ -1,0 +1,82 @@
+# --- Powerlevel10k instant prompt (must be near top) ---
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+# --- Zgenom plugin manager ---
+ZGEN_DIR="${HOME}/.zgenom"
+source "${ZGEN_DIR}/zgenom.zsh"
+
+if ! zgenom saved; then
+  zgenom ohmyzsh
+  zgenom ohmyzsh plugins/sudo
+  zgenom ohmyzsh plugins/colored-man-pages
+  zgenom ohmyzsh plugins/extract
+  zgenom ohmyzsh plugins/command-not-found
+  zgenom ohmyzsh plugins/docker
+  zgenom ohmyzsh plugins/docker-compose
+  zgenom ohmyzsh plugins/npm
+  zgenom ohmyzsh plugins/pip
+  zgenom ohmyzsh plugins/dotnet
+  zgenom load zdharma-continuum/fast-syntax-highlighting
+  zgenom load zsh-users/zsh-autosuggestions
+  zgenom load zsh-users/zsh-history-substring-search
+  zgenom load zsh-users/zsh-completions
+  zgenom load Aloxaf/fzf-tab
+  zgenom load unixorn/fzf-zsh-plugin
+  zgenom load romkatv/powerlevel10k powerlevel10k
+  zgenom save
+  zgenom compile "$HOME/.zshrc"
+fi
+
+# --- History ---
+HISTFILE=~/.zsh_history
+HISTSIZE=100000
+SAVEHIST=100000
+setopt APPEND_HISTORY SHARE_HISTORY HIST_EXPIRE_DUPS_FIRST HIST_IGNORE_DUPS \
+       HIST_IGNORE_ALL_DUPS HIST_FIND_NO_DUPS HIST_IGNORE_SPACE \
+       HIST_SAVE_NO_DUPS HIST_REDUCE_BLANKS
+
+# --- Shell options ---
+setopt NO_BEEP INTERACTIVE_COMMENTS MULTIOS
+
+# --- Completion ---
+autoload -Uz compinit
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C
+fi
+autoload -Uz bashcompinit && bashcompinit
+# Claude Code ships completions via `claude --print-completion zsh` at runtime.
+# Previous versions sourced a bash-completion file we never wrote — that was
+# dead code. Source only if the binary is actually on PATH, otherwise
+# mise-shim startup is a ~200ms tax on every shell for nothing.
+if command -v claude &>/dev/null; then
+    eval "$(claude --print-completion zsh 2>/dev/null)" || true
+fi
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path ~/.zsh/cache
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+
+# --- PATH ---
+export PATH="$HOME/.local/bin:$PATH"
+typeset -aU path
+
+# --- Tool inits ---
+eval "$(mise activate zsh)"
+eval "$(zoxide init zsh)"
+eval "$(direnv hook zsh)"
+
+# --- Aliases ---
+source ~/.zsh_aliases 2>/dev/null
+
+# --- Local overrides ---
+for f in ~/.zshrc.d/*(N); do source "$f"; done
+
+# --- Report commands that ran >2s ---
+REPORTTIME=2
+
+# --- Powerlevel10k config ---
+[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh

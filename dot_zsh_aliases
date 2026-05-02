@@ -1,0 +1,94 @@
+# --- Navigation ---
+alias ..="cd .."
+alias ...="cd ../.."
+alias ....="cd ../../.."
+
+# --- ls (eza) ---
+alias ls='eza --group-directories-first --icons'
+alias ll='eza -l --git --group-directories-first --icons'
+alias la='eza -la --git --group-directories-first --icons'
+alias lt='eza --tree --level=2 --icons'
+alias tree='eza --tree --icons'
+
+# --- bat ---
+alias cat='bat --paging=never'
+
+# --- claude ---
+alias cclaude='claude --dangerously-skip-permissions --chrome --brief'
+
+# --- mc: make directory and cd into it ---
+mc() { mkdir -p "$1" && cd "$1"; }
+
+# --- bw (Bitwarden CLI): unlock the vault using libsecret (gnome-keyring) ---
+# Same auth model as the desktop app's "Unlock with system authentication"
+# toggle: master password lives in gnome-keyring (unlocked at login by
+# PAM), CLI pulls it silently to unlock the BW vault for this shell.
+#
+# First call in a fresh keyring prompts for the master password ONCE
+# (`secret-tool store ...`) and persists it. Every subsequent shell can
+# `bwu` without typing anything — the keyring is already unlocked from
+# PAM at login.
+#
+# To wipe the stored master password (e.g. after rotating it):
+#     secret-tool clear service bitwarden user master
+bwu() {
+    local pw session
+    for attempt in 1 2; do
+        # 1. Try the keyring first (silent on subsequent calls).
+        if ! pw=$(secret-tool lookup service bitwarden user master 2>/dev/null); then
+            # 2. Fall back to interactive prompt — using `read -rs` so
+            #    we can validate non-empty BEFORE pushing into libsecret.
+            #    secret-tool store's own prompt is harder to validate.
+            echo -n "Bitwarden master password (one-time seed): " >&2
+            IFS= read -rs pw
+            echo >&2
+            if [[ -z "$pw" ]]; then
+                echo "bwu: empty password — aborting (re-run when ready)." >&2
+                return 1
+            fi
+            printf '%s' "$pw" | secret-tool store \
+                --label='Bitwarden master password' \
+                service bitwarden user master
+        fi
+        # 3. Unlock. `--passwordenv` reads from BW_PASSWORD; never let
+        #    bw fall through to its own stdin prompt (would hang us).
+        session=$(BW_PASSWORD="$pw" command bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null) || true
+        if [[ -n "$session" ]]; then
+            export BW_SESSION="$session"
+            printf '%s' "$BW_SESSION" | secret-tool store \
+                --label='Bitwarden CLI session' \
+                service bitwarden type session
+            echo "bwu: vault unlocked." >&2
+            return 0
+        fi
+        # 4. Wrong password — purge keyring entry and reprompt. One retry only.
+        echo "bwu: that password didn't unlock the vault — wiping cached entry, re-prompting..." >&2
+        secret-tool clear service bitwarden user master 2>/dev/null
+        pw=""
+    done
+    echo "bwu: couldn't unlock after retry. Check: bw login --check; bw status" >&2
+    return 1
+}
+
+# `bw` wrapper: transparent unlock. If vault is locked or BW_SESSION
+# is missing/stale, pull the cached session from libsecret; if that's
+# also stale, re-run bwu (which uses the master password in libsecret —
+# silent unless the keyring has been wiped). End result: every `bw`
+# command Just Works in any shell after the user has run bwu once.
+#
+# Cost: one `bw status` invocation per call to gate the unlock check
+# (~100ms). Skip the gate when stdin isn't a TTY (scripts/CI) so we
+# don't accidentally prompt during automation.
+bw() {
+    if [[ -t 0 ]]; then
+        if [[ -z "${BW_SESSION:-}" ]]; then
+            BW_SESSION=$(secret-tool lookup service bitwarden type session 2>/dev/null) && export BW_SESSION
+        fi
+        local status
+        status=$(command bw status 2>/dev/null | jq -r .status 2>/dev/null)
+        if [[ "$status" == "locked" ]] || [[ "$status" == "" ]]; then
+            bwu >&2 || return $?
+        fi
+    fi
+    command bw "$@"
+}
