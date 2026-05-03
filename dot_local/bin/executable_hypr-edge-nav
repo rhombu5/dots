@@ -111,6 +111,30 @@ fi
 #               `layoutmsg swapcol` while the geometric edge check
 #               says there's still a column past us in the push
 #               direction.
+
+# Pre-jump check (scrolling source only): if the focused window is in
+# the geometric edge column but shares that column with another
+# window (same at[0]), defer to plain `movewindow` instead of
+# jumping. The built-in handler promotes the window out into its own
+# column on the desired side; the *next* press, when the window is
+# alone in the column, escalates to the workspace jump.
+src_layout=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.tiledLayout // "dwindle"')
+if [ "$src_layout" = scrolling ]; then
+    self_x=$(printf '%s' "$active" | jq -r '.at[0] // empty')
+    if [ -n "$self_x" ]; then
+        column_mates=$(hyprctl -j clients 2>/dev/null | jq --arg self "$self_addr" --argjson ws "$ws" --argjson sx "$self_x" '
+            [ .[]
+              | select(.workspace.id == $ws)
+              | select(.mapped)
+              | select(.address != $self)
+              | select(.at[0] == $sx)
+            ] | length')
+        if [ "${column_mates:-0}" -gt 0 ]; then
+            exec hyprctl dispatch movewindow "$dir" >/dev/null
+        fi
+    fi
+fi
+
 hyprctl dispatch movetoworkspace "$ws_target" >/dev/null 2>&1 || exit 0
 
 if [ "$dir" = r ]; then push=l; opp_op='<'; else push=r; opp_op='>'; fi
