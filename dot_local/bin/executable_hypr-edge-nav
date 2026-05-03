@@ -91,20 +91,62 @@ if [ "$mode" = focus ]; then
     exit 0
 fi
 
-# mode = move : carry the window over and push it to the far edge.
+# mode = move : carry the window over and settle it at the leading
+# edge of the destination workspace.
+#
+# Travel direction → target edge:
+#   dir=r (moved into a higher-id ws) → land at the LEFT edge.
+#   dir=l (moved into a lower-id  ws) → land at the RIGHT edge.
+#
+# How "land at edge" is achieved depends on the destination layout:
+#
+#   dwindle   — push with `movewindow` until the position stops
+#               changing. dwindle's movewindow is non-wrapping, so
+#               position-equality is a valid loop guard.
+#
+#   scrolling — `wrap_swapcol` defaults to true (per Hyprland docs),
+#               so position-equality would loop forever. Instead we
+#               promote the window to its own column (so it doesn't
+#               accidentally join the column it landed in), then loop
+#               `layoutmsg swapcol` while the geometric edge check
+#               says there's still a column past us in the push
+#               direction.
 hyprctl dispatch movetoworkspace "$ws_target" >/dev/null 2>&1 || exit 0
 
-# Push opposite to the travel direction so the window lands at the
-# leading edge of the destination (right→next ws → land at left;
-# left→prev ws → land at right). Loop until position stabilises;
-# bounded so a pathological layout can't hang us.
-if [ "$dir" = r ]; then push=l; else push=r; fi
-prev=""
-i=0
-while [ $i -lt 16 ]; do
-    cur=$(hyprctl -j activewindow 2>/dev/null | jq -r 'if .at then "\(.at[0]),\(.at[1])" else "" end')
-    [ "$cur" = "$prev" ] && break
-    prev=$cur
-    hyprctl dispatch movewindow "$push" >/dev/null 2>&1 || break
-    i=$((i + 1))
-done
+if [ "$dir" = r ]; then push=l; opp_op='<'; else push=r; opp_op='>'; fi
+dest_layout=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.tiledLayout // "dwindle"')
+
+case "$dest_layout" in
+    scrolling)
+        hyprctl dispatch layoutmsg promote >/dev/null 2>&1 || true
+        i=0
+        while [ $i -lt 32 ]; do
+            cur=$(hyprctl -j activewindow 2>/dev/null)
+            self=$(printf '%s' "$cur" | jq -r '.address // empty')
+            cx=$(printf '%s' "$cur" | jq -r 'if .at and .size then (.at[0] + .size[0]/2) else empty end')
+            new_ws=$(printf '%s' "$cur" | jq -r '.workspace.id // empty')
+            [ -n "$self" ] && [ -n "$cx" ] && [ -n "$new_ws" ] || break
+            others=$(hyprctl -j clients 2>/dev/null | jq --arg self "$self" --argjson ws "$new_ws" --argjson cx "$cx" "
+                [ .[]
+                  | select(.workspace.id == \$ws)
+                  | select(.mapped)
+                  | select(.address != \$self)
+                  | select((.at[0] + .size[0]/2) $opp_op \$cx)
+                ] | length")
+            [ "${others:-0}" -eq 0 ] && break
+            hyprctl dispatch layoutmsg "swapcol $push" >/dev/null 2>&1 || break
+            i=$((i + 1))
+        done
+        ;;
+    *)
+        prev=""
+        i=0
+        while [ $i -lt 16 ]; do
+            cur=$(hyprctl -j activewindow 2>/dev/null | jq -r 'if .at then "\(.at[0]),\(.at[1])" else "" end')
+            [ "$cur" = "$prev" ] && break
+            prev=$cur
+            hyprctl dispatch movewindow "$push" >/dev/null 2>&1 || break
+            i=$((i + 1))
+        done
+        ;;
+esac
