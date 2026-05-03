@@ -57,3 +57,19 @@ When asked to start a new project (anything I might eventually push to GitHub), 
 `fnrhombus/arch-setup` properly belongs under `rhombu5` — it's an oversight on my part that I'll fix eventually. Don't pattern-match off that location when picking owners for new repos.
 
 > **Self-cleanup directive (Claude):** if you ever notice that `arch-setup` is no longer at `github.com:fnrhombus/arch-setup` (e.g. the remote has been moved to `rhombu5/arch-setup`, or the local checkout's `git remote -v` reflects the move), delete *both* the preceding paragraph about the misplacement *and* this directive itself in the same commit. Goal: this whole call-out evaporates the moment it's no longer true.
+
+## Project memory lives in the project tree
+
+When working inside a git repo, Claude's auto-memory files belong in `<project-root>/.claude/memory/`, not the per-session home-dir path (`~/.claude/projects/<encoded-cwd>/memory/`). Reasons:
+
+- Memory travels with the repo across reinstalls, machines, and worktrees.
+- Each repo's learnings stay scoped to that repo — no leakage from one project's gotchas into another project's session.
+- The project-root path is stable; the home-dir path is encoded from the absolute CWD and breaks if the repo moves.
+
+Claude Code's hardcoded home-dir path is reconciled with this via a **symlink**: `~/.claude/projects/<encoded-cwd>/memory` → `<project-root>/.claude/memory/`. Both paths resolve to the same files. The symlink itself is per-machine (lives under `~/.claude/`, not the repo); set it up after cloning a project on a new machine.
+
+**Commit policy is per-repo:**
+- **Public repos** (most things under `fnrhombus`): `.gitignore` `/.claude/memory/`. Memories often contain tenant IDs, internal endpoints, or other identifiers safer kept local.
+- **Private repos** (most things under `rhombu5`): commit memory files. They're part of the project's institutional knowledge.
+
+When in doubt, gitignore — easier to opt-in to commit later than to redact a public commit.
