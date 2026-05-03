@@ -26,8 +26,9 @@ fi
 # Active layout drives category labels for layout-specific dispatchers
 # (layoutmsg → scrolling-only; togglesplit → dwindle-only). Binds that
 # silently no-op in the current layout get an "(off)" suffix so the
-# user can see what's actually firing right now.
-LAYOUT=$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // ""')
+# user can see what's actually firing right now. Layout is per-workspace
+# (see hypr-layout-toggle), so read the active workspace's tiledLayout.
+LAYOUT=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.tiledLayout // ""')
 
 mods_to_label() {
     case "$1" in

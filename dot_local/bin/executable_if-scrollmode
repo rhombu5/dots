@@ -1,9 +1,10 @@
 #!/bin/sh
 # if-scrollmode <hyprctl-dispatch-args...>
 #
-# Run `hyprctl dispatch <args>` ONLY if current Hyprland layout is
-# scroller (hyprscroller plugin). Counterpart to if-tilemode — see
-# that file for design notes.
+# Run `hyprctl dispatch <args>` ONLY if the ACTIVE workspace is using
+# the Hyprland 0.54+ core scrolling layout. Per-workspace, not global —
+# layouts are workspace-scoped (see hypr-layout-toggle). Counterpart to
+# if-tilemode; design notes there.
 
-[ "$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str // empty')" = "scrolling" ] || exit 0
+[ "$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.tiledLayout // empty')" = "scrolling" ] || exit 0
 exec hyprctl dispatch "$@"
