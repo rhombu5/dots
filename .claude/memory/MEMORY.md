@@ -1,0 +1,1 @@
+- [Layout-toggle is per-workspace](feedback_layout_toggle_per_workspace.md) — Super+Alt+S/T/B/F flip the active ws only; persist via state files + sourced runtime-layouts.conf, not global `general:layout`.
