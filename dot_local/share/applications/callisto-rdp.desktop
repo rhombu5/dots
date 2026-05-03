@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Callisto (RDP)
+GenericName=Remote Desktop
+Comment=Connect to Callisto via Remmina
+Exec=remmina -c %h/.config/remmina/Callisto.remmina
+Icon=org.remmina.Remmina
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=rdp;remote;remmina;callisto;windows;
+StartupNotify=true
