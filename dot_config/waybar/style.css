@@ -19,7 +19,6 @@
 window#waybar {
     background-color: alpha(@surface-container, 0.85);
     color: @on-surface;
-    border-radius: 12px;
     transition: background-color 0.3s ease;
 }
 
@@ -29,7 +28,6 @@ window#waybar.empty {
 
 #workspaces {
     background-color: alpha(@surface, 0.6);
-    border-radius: 10px;
     margin: 4px 6px;
     padding: 0 4px;
 }
@@ -38,7 +36,6 @@ window#waybar.empty {
     color: @outline;
     padding: 0 8px;
     background-color: transparent;
-    border-radius: 8px;
     transition: all 0.2s ease;
 }
 
@@ -68,7 +65,6 @@ window#waybar.empty {
     color: @on-primary-container;
     background-color: @primary-container;
     padding: 0 14px;
-    border-radius: 10px;
     margin: 4px 0;
 }
 
@@ -82,7 +78,6 @@ window#waybar.empty {
     color: @on-surface;
     background-color: alpha(@surface, 0.6);
     padding: 0 10px;
-    border-radius: 10px;
     margin: 4px 2px;
 }
 
@@ -111,5 +106,4 @@ tooltip {
     background-color: @surface-high;
     color: @on-surface;
     border: 1px solid @primary;
-    border-radius: 8px;
 }
