@@ -72,13 +72,21 @@ fi
 if [ "$dir" = r ]; then ws_target='+1'; else ws_target='-1'; fi
 
 if [ "$mode" = focus ]; then
-    if [ "$dir" = r ]; then sort_jq='sort_by(.at[0])'; else sort_jq='sort_by(.at[0]) | reverse'; fi
-    hyprctl dispatch workspace "$ws_target" >/dev/null 2>&1 || exit 0
-    new_ws=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id // empty')
-    [ -n "$new_ws" ] || exit 0
+    # Skip empty workspaces. The semantic is "focus the next window
+    # rightward/leftward" — landing on an empty workspace would mean
+    # nothing got focused, which violates that contract. Find the
+    # nearest populated workspace strictly past `$ws`; if none exists
+    # in that direction, do nothing.
+    if [ "$dir" = r ]; then ws_filter='select(.id > $cur)'; ws_sort='sort_by(.id)';        else ws_filter='select(.id < $cur)'; ws_sort='sort_by(.id) | reverse'; fi
+    if [ "$dir" = r ]; then win_sort='sort_by(.at[0])';                                     else win_sort='sort_by(.at[0]) | reverse';                                       fi
+    target_ws=$(hyprctl -j workspaces 2>/dev/null | jq -r --argjson cur "$ws" "
+        [ .[] | select(.id > 0) | select(.windows > 0) | $ws_filter ]
+        | $ws_sort | .[0].id // empty")
+    [ -n "$target_ws" ] || exit 0
+    hyprctl dispatch workspace "$target_ws" >/dev/null 2>&1 || exit 0
     target=$(hyprctl -j clients 2>/dev/null \
-        | jq -r --argjson ws "$new_ws" \
-            "[.[] | select(.workspace.id == \$ws) | select(.mapped)] | $sort_jq | .[0].address // empty")
+        | jq -r --argjson ws "$target_ws" \
+            "[.[] | select(.workspace.id == \$ws) | select(.mapped)] | $win_sort | .[0].address // empty")
     [ -n "$target" ] && hyprctl dispatch focuswindow "address:$target" >/dev/null 2>&1 || true
     exit 0
 fi
