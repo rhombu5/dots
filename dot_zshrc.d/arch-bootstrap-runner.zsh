@@ -8,6 +8,7 @@
 #   ssh-signing.sh         — gh authed AND Bitwarden SSH-agent socket exposes a key.
 #   hyprpm.sh              — inside a Hyprland session.
 #   cloud-storage-auth.sh  — TTY login; Dropbox link + rclone gdrive OAuth + bisync seed.
+#   callisto-rdp.sh        — bw vault unlocked AND Callisto.remmina applied; seeds RDP password into keyring.
 #
 # Fires per-shell so each precondition gets a chance the moment it's first
 # met. Each script handles its own re-entrancy (hyprpm.sh uses an
