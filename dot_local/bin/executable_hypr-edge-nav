@@ -1,28 +1,32 @@
 #!/bin/sh
 # hypr-edge-nav <focus|move> <l|r>
 #
-# Edge-aware focus/move for the left↔right axis. Behaviour:
+# Edge-aware focus/move on the left↔right axis. Escalates to a
+# workspace switch when the active window is the geometric edge
+# window on its workspace.
 #
-#   focus l|r : try `movefocus`. If the active window didn't change
-#               (i.e. nothing in that direction within the workspace),
-#               escalate to `workspace +1` / `-1` and focus the
-#               left-most (going right) or right-most (going left)
-#               window on the new workspace.
+#   focus l|r : if at edge, switch workspace and focus the leftmost
+#               (going right) / rightmost (going left) window on the
+#               new workspace. Otherwise plain `movefocus`.
 #
-#   move  l|r : try `movewindow`. If the window's address+position
-#               didn't change, escalate to `movetoworkspace +1` / `-1`
-#               (which switches focus along with the window).
+#   move  l|r : if at edge, `movetoworkspace +1` / `-1` and then loop
+#               `movewindow` in the opposite direction until the
+#               position stops changing — so the window lands at the
+#               far left of the next workspace (or far right of the
+#               previous one). Otherwise plain `movewindow`.
 #
-# Why address+position for `move`: `movewindow l/r` can shuffle inside
-# a tabgroup or cross to another monitor — we only want to escalate to
-# a workspace switch when the dispatcher truly no-ops.
+# Edge detection is geometric, not based on `movefocus`/`movewindow`
+# return: count other mapped clients on the same workspace whose
+# horizontal centre is past ours in the requested direction. Zero =
+# we're the edge window.
 #
-# Workspace target is `+1` / `-1` (numeric next/prev), not `e+1` / `e-1`
-# (next/prev existing). Predictable, and the focus variant degrades
-# gracefully on an empty workspace (no `focuswindow` to issue).
+# Why geometric: relying on "did movefocus change the active window?"
+# is fragile — Hyprland's wrap/cycle behaviours and floating windows
+# can make it report a focus change even when no real-rightward
+# motion happened.
 #
-# Bound from binds.conf: Super+Left/Right and Super+H/L do `focus`;
-# add Ctrl for `move`.
+# Workspace target is `+1` / `-1` (numeric next/prev). Predictable;
+# the focus variant degrades gracefully on an empty workspace.
 
 set -eu
 
@@ -36,23 +40,40 @@ case "$dir" in l|r) ;; *)
     echo "usage: hypr-edge-nav <focus|move> <l|r>" >&2; exit 2 ;;
 esac
 
-active_json() { hyprctl -j activewindow 2>/dev/null; }
-addr_of()     { printf '%s' "$1" | jq -r '.address // empty'; }
-pos_of()      { printf '%s' "$1" | jq -r 'if .at then "\(.at[0]),\(.at[1])" else "" end'; }
+active=$(hyprctl -j activewindow 2>/dev/null || echo '{}')
+self_addr=$(printf '%s' "$active" | jq -r '.address // empty')
+[ -n "$self_addr" ] || exit 0
 
-before=$(active_json)
-before_addr=$(addr_of "$before")
-before_pos=$(pos_of "$before")
+ws=$(printf '%s' "$active" | jq -r '.workspace.id // empty')
+center_x=$(printf '%s' "$active" | jq -r 'if .at and .size then (.at[0] + .size[0]/2) else empty end')
+[ -n "$ws" ] && [ -n "$center_x" ] || exit 0
+
+# Count other mapped clients on this workspace whose centre is past
+# ours in the requested direction. Zero → we're the edge window.
+if [ "$dir" = r ]; then op='>'; else op='<'; fi
+others=$(hyprctl -j clients 2>/dev/null | jq --arg self "$self_addr" --argjson ws "$ws" --argjson cx "$center_x" "
+    [ .[]
+      | select(.workspace.id == \$ws)
+      | select(.mapped)
+      | select(.address != \$self)
+      | select((.at[0] + .size[0]/2) $op \$cx)
+    ] | length")
+
+if [ "${others:-0}" -gt 0 ]; then
+    # Not at edge — let the plain dispatcher run.
+    if [ "$mode" = focus ]; then
+        exec hyprctl dispatch movefocus "$dir" >/dev/null
+    else
+        exec hyprctl dispatch movewindow "$dir" >/dev/null
+    fi
+fi
+
+# At edge — escalate to the next/prev workspace.
+if [ "$dir" = r ]; then ws_target='+1'; else ws_target='-1'; fi
 
 if [ "$mode" = focus ]; then
-    hyprctl dispatch movefocus "$dir" >/dev/null 2>&1 || true
-    after_addr=$(addr_of "$(active_json)")
-    [ "$before_addr" = "$after_addr" ] || exit 0
-
-    # Escalate: switch workspace, focus the appropriate edge window.
-    if [ "$dir" = r ]; then ws='+1'; sort_jq='sort_by(.at[0])';        else ws='-1'; sort_jq='sort_by(.at[0]) | reverse'; fi
-    hyprctl dispatch workspace "$ws" >/dev/null 2>&1 || exit 0
-
+    if [ "$dir" = r ]; then sort_jq='sort_by(.at[0])'; else sort_jq='sort_by(.at[0]) | reverse'; fi
+    hyprctl dispatch workspace "$ws_target" >/dev/null 2>&1 || exit 0
     new_ws=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id // empty')
     [ -n "$new_ws" ] || exit 0
     target=$(hyprctl -j clients 2>/dev/null \
@@ -62,12 +83,20 @@ if [ "$mode" = focus ]; then
     exit 0
 fi
 
-# mode = move
-hyprctl dispatch movewindow "$dir" >/dev/null 2>&1 || true
-after=$(active_json)
-after_addr=$(addr_of "$after")
-after_pos=$(pos_of "$after")
-if [ "$before_addr" = "$after_addr" ] && [ "$before_pos" = "$after_pos" ]; then
-    if [ "$dir" = r ]; then ws='+1'; else ws='-1'; fi
-    hyprctl dispatch movetoworkspace "$ws" >/dev/null 2>&1 || true
-fi
+# mode = move : carry the window over and push it to the far edge.
+hyprctl dispatch movetoworkspace "$ws_target" >/dev/null 2>&1 || exit 0
+
+# Push opposite to the travel direction so the window lands at the
+# leading edge of the destination (right→next ws → land at left;
+# left→prev ws → land at right). Loop until position stabilises;
+# bounded so a pathological layout can't hang us.
+if [ "$dir" = r ]; then push=l; else push=r; fi
+prev=""
+i=0
+while [ $i -lt 16 ]; do
+    cur=$(hyprctl -j activewindow 2>/dev/null | jq -r 'if .at then "\(.at[0]),\(.at[1])" else "" end')
+    [ "$cur" = "$prev" ] && break
+    prev=$cur
+    hyprctl dispatch movewindow "$push" >/dev/null 2>&1 || break
+    i=$((i + 1))
+done
