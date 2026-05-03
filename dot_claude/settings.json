@@ -1,5 +1,7 @@
 {
+  "effortLevel": "xhigh",
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
-  "effortLevel": "xhigh"
+  "skipAutoPermissionPrompt": true,
+  "agentPushNotifEnabled": true
 }
