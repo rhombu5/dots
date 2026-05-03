@@ -1,0 +1,73 @@
+#!/bin/sh
+# hypr-edge-nav <focus|move> <l|r>
+#
+# Edge-aware focus/move for the left↔right axis. Behaviour:
+#
+#   focus l|r : try `movefocus`. If the active window didn't change
+#               (i.e. nothing in that direction within the workspace),
+#               escalate to `workspace +1` / `-1` and focus the
+#               left-most (going right) or right-most (going left)
+#               window on the new workspace.
+#
+#   move  l|r : try `movewindow`. If the window's address+position
+#               didn't change, escalate to `movetoworkspace +1` / `-1`
+#               (which switches focus along with the window).
+#
+# Why address+position for `move`: `movewindow l/r` can shuffle inside
+# a tabgroup or cross to another monitor — we only want to escalate to
+# a workspace switch when the dispatcher truly no-ops.
+#
+# Workspace target is `+1` / `-1` (numeric next/prev), not `e+1` / `e-1`
+# (next/prev existing). Predictable, and the focus variant degrades
+# gracefully on an empty workspace (no `focuswindow` to issue).
+#
+# Bound from binds.conf: Super+Left/Right and Super+H/L do `focus`;
+# add Ctrl for `move`.
+
+set -eu
+
+mode=${1:-}
+dir=${2:-}
+
+case "$mode" in focus|move) ;; *)
+    echo "usage: hypr-edge-nav <focus|move> <l|r>" >&2; exit 2 ;;
+esac
+case "$dir" in l|r) ;; *)
+    echo "usage: hypr-edge-nav <focus|move> <l|r>" >&2; exit 2 ;;
+esac
+
+active_json() { hyprctl -j activewindow 2>/dev/null; }
+addr_of()     { printf '%s' "$1" | jq -r '.address // empty'; }
+pos_of()      { printf '%s' "$1" | jq -r 'if .at then "\(.at[0]),\(.at[1])" else "" end'; }
+
+before=$(active_json)
+before_addr=$(addr_of "$before")
+before_pos=$(pos_of "$before")
+
+if [ "$mode" = focus ]; then
+    hyprctl dispatch movefocus "$dir" >/dev/null 2>&1 || true
+    after_addr=$(addr_of "$(active_json)")
+    [ "$before_addr" = "$after_addr" ] || exit 0
+
+    # Escalate: switch workspace, focus the appropriate edge window.
+    if [ "$dir" = r ]; then ws='+1'; sort_jq='sort_by(.at[0])';        else ws='-1'; sort_jq='sort_by(.at[0]) | reverse'; fi
+    hyprctl dispatch workspace "$ws" >/dev/null 2>&1 || exit 0
+
+    new_ws=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id // empty')
+    [ -n "$new_ws" ] || exit 0
+    target=$(hyprctl -j clients 2>/dev/null \
+        | jq -r --argjson ws "$new_ws" \
+            "[.[] | select(.workspace.id == \$ws) | select(.mapped)] | $sort_jq | .[0].address // empty")
+    [ -n "$target" ] && hyprctl dispatch focuswindow "address:$target" >/dev/null 2>&1 || true
+    exit 0
+fi
+
+# mode = move
+hyprctl dispatch movewindow "$dir" >/dev/null 2>&1 || true
+after=$(active_json)
+after_addr=$(addr_of "$after")
+after_pos=$(pos_of "$after")
+if [ "$before_addr" = "$after_addr" ] && [ "$before_pos" = "$after_pos" ]; then
+    if [ "$dir" = r ]; then ws='+1'; else ws='-1'; fi
+    hyprctl dispatch movetoworkspace "$ws" >/dev/null 2>&1 || true
+fi
