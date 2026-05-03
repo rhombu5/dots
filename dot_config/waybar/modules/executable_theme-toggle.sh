@@ -10,7 +10,7 @@ mode_file="${XDG_CACHE_HOME:-$HOME/.cache}/matugen/mode"
 mode=$( [[ -f "$mode_file" ]] && cat "$mode_file" || echo "dark" )
 
 case "$mode" in
-    light) printf '%s' "" ;;   # sun
-    *)     printf '%s' "" ;;   # moon (default)
+    light) printf '%s' "" ;;   # sun
+    *)     printf '%s' "" ;;   # moon (default)
 esac
 echo
