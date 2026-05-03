@@ -1,5 +1,13 @@
 # Tom's Claude Code rules
 
+---
+
+> # WHEN IN DOUBT — DISCUSS
+>
+> **If you are not certain about scope, intent, the right approach, or whether to take an action: stop and ask.** Don't guess. Don't proceed-and-hope. A clarifying question costs nothing; an unwanted edit, commit, push, refactor, or rewrite costs real work. This rule overrides every other instinct toward "just do it."
+
+---
+
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`).
 
 ## System changes go to both the live system AND the dotfiles repo
