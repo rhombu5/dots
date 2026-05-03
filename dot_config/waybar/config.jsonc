@@ -12,7 +12,7 @@
     "margin-right": 8,
 
     "modules-left":   ["hyprland/workspaces", "hyprland/window"],
-    "modules-center": ["custom/clock"],
+    "modules-center": [],
     "modules-right":  [
         "tray",
         "custom/notifications",
@@ -20,7 +20,8 @@
         "pulseaudio",
         "battery",
         "custom/theme-toggle",
-        "custom/power"
+        "custom/power",
+        "custom/clock"
     ],
 
     "hyprland/workspaces": {
