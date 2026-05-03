@@ -66,6 +66,8 @@ When working inside a git repo, Claude's auto-memory files belong in `<project-r
 - Each repo's learnings stay scoped to that repo — no leakage from one project's gotchas into another project's session.
 - The project-root path is stable; the home-dir path is encoded from the absolute CWD and breaks if the repo moves.
 
+**The project is the project the work is about, not the CWD.** A session may start in one repo and end up doing work in another (e.g., started in `arch-setup` but the user asks for changes in `dots`). Sort each memory file into the `.claude/memory/` of the project it actually describes, not the launch directory. If a single memory genuinely spans projects, route it to the more affected one.
+
 Claude Code's hardcoded home-dir path is reconciled with this via a **symlink**: `~/.claude/projects/<encoded-cwd>/memory` → `<project-root>/.claude/memory/`. Both paths resolve to the same files. The symlink itself is per-machine (lives under `~/.claude/`, not the repo); set it up after cloning a project on a new machine.
 
 **Commit policy is per-repo:**
