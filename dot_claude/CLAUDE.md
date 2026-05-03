@@ -21,6 +21,16 @@ For **chezmoi-managed** files (check with `chezmoi managed | grep <path>`):
 
 Always make **immediate, atomic commits and push**. One logical change per commit. Don't batch unrelated changes. Don't leave the repo dirty across turns. Match the existing commit-message style in the repo (check `git log` first).
 
+## Reinstall reproducibility — three layers
+
+Persistent state lives in one of three layers. Pick the right one when adding a change, and trace all three when checking what survives a reinstall:
+
+1. **Install scripts** (`arch-setup`): system-level config (`/etc/`, `/usr/local/`, package lists, services).
+2. **chezmoi** (`rhombu5/dots`): user configs that should be identical across installs. chezmoi runs *after* the postinstall script and **can overwrite anything postinstall just wrote** — for any chezmoi-managed path, the chezmoi source is the source of truth, not the postinstall HEREDOC content.
+3. **Planters** (`~/.local/share/arch-setup-bootstraps/`, shipped via dots, dispatched by a `.zshrc.d` runner): user-specific state that needs interactive setup or external auth (gh, SSH agent, etc.). Planters self-delete on success — a planter file still on disk means it never ran successfully.
+
+Direct edits to live `$HOME` files outside these layers are ephemeral. Don't conclude "this drifted" without checking the chezmoi source AND the relevant planter first.
+
 ## Always follow FHS (and XDG for user paths)
 
 Stick to the Filesystem Hierarchy Standard for system paths and the XDG Base Directory spec for user paths. Don't invent locations or scatter files in `$HOME`.
