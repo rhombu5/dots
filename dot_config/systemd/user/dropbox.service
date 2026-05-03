@@ -1,0 +1,20 @@
+[Unit]
+Description=Dropbox sync daemon
+# Tied to the graphical session so it doesn't spin up at greeter time.
+PartOf=graphical-session.target
+After=graphical-session.target
+# Silently no-op until the user has linked the account via the planter
+# (cloud-storage-auth.sh) — info.json appears after the browser link flow.
+ConditionPathExists=%h/.dropbox/info.json
+
+[Service]
+# `dropbox start` forks the daemon (~/.dropbox-dist/dropboxd) and exits;
+# Type=forking lets systemd track the forked daemon via GuessMainPID.
+Type=forking
+ExecStart=/usr/bin/dropbox start
+ExecStop=/usr/bin/dropbox stop
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

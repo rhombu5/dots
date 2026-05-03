@@ -4,9 +4,10 @@
 # directory is gone (everything has bootstrapped).
 #
 # Scripts and their preconditions:
-#   first-login.sh  — TTY login; bw + gh first-time auth.
-#   ssh-signing.sh  — gh authed AND Bitwarden SSH-agent socket exposes a key.
-#   hyprpm.sh       — inside a Hyprland session.
+#   first-login.sh         — TTY login; bw + gh first-time auth.
+#   ssh-signing.sh         — gh authed AND Bitwarden SSH-agent socket exposes a key.
+#   hyprpm.sh              — inside a Hyprland session.
+#   cloud-storage-auth.sh  — TTY login; Dropbox link + rclone gdrive OAuth + bisync seed.
 #
 # Fires per-shell so each precondition gets a chance the moment it's first
 # met. Each script handles its own re-entrancy (hyprpm.sh uses an

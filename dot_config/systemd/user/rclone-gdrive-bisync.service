@@ -1,0 +1,18 @@
+[Unit]
+Description=rclone bisync — gdrive: <-> ~/GoogleDrive
+# Skipped silently until the planter (cloud-storage-auth.sh) has run rclone
+# OAuth and seeded the bisync baseline with --resync.
+ConditionPathExists=%h/.local/state/rclone-bisync-initialized
+ConditionPathExistsGlob=%h/.config/rclone/rclone.conf
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/mkdir -p %h/GoogleDrive
+# --resilient: bisync v1.62+ flag, recovers from interrupted runs without
+#   needing a manual --resync. Critical for laptop use (suspends, network
+#   drops mid-sync).
+# --max-delete 25: refuses to propagate large mass-deletes; protects
+#   against an accidental rm -rf ~/GoogleDrive nuking the cloud copy.
+# --create-empty-src-dirs: preserves directory structure even when one
+#   side has empty dirs that bisync would otherwise drop.
+ExecStart=/usr/bin/rclone bisync gdrive: %h/GoogleDrive --resilient --max-delete 25 --create-empty-src-dirs
