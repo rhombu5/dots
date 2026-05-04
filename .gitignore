@@ -9,5 +9,11 @@
 .DS_Store
 Thumbs.db
 
+# package.json `prepare` script wires up .githooks; node_modules itself
+# is not needed (we have no dependencies — npm install is just for the
+# lifecycle hook).
+/node_modules/
+/package-lock.json
+
 # Crash artifacts
 *.stackdump

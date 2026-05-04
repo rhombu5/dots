@@ -1,36 +1,64 @@
 #!/usr/bin/env bash
-# pre-commit hook — refuse to commit a Hyprland config with binding
-# conflicts or unknown dispatchers. Runs validate-hypr-binds against
-# the in-repo source tree (NOT against ~/.config/hypr/, since the
-# committed change may not have been chezmoi-applied yet).
+# pre-commit hook — two checks:
+#
+#   1. (always) chezmoi verify
+#      Fails if the source tree doesn't match the live system — i.e.,
+#      "you forgot to chezmoi apply." Catches drifts that would
+#      otherwise commit out-of-sync source. If you have intentional
+#      drift (an active config trial), use --no-verify for that one
+#      commit.
+#
+#   2. (if Hyprland config staged) validate-hypr-binds
+#      Refuses commits introducing binding conflicts or unknown
+#      dispatchers in dot_config/hypr/*.conf.
 #
 # Activate with:
 #   git config core.hooksPath .githooks
-# (run once per checkout — the .git directory's local config persists).
+# (or just `npm install` — the package.json prepare script does this).
 #
 # Skip in emergencies with `git commit --no-verify` (sparingly!).
 
 set -euo pipefail
 
-# Only run if any hyprland config file is staged for commit.
-if ! git diff --cached --name-only | grep -qE '^dot_config/hypr/.*\.conf$'; then
-    exit 0
-fi
-
 repo_root="$(git rev-parse --show-toplevel)"
-validator="$repo_root/dot_local/bin/executable_validate-hypr-binds"
 
-if [[ ! -f "$validator" ]]; then
-    echo "pre-commit: validate-hypr-binds not found at $validator (skipping)" >&2
-    exit 0
+# ---- Check 1: chezmoi verify --------------------------------------------------
+if command -v chezmoi >/dev/null 2>&1; then
+    if ! chezmoi verify >/dev/null 2>&1; then
+        cat >&2 <<EOF
+
+================================================================================
+pre-commit: chezmoi verify failed — source tree doesn't match the live system.
+You probably forgot to run \`chezmoi apply\` (or \`chezmoi re-add <path>\` if
+the change started live and needs to flow back to source).
+
+Diff:
+
+$(chezmoi diff 2>&1 | head -60)
+
+If this drift is INTENTIONAL (e.g., an active config trial), bypass with:
+    git commit --no-verify
+================================================================================
+EOF
+        exit 1
+    fi
+else
+    echo "pre-commit: chezmoi not found on PATH (skipping verify)" >&2
 fi
 
-# Invoke via bash so the in-repo file doesn't need its +x bit — chezmoi's
-# `executable_` prefix only sets exec bit on the APPLIED copy, not the
-# source. (We do chmod +x it in-repo for direct invocations, but belt-
-# and-braces.)
-if ! HYPR_DIR="$repo_root/dot_config/hypr" bash "$validator"; then
-    cat >&2 <<EOF
+# ---- Check 2: hypr binds (only if hypr/*.conf is staged) ----------------------
+if git diff --cached --name-only | grep -qE '^dot_config/hypr/.*\.conf$'; then
+    validator="$repo_root/dot_local/bin/executable_validate-hypr-binds"
+    if [[ ! -f "$validator" ]]; then
+        echo "pre-commit: validate-hypr-binds not found at $validator (skipping)" >&2
+        exit 0
+    fi
+    # Invoke via bash so the in-repo file doesn't need its +x bit — chezmoi's
+    # `executable_` prefix only sets exec bit on the APPLIED copy, not the
+    # source. (We do chmod +x it in-repo for direct invocations, but belt-
+    # and-braces.)
+    if ! HYPR_DIR="$repo_root/dot_config/hypr" bash "$validator"; then
+        cat >&2 <<EOF
 
 ================================================================================
 pre-commit: Hyprland binding conflicts in staged changes.
@@ -39,5 +67,6 @@ Bypass (NOT recommended) with:
     git commit --no-verify
 ================================================================================
 EOF
-    exit 1
+        exit 1
+    fi
 fi

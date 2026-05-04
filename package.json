@@ -1,0 +1,8 @@
+{
+    "name": "dots",
+    "private": true,
+    "description": "chezmoi-managed dotfiles. `npm install` activates the .githooks/ pre-commit hook.",
+    "scripts": {
+        "prepare": "git config core.hooksPath .githooks"
+    }
+}

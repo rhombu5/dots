@@ -1,3 +1,10 @@
+# Repo-level files that exist for git-hook plumbing or repo metadata,
+# NOT to be applied to $HOME by chezmoi.
+package.json
+package-lock.json
+node_modules
+.githooks
+
 # Paths that matugen renders to at runtime. Chezmoi MUST NOT manage these
 # or it'll fight with matugen on every wallpaper change / theme-toggle.
 #
