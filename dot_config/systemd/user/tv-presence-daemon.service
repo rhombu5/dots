@@ -1,0 +1,15 @@
+[Unit]
+Description=Toggle Hyprland output based on TV LAN presence (ICMP ping)
+Documentation=man:hyprctl(1)
+PartOf=graphical-session.target
+After=graphical-session.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/tv-presence-daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,51 @@
+#!/bin/sh
+# tv-presence-daemon — toggle a Hyprland output based on the TV's LAN
+# presence (ICMP ping). Built around the V505-G9's behaviour: powered
+# on → answers ping at its DHCP-reserved IP; soft-off → completely
+# silent on the network. Combined with sticky HPD (the dock keeps the
+# DRM connector "connected" 24/7), this is the only real signal we
+# have to know whether the panel is actually showing pixels.
+#
+# Why this exists at all: see project memory
+# `project_inspiron_hdmi_cec_dead.md` — CEC over the laptop's HDMI is
+# physically dead (5 cables tested), DDC/CI is unimplemented by the
+# Vizio, all sysfs/SCDC/EDID paths look identical between TV-on and
+# TV-off. ICMP is the only thing that flips.
+#
+# Configuration via env (all overridable):
+#   TV_IP        — TV's LAN address (default: 192.168.1.98)
+#   MONITOR      — Hyprland output name (default: DP-1)
+#   ON_SPEC      — `monitor=<NAME>,<spec>` argument used to re-enable
+#                  the output. Must match what monitors.conf would set.
+#   POLL         — seconds between pings (default: 3)
+#
+# Re-asserts on Hyprland reload by virtue of being a long-running
+# daemon — the next ping cycle pushes the correct keyword regardless
+# of what hyprctl reload reset.
+
+set -eu
+
+TV_IP=${TV_IP:-192.168.1.98}
+MONITOR=${MONITOR:-DP-1}
+ON_SPEC=${ON_SPEC:-preferred,0x0,1.5}
+POLL=${POLL:-3}
+
+last=""
+while :; do
+    if ping -c1 -W1 -q "$TV_IP" >/dev/null 2>&1; then
+        cur=on
+    else
+        cur=off
+    fi
+
+    if [ "$cur" != "$last" ]; then
+        if [ "$cur" = on ]; then
+            hyprctl keyword monitor "$MONITOR,$ON_SPEC" >/dev/null 2>&1 || true
+        else
+            hyprctl keyword monitor "$MONITOR,disable" >/dev/null 2>&1 || true
+        fi
+        last=$cur
+    fi
+
+    sleep "$POLL"
+done
