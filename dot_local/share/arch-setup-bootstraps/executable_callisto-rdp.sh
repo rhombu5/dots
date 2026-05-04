@@ -50,12 +50,24 @@ if [[ "$_bw_status" != "unlocked" ]]; then
 fi
 unset _bw_status
 
-_pw=$(command bw get item Microsoft 2>/dev/null | jq -r '.login.password // empty')
-if [[ -z "$_pw" ]]; then
-    echo "arch: callisto-rdp planter — couldn't fetch password from BW item 'Microsoft'." >&2
-    unset _remmina_file _planter_file _pw
+# Look up the password by matching the Remmina profile's username against
+# any BW "Microsoft Remote Desktop" item's login.username. The user's vault
+# typically has multiple entries (one per RDP target); this picks the one
+# whose username field matches what Callisto.remmina is configured to use.
+_username=$(grep -E '^username=' "$_remmina_file" | head -1 | cut -d= -f2-)
+if [[ -z "$_username" ]]; then
+    echo "arch: callisto-rdp planter — Callisto.remmina has no username= line." >&2
+    unset _remmina_file _planter_file
     return 0
 fi
+_pw=$(command bw list items --search 'Microsoft Remote Desktop' 2>/dev/null \
+    | jq -r --arg u "$_username" 'map(select(.login.username == $u)) | .[0].login.password // empty')
+if [[ -z "$_pw" ]]; then
+    echo "arch: callisto-rdp planter — no BW 'Microsoft Remote Desktop' item with login.username=$_username." >&2
+    unset _remmina_file _planter_file _pw _username
+    return 0
+fi
+unset _username
 
 if printf '%s' "$_pw" | secret-tool store \
         --label="Remmina: Callisto - password" \
