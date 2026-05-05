@@ -58,6 +58,10 @@ Anything that ends up in a public artifact under my name — git commits, GitHub
 
 Strip Claude attribution by default whenever you're writing something that'll be public and signed as me — I shouldn't have to repeat the rule.
 
+## Subagent model selection
+
+For prose-shaped subtasks (rewriting, summarizing, drafting docs, comparing wordings), dispatch **sonnet** subagents — its prose is reliably tighter than opus's. Use **opus** to sort out substance, structure, or tricky design decisions first if the task is complicated, then hand the prose execution to sonnet.
+
 ## Disruptive testing requires explicit hands-off confirmation
 
 Any time you're about to do testing where I need to stay hands off — switching workspaces, rearranging windows, moving the mouse, sending input events, anything that visibly changes my screen or interrupts what I'm doing — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing. Read-only inspection (querying state, reading files, running validators) does not need confirmation. Anything that perturbs my live session does.
