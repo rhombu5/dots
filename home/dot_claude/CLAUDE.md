@@ -26,7 +26,7 @@ When the loop is over, **give up**:
 - **Inside a project**: write or append to `blockers.md` at the project root — what you tried, what you learned, what you still don't know. Then stop.
 - **Outside a project / one-off task**: say so in the response, specifically where you got stuck.
 
-Definitions: *no progress* = the failing thing is still failing in the same way, or your changes haven't moved the needle on the symptom you're chasing — that's the trigger to stop attempts and research, whether you've used 1 or 5. *New context* = something genuinely informative (a docs page, a decoded error message, a related code path, a now-observed behavior) that changes your mental model — that's what licenses *another* round.
+Definitions: *no progress* = the failing thing is still failing in the same way and your changes haven't moved the needle — that's the *state* during attempts, not by itself a research trigger (one failed attempt isn't enough; failures are expected). *Research is triggered* when either (a) you reach the 5-attempt ceiling, or (b) you realize you've already tried everything you can think of without more information — whichever comes first. *New context* = something genuinely informative (a docs page, a decoded error message, a related code path, a now-observed behavior) that changes your mental model — that's what licenses *another* round of attempts after research.
 
 ---
 
