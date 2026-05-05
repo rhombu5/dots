@@ -20,7 +20,7 @@ Argument order:
 1. **Leading positional paths.** The first is `cd`ed into (in a subshell)
    before `claude` runs and becomes its primary working directory. Each
    remaining path is passed as `--add-dir <path>`. **If no path is given**,
-   cclaude defaults to `~/src/noop/` — the [noop landing zone](#noop-default)
+   cclaude defaults to `~/.claude/noop/` — the [noop landing zone](#noop-default)
    for general questions and one-off instructions.
 2. **Everything else** is forwarded to `claude` unchanged, *minus*
    cclaude's own flags. The path region ends at the first token starting
@@ -102,19 +102,23 @@ provided initial prompt.
 
 ## noop default
 
-`cclaude` with no positional path lands in `~/src/noop/`. That directory
-holds a [`CLAUDE.md`](../home/src/noop/CLAUDE.md) telling Claude it's
-been started outside any project and that project-specific work should
-be redirected — Claude offers to write a `handoff.md` in the right repo
-and then suggests the user relaunch with:
+`cclaude` with no positional path lands in `~/.claude/noop/`. That directory
+holds a [`CLAUDE.md`](../home/dot_claude/noop/CLAUDE.md) putting claude
+in **strict redirect mode**: every prompt is classified as either GENERAL
+(answer here) or PROJECT (write a `handoff.md` in the project's repo and
+tell the user to relaunch with):
 
 ```
 cclaude <project-dir> -i @handoff.md
 ```
 
-So a bare `cclaude` becomes "open Claude for general chat" without
-contaminating any project's tree. The dir + its `CLAUDE.md` are
-chezmoi-managed under `home/src/noop/` so they survive a reinstall.
+The handoff file is templated and includes a top-of-file *burn after
+reading* directive that the receiving session must obey on its first
+turn. So a bare `cclaude` becomes "open Claude for general chat" without
+contaminating any project's tree, and project-specific requests bridge
+to a properly-rooted session via a single-use file. The dir +
+`CLAUDE.md` are chezmoi-managed under `home/dot_claude/noop/` so they
+survive a reinstall.
 
 ## Notes
 

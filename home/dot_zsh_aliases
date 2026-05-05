@@ -56,7 +56,7 @@ cclaude() {
     # instructions. Its CLAUDE.md tells claude to redirect project-specific
     # work to a per-project handoff.md instead of acting from here.
     if (( ${#paths[@]} == 0 )); then
-        paths=("$HOME/src/noop")
+        paths=("$HOME/.claude/noop")
     fi
 
     # --setting-sources is incompatible with --settings; suppress auto-injection if the user set it explicitly.
