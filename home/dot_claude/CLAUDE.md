@@ -20,7 +20,7 @@ You may make **up to 5 attempts** at any one thing before stopping. After 5 with
 
 The loop's escape hatch is *new context*: the 5 attempts themselves should be teaching you something — a new error message, a ruled-out hypothesis, a related code path you didn't know about, a behavior you've now observed. That new context is what fuels the next research phase, which fuels the next round of attempts. **The loop continues indefinitely so long as each round of attempts produces new context.** If a round of 5 attempts surfaces nothing new — same failures, same symptoms, no new information — the loop is over.
 
-**Each research phase must target *different* material than the previous one** — different docs, different code paths, different web searches. Re-reading what you already read or re-examining code you already analyzed isn't research, it's spinning. If you can't find new material to investigate, that's the same signal as "no new context": the loop is over.
+**Each research phase must target something new, driven by the new context the attempts surfaced.** A fresh error message names a function to look up; a ruled-out hypothesis narrows where to investigate; a surprising behavior suggests which docs to read. The new context dictates the research target — re-reading material you already covered without that pointer isn't research, it's spinning. If the new context doesn't point at something specific to investigate next, the loop is over.
 
 When the loop is over, **give up**:
 - **Inside a project**: write or append to `blockers.md` at the project root — what you tried, what you learned, what you still don't know. Then stop.
