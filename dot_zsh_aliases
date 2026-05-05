@@ -14,26 +14,50 @@ alias tree='eza --tree --icons'
 alias cat='bat --paging=never'
 
 # --- claude ---
+# cclaude: launch `claude` rooted in the first path, with extra paths
+# added via --add-dir + their .mcp.json / project .claude/settings.json
+# auto-loaded. Everything after the leading paths is passed through to
+# `claude` verbatim — minus cclaude's own flags below.
 cclaude() {
     local -a paths passthrough injected
     local arg
     local skip_mcp=0 skip_settings=0
+    local init_prompt=""
+    local in_flags=0
 
-    for arg in "$@"; do
+    while (( $# )); do
+        arg="$1"
+        # Leading positional paths run until the first flag-looking token.
+        if (( ! in_flags )) && [[ "$arg" != -* ]]; then
+            paths+=("$arg")
+            shift
+            continue
+        fi
+        in_flags=1
         case "$arg" in
-            -m|--no-mcp)      skip_mcp=1 ;;
-            -s|--no-settings) skip_settings=1 ;;
-            --*)              passthrough+=("$arg") ;;
-            *)                paths+=("$arg") ;;
+            -m|--no-mcp)      skip_mcp=1; shift ;;
+            -s|--no-settings) skip_settings=1; shift ;;
+            -i|--init)
+                if (( $# < 2 )); then
+                    echo "cclaude: $arg requires a prompt string" >&2
+                    return 1
+                fi
+                init_prompt="$2"
+                shift 2
+                ;;
+            *)
+                passthrough+=("$arg")
+                shift
+                ;;
         esac
     done
 
     if (( ${#paths[@]} == 0 )); then
-        echo "cclaude: usage: cclaude <path> [paths...] [-m|--no-mcp] [-s|--no-settings] [--claude-flags...]" >&2
+        echo "cclaude: usage: cclaude <path> [paths...] [-m|--no-mcp] [-s|--no-settings] [-i|--init <prompt>] [claude-flags...]" >&2
         return 1
     fi
 
-    # --setting-sources is explicit; don't override it with auto --settings.
+    # --setting-sources is incompatible with --settings; suppress auto-injection if the user set it explicitly.
     for arg in "${passthrough[@]}"; do
         [[ "$arg" == --setting-sources* ]] && { skip_settings=1; break }
     done
@@ -49,7 +73,11 @@ cclaude() {
         fi
     done
 
-    ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" )
+    if [[ -n "$init_prompt" ]]; then
+        ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" "$init_prompt" )
+    else
+        ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" )
+    fi
 }
 
 # --- mc: make directory and cd into it ---

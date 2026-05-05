@@ -45,6 +45,14 @@ exist on disk:
 ~/.local/bin/wallpaper-rotate --first
 ```
 
+## Shell helpers
+
+Functions defined in [`dot_zsh_aliases`](dot_zsh_aliases) that have enough
+surface area to warrant their own page:
+
+- [`cclaude`](docs/cclaude.md) — launch `claude` across multiple project
+  roots, auto-loading each root's `.mcp.json` and `.claude/settings.json`.
+
 ## Secrets
 
 Source repo is public. Anything sensitive is fetched at apply time from
