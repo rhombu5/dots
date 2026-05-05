@@ -75,6 +75,21 @@ cclaude <project-dir> -i @handoff.md
 
 ---
 
+## Permitted exception: user-prefs maintenance
+
+Editing files under `~/.claude/` — the user-prefs `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, and noop's own `CLAUDE.md` / `handoff.template.md` — is **allowed from noop** despite matching bucket-C verbs ("update prefs", "add a rule", "change settings"). User prefs are cross-cutting — they apply to every session, not to any one project — so a general-chat session is the right scope for them.
+
+When you do this work:
+
+1. **Edit the chezmoi source, not the live file.** The truth is at `~/src/dots@rhombu5/home/dot_claude/<file>`. Editing the live `~/.claude/<file>` directly works once but gets overwritten by the next `chezmoi apply` from any session.
+2. **Apply afterwards:** `chezmoi apply ~/.claude/<file>` to sync the live copy. Verify with `chezmoi diff ~/.claude/<file>` (empty output = clean).
+3. **Commit and push the dots repo** atomically — one logical change per commit, immediately. `Read ~/.claude/CLAUDE.git.md` first if you haven't this session, for the SSH/commit conventions.
+4. **If you create a new `CLAUDE.<context>.md`,** add a one-line entry to the *Context files* index in `~/.claude/CLAUDE.md` so it's discoverable next session.
+
+This exception is scoped to `~/.claude/` only. Other user-level state — `.zshrc`, hyprland configs, the rest of dotfiles — is still bucket C; redirect via handoff.
+
+---
+
 ## Escalation — when a thread shifts B → C
 
 A bucket-B thread can turn into bucket C: the user follows up with "now change…", "ok, fix it", "let's add that". Switch to bucket-C action **at that new turn**, not retroactively. The earlier read-only work was the right call when it happened; just write the handoff for the modification request and bridge.

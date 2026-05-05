@@ -39,6 +39,8 @@ A bucket-B thread can shift to bucket C mid-conversation. The rule is to redirec
 
 The classifier also has a step-1 "if you can't classify with high confidence, ask" rule, applying the global *WHEN IN DOUBT — DISCUSS* posture.
 
+**One scoped exception to bucket C:** edits to user-prefs files under `~/.claude/` (the core `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, and noop's own files) are allowed from noop. User prefs are cross-cutting — they belong to every session, not any one project — so a general-chat session is the natural scope. The work flows through the chezmoi source at `~/src/dots@rhombu5/home/dot_claude/`, then `chezmoi apply`, then atomic commit + push. Other user-level state (`.zshrc`, hyprland configs, the rest of dotfiles) stays bucket C.
+
 ## The handoff bridge
 
 When claude classifies bucket C, it writes `<project-dir>/handoff.md` (template: [`home/dot_claude/noop/handoff.template.md`](../home/dot_claude/noop/handoff.template.md)) capturing the user's request, then gives a copy-pasteable command:
