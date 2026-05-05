@@ -4,7 +4,7 @@ Load when the task touches: Arch package management, systemd units, the FHS / XD
 
 ## Use `sudonf` for any auth that needs a fingerprint
 
-The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Use the `sudonf` wrapper (`~/.local/bin/sudonf`, chezmoi-managed in `rhombu5/dots`) for **anything that triggers sudo or polkit auth** — `sudo`, `pkexec`, `pacman -S/-U/-R`, `tee /etc/...`, `systemctl restart` of root services, AUR `makepkg -si`, etc. It fires a Critical notify-send (which swaync plays a sound on via its `critical-sound` script) and dismisses the notification once auth resolves.
+The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Use the `sudonf` wrapper (`~/.local/bin/sudonf`, chezmoi-managed in `rhombu5/dots`) for **anything that triggers sudo or polkit auth** — `sudo`, `pkexec`, `pacman -S/-U/-R`, `tee /etc/...`, `systemctl restart` of root services, AUR `makepkg -si`, etc. It plays an audible cue and self-clears.
 
 ```bash
 sudonf '<short hint of what is about to run>' <sudo args>
@@ -40,9 +40,6 @@ Direct edits to live `$HOME` files outside these layers are ephemeral. Don't con
 
 ## Always follow FHS (and XDG for user paths)
 
-Stick to the Filesystem Hierarchy Standard for system paths and the XDG Base Directory spec for user paths. Don't invent locations or scatter files in `$HOME`.
+Stick to the Filesystem Hierarchy Standard for system paths and the XDG Base Directory spec for user paths (`~/.config/`, `~/.local/share/`, `~/.local/state/`, `~/.cache/`, `~/.local/bin/`, `$XDG_RUNTIME_DIR`). Don't invent locations or scatter files in `$HOME`.
 
-- **System (FHS):** `/etc/` config, `/var/lib/` state, `/var/log/` logs, `/usr/local/` locally-built system-wide, `/opt/` self-contained third-party bundles, `/srv/` service data, `/tmp/` ephemeral.
-- **User (XDG):** `~/.config/` (`$XDG_CONFIG_HOME`), `~/.local/share/` (`$XDG_DATA_HOME`), `~/.local/state/` (`$XDG_STATE_HOME`), `~/.cache/` (`$XDG_CACHE_HOME`), `~/.local/bin/` for user binaries, `$XDG_RUNTIME_DIR` (typically `/run/user/$UID/`) for runtime sockets.
-
-When a tool defaults to a non-XDG dotfile path (e.g. `~/.foorc`) but offers a config option or env var to relocate, prefer the XDG path. When in doubt about which directory fits, search the spec rather than guessing.
+When a tool defaults to a non-XDG dotfile path (e.g. `~/.foorc`) but offers a config option or env var to relocate, prefer the XDG path. When in doubt about which directory fits, check the spec rather than guessing.

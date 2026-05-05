@@ -36,9 +36,9 @@ Never assume `~/src/<name>/` (no `@user` suffix) is a valid path — folder name
 
 Use `git@<host>:<user>/<repo>.git` URLs, never `https://`. The SSH agent is Bitwarden Desktop (socket at `~/.bitwarden-ssh-agent.sock`); if a non-interactive shell doesn't have `SSH_AUTH_SOCK` set, prepend `SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock` to the git command — don't bypass signing.
 
-## New projects follow the same clone-path rules
+## New projects
 
-When asked to start a new project (anything I might eventually push to GitHub), pick its directory using the same `{repo}@{user}+{workspace}` rule and the same `~/src/` vs `~/.local/src/` vs `/opt/` axis as for clones. Decide the GitHub owner *up front* — see the next section — so the folder name reflects where it'll live.
+Same rules as clones (folder name + parent dir). Pick the GitHub owner from the table below *up front* so the folder name reflects ownership from day one.
 
 ## My GitHub user/orgs
 

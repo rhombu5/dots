@@ -30,7 +30,7 @@ Anything that ends up in a public artifact under my name — git commits, GitHub
 - **No "Claude here" / "as an AI" / "happy to" / "I'd love to" filler** in issue or PR text. Write the way I'd write — direct, technical, first-person.
 - **Don't sign work as Claude** anywhere a human reader will see it.
 
-This applies even if I don't repeat the instruction every time. If you're about to write something that will be public and signed as me, strip Claude attribution by default.
+Strip Claude attribution by default whenever you're writing something that'll be public and signed as me — I shouldn't have to repeat the rule.
 
 ## Disruptive testing requires explicit hands-off confirmation
 
@@ -43,7 +43,6 @@ Any time you're about to do testing where I need to stay hands off — switching
 When working inside a git repo, Claude's auto-memory files belong in `<project-root>/.claude/memory/`, not the per-session home-dir path (`~/.claude/projects/<encoded-cwd>/memory/`). Reasons:
 
 - Memory travels with the repo across reinstalls, machines, and worktrees.
-- Each repo's learnings stay scoped to that repo — no leakage from one project's gotchas into another project's session.
 - The project-root path is stable; the home-dir path is encoded from the absolute CWD and breaks if the repo moves.
 
 **The project is the project the work is about, not the CWD.** A session may start in one repo and end up doing work in another (e.g., started in `arch-setup` but the user asks for changes in `dots`). Sort each memory file into the `.claude/memory/` of the project it actually describes, not the launch directory. If a single memory genuinely spans projects, route it to the more affected one.
