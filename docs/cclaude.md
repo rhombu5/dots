@@ -19,7 +19,9 @@ Argument order:
 
 1. **Leading positional paths.** The first is `cd`ed into (in a subshell)
    before `claude` runs and becomes its primary working directory. Each
-   remaining path is passed as `--add-dir <path>`.
+   remaining path is passed as `--add-dir <path>`. **If no path is given**,
+   cclaude defaults to `~/src/noop/` — the [noop landing zone](#noop-default)
+   for general questions and one-off instructions.
 2. **Everything else** is forwarded to `claude` unchanged, *minus*
    cclaude's own flags. The path region ends at the first token starting
    with `-`; positional tokens after that go through to `claude` as-is
@@ -85,6 +87,22 @@ claude --dangerously-skip-permissions \
 So the session is rooted in `arch-setup`, can read/write `dots`, runs
 under the named conversation `metis-housekeeping`, and opens with the
 provided initial prompt.
+
+## noop default
+
+`cclaude` with no positional path lands in `~/src/noop/`. That directory
+holds a [`CLAUDE.md`](../home/src/noop/CLAUDE.md) telling Claude it's
+been started outside any project and that project-specific work should
+be redirected — Claude offers to write a `handoff.md` in the right repo
+and then suggests the user relaunch with:
+
+```
+cclaude <project-dir> -i @handoff.md
+```
+
+So a bare `cclaude` becomes "open Claude for general chat" without
+contaminating any project's tree. The dir + its `CLAUDE.md` are
+chezmoi-managed under `home/src/noop/` so they survive a reinstall.
 
 ## Notes
 

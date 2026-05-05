@@ -52,9 +52,11 @@ cclaude() {
         esac
     done
 
+    # No path given → land in the noop dir for general questions / one-off
+    # instructions. Its CLAUDE.md tells claude to redirect project-specific
+    # work to a per-project handoff.md instead of acting from here.
     if (( ${#paths[@]} == 0 )); then
-        echo "cclaude: usage: cclaude <path> [paths...] [-m|--no-mcp] [-s|--no-settings] [-i|--init <prompt>] [claude-flags...]" >&2
-        return 1
+        paths=("$HOME/src/noop")
     fi
 
     # --setting-sources is incompatible with --settings; suppress auto-injection if the user set it explicitly.
