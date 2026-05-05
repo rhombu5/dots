@@ -10,23 +10,27 @@
 
 ## Never guess
 
-Don't fabricate a theory and act on it as if it were verified. If you don't know something load-bearing, **ask** — the *WHEN IN DOUBT — DISCUSS* rule above applies.
+Don't fabricate a theory and act on it as if verified. If something load-bearing is unknown, **ask** — the *WHEN IN DOUBT — DISCUSS* rule above applies.
 
-**Debugging is the one exception.** Forming a hypothesis and running a test to confirm or rule it out is the scientific method, not guessing. Guess freely *as a theory to be tested*; never as a theory to act on.
+**Debugging exception:** forming a hypothesis and running a test to confirm or rule it out is the scientific method, not guessing. Theories-to-test are fine; theories-to-act-on are not.
 
 ### The 5-attempt loop
 
-You may make **up to 5 attempts** at any one thing before stopping. **5 is a ceiling, not a quota** — if at any point during those attempts you realize you've already exhausted what you can productively try without more information, stop and **research** right then. You don't have to burn all 5 first. After research, up to 5 more attempts.
+**5 attempts is a ceiling, not a quota.** Stop and research as soon as any of these fires — whichever comes first:
 
-The loop's escape hatch is *new context*: the attempts themselves should be teaching you something — a new error message, a ruled-out hypothesis, a related code path you didn't know about, a behavior you've now observed. That new context is what fuels the next research phase, which fuels the next round of attempts. **The loop continues indefinitely so long as each round of attempts produces new context.** If a round surfaces nothing new — same failures, same symptoms, no new information — the loop is over.
+- **(a)** you hit the 5-attempt ceiling
+- **(b)** you've exhausted what you can try without more information
+- **(c)** you notice a knowledge gap that's keeping you from forming a credible attempt — this can fire *before any attempts*, when "I'm about to guess" is the honest description
 
-**Each research phase must target something new, driven by the new context the attempts surfaced.** A fresh error message names a function to look up; a ruled-out hypothesis narrows where to investigate; a surprising behavior suggests which docs to read. The new context dictates the research target — re-reading material you already covered without that pointer isn't research, it's spinning. If the new context doesn't point at something specific to investigate next, the loop is over.
+Every failed attempt is "no progress" in the literal sense; that alone doesn't trigger research. It's the conditions above that do.
 
-When the loop is over, **give up**:
-- **Inside a project**: write or append to `blockers.md` at the project root — what you tried, what you learned, what you still don't know. Then stop.
-- **Outside a project / one-off task**: say so in the response, specifically where you got stuck.
+**The loop's escape hatch is new context.** Attempts should produce it — error messages, ruled-out hypotheses, observed behavior, related code paths. That new context fuels the next research phase. Each research phase must target what the new context points at specifically: a fresh error names a function to look up; a ruled-out hypothesis narrows the next search. Re-reading already-covered material without a specific pointer isn't research, it's spinning.
 
-Definitions: *no progress* = the failing thing is still failing in the same way and your changes haven't moved the needle — that's the *state* during attempts, not by itself a research trigger (one failed attempt isn't enough; failures are expected). *Research is triggered* when (a) you reach the 5-attempt ceiling, (b) you realize you've already tried everything you can think of without more information, or (c) you notice a gap in your knowledge — something load-bearing you don't actually know about how this works — that would let you form a more credible attempt; this third one can fire before *any* attempts, when "I'm about to guess" is what you'd otherwise be doing. Whichever comes first wins. *New context* = something genuinely informative (a docs page, a decoded error message, a related code path, a now-observed behavior) that changes your mental model — that's what licenses *another* round of attempts after research.
+**The loop ends when** a round of attempts surfaces no new context, or the new context doesn't point at anything specific to investigate next.
+
+When the loop ends, **give up**:
+- **Inside a project:** write or append `blockers.md` at the project root — what you tried, what you learned, what you still don't know. Stop.
+- **Outside a project / one-off task:** say so in the response, specifically where you got stuck.
 
 ---
 
