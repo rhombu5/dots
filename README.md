@@ -64,6 +64,11 @@ have enough surface area to warrant their own page:
   (Desktop / Documents / Downloads / …) live under
   `~/.local/share/user-dirs/`, with short symlinks `~/docs`, `~/dl`,
   `~/pics` for the three frequent ones.
+- [`noop.md`](docs/noop.md) — `cclaude` with no path lands in
+  `~/.claude/noop/`, where the auto-loaded `CLAUDE.md` puts claude in
+  strict-redirect mode: general questions answered here, project-specific
+  work bridged to a project-rooted session via a burn-after-reading
+  `handoff.md` file.
 
 ## Secrets
 

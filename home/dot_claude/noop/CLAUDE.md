@@ -34,9 +34,9 @@ Conceptual / how-to / one-off requests with no specific repo in scope.
 - "What's a monoid?"
 - "How do I redirect stderr in zsh?"
 - "Show me a Python pattern for retrying a flaky network call."
-- "What's the difference between a btrfs subvolume and a regular directory?"
+- "What's the difference between a hard link and a symlink?"
 
-**Action:** answer directly, like a concise tutor. No project tool calls. Reference docs / man pages are fine.
+**Action:** answer directly, like a concise tutor. No project tool calls. Reference docs / man pages / language standard library docs are fine.
 
 </bucket>
 
@@ -99,7 +99,7 @@ The cost gradient: **before any tool call** (free) → **right after the call th
 
 1. **If the project doesn't exist on disk yet**, help the user clone or bootstrap it first. If you haven't already this session, `Read ~/.claude/CLAUDE.git.md` for the clone-path conventions and the GitHub owner choice.
 
-2. **Write the handoff at an absolute path.** Your `Write` call MUST target `<project-dir-absolute>/handoff.md`, e.g. `/home/tom/src/arch-setup@fnrhombus/handoff.md`. Never pass just `handoff.md` — your cwd is `~/.claude/noop/`, so a relative path would land there. Before writing, `Read ~/.claude/noop/handoff.template.md` and follow it exactly. If `handoff.md` already exists at the target, append after a `---` separator — don't clobber. Don't `git add` the file.
+2. **Write the handoff at an absolute or `~`-anchored path.** Your `Write` call MUST target the project's full path with `handoff.md` appended — for example `~/src/arch-setup@fnrhombus/handoff.md` (or the OS-native absolute form, whatever works for your `Write` tool on this platform). Never pass just `handoff.md` — your cwd is `~/.claude/noop/`, so a relative path would land there. Before writing, `Read ~/.claude/noop/handoff.template.md` and follow it exactly. If `handoff.md` already exists at the target, append after a `---` separator — don't clobber. Don't `git add` the file.
 
 3. **Give the user a copy-pasteable command with the placeholder substituted.** The shape:
 
@@ -110,7 +110,7 @@ The cost gradient: **before any tool call** (free) → **right after the call th
    <path_rules>
    The two paths resolve in *different scopes* — getting this wrong breaks the user's paste:
 
-   - **`<project-dir>`** is resolved by **bash at paste time**, with the user's shell cwd. After they `Ctrl+C Ctrl+C` out of this session their cwd is whatever it was *before* they ran `cclaude` — `$HOME`, a totally unrelated repo, `/tmp`, who knows. (`cclaude`'s `cd` happens in a subshell, so it never propagates back to the parent shell.) Therefore **`<project-dir>` MUST be absolute (`/home/tom/…`) or `~`-relative (`~/src/…`)**. Never `./foo`, `../foo`, or bare `foo`.
+   - **`<project-dir>`** is resolved by **the shell at paste time**, with the user's shell cwd. After they `Ctrl+C Ctrl+C` out of this session their cwd is whatever it was *before* they ran `cclaude` — could be anywhere. (`cclaude`'s `cd` happens in a subshell, so it never propagates back to the parent shell.) Therefore **`<project-dir>` MUST be absolute or `~`-anchored**. Never `./foo`, `../foo`, or a bare repo name. The `~` form is portable across Linux/macOS/Windows shells; native absolute paths (`/home/...`, `/Users/...`, `C:\Users\...`) are also fine if you know the platform.
    - **`@handoff.md`** is resolved by **`claude` after `cclaude`'s `cd`**, with cwd = `<project-dir>`. So it MUST stay literal as `@handoff.md` — leave that token alone, don't substitute, don't make it absolute.
    </path_rules>
 
