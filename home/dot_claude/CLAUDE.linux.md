@@ -40,6 +40,9 @@ Direct edits to live `$HOME` files outside these layers are ephemeral. Don't con
 
 ## Always follow FHS (and XDG for user paths)
 
-Stick to the Filesystem Hierarchy Standard for system paths and the XDG Base Directory spec for user paths (`~/.config/`, `~/.local/share/`, `~/.local/state/`, `~/.cache/`, `~/.local/bin/`, `$XDG_RUNTIME_DIR`). Don't invent locations or scatter files in `$HOME`.
+Stick to the Filesystem Hierarchy Standard for system paths and the XDG Base Directory spec for user paths. Don't invent locations or scatter files in `$HOME`.
+
+- **System (FHS):** `/etc/` config, `/var/lib/` state, `/var/log/` logs, `/usr/local/` locally-built system-wide, `/opt/` self-contained third-party bundles, `/srv/` service data, `/tmp/` ephemeral.
+- **User (XDG):** `~/.config/` (`$XDG_CONFIG_HOME`), `~/.local/share/` (`$XDG_DATA_HOME`), `~/.local/state/` (`$XDG_STATE_HOME`), `~/.cache/` (`$XDG_CACHE_HOME`), `~/.local/bin/` for user binaries, `$XDG_RUNTIME_DIR` (typically `/run/user/$UID/`) for runtime sockets.
 
 When a tool defaults to a non-XDG dotfile path (e.g. `~/.foorc`) but offers a config option or env var to relocate, prefer the XDG path. When in doubt about which directory fits, check the spec rather than guessing.

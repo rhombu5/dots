@@ -18,13 +18,13 @@ Don't fabricate a theory and act on it as if it were verified. If you don't know
 
 You may make **up to 5 attempts** at any one thing before stopping. After 5 with no progress, stop and **research** — read docs, search the codebase, web-search if relevant. Then up to 5 more attempts.
 
-The loop continues indefinitely **so long as each research round discovers genuinely new context.** The trigger for another iteration is *new context*, not *5 more attempts wanted*.
+The loop's escape hatch is *new context*: the 5 attempts themselves should be teaching you something — a new error message, a ruled-out hypothesis, a related code path you didn't know about, a behavior you've now observed. That new context is what fuels the next research phase, which fuels the next round of attempts. **The loop continues indefinitely so long as each round of attempts produces new context.** If a round of 5 attempts surfaces nothing new — same failures, same symptoms, no new information — the loop is over.
 
-If a research round yields no new context, **give up**:
+When the loop is over, **give up**:
 - **Inside a project**: write or append to `blockers.md` at the project root — what you tried, what you learned, what you still don't know. Then stop.
 - **Outside a project / one-off task**: say so in the response, specifically where you got stuck.
 
-Definitions: *no progress* = the failing thing is still failing the same way, or your changes haven't moved the needle on the symptom you're chasing. *New context* = something genuinely informative (a docs page, a decoded error message, a related code path) that changes your mental model of the problem.
+Definitions: *no progress* = the failing thing is still failing in the same way, or your changes haven't moved the needle on the symptom you're chasing — that triggers stopping the current 5-attempt round. *New context* = something genuinely informative (a docs page, a decoded error message, a related code path, a now-observed behavior) that changes your mental model — that's what licenses *another* round.
 
 ---
 
@@ -63,6 +63,7 @@ Any time you're about to do testing where I need to stay hands off — switching
 When working inside a git repo, Claude's auto-memory files belong in `<project-root>/.claude/memory/`, not the per-session home-dir path (`~/.claude/projects/<encoded-cwd>/memory/`). Reasons:
 
 - Memory travels with the repo across reinstalls, machines, and worktrees.
+- Each repo's learnings stay scoped to that repo — no leakage from one project's gotchas into another project's session.
 - The project-root path is stable; the home-dir path is encoded from the absolute CWD and breaks if the repo moves.
 
 **The project is the project the work is about, not the CWD.** A session may start in one repo and end up doing work in another (e.g., started in `arch-setup` but the user asks for changes in `dots`). Sort each memory file into the `.claude/memory/` of the project it actually describes, not the launch directory. If a single memory genuinely spans projects, route it to the more affected one.
