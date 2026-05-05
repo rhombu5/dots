@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""display-watchdog — Hyprland recovery daemon for total display blackout.
+
+Listens on Hyprland's IPC for monitor-removal events. When the last
+usable monitor goes dark — external unplugged or powered off, with
+the internal panel already DPMS-off or disabled — runs one of two
+configurable shell commands depending on laptop-lid state.
+
+Typical setup: laptop docked to an external display with the internal
+panel DPMS-off (e.g. lid closed while docked). Unplugging or powering
+off the external would leave you with no usable display. This daemon
+recovers the situation:
+
+    lid open    → re-enable the internal display
+    lid closed  → hibernate (no point staying alive blind)
+
+A monitor counts as "usable" iff it appears in `hyprctl monitors -j`
+with dpmsStatus=true. A monitor disabled via `monitor=NAME,disable`
+is absent from that list, so disabled and DPMS-off both count as
+"not usable" — defense-in-depth covers either path to blackout.
+
+Lid state is read from /proc/acpi/button/lid/*/state. On systems
+without a lid sensor (desktops), the lid is treated as always open
+and the lid-open action is used.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import socket
+import subprocess
+import sys
+from glob import glob
+from pathlib import Path
+
+LID_STATE_GLOB = "/proc/acpi/button/lid/*/state"
+RECOVERY_TRIGGERS = ("monitorremoved>>", "monitorremovedv2>>")
+
+log = logging.getLogger("display-watchdog")
+
+
+def lid_closed() -> bool:
+    """True iff the laptop lid is closed. False if open or no lid sensor."""
+    files = glob(LID_STATE_GLOB)
+    if not files:
+        return False
+    state = Path(files[0]).read_text().split()[-1]
+    return state == "closed"
+
+
+def all_dark() -> bool:
+    """True iff no currently-attached, currently-enabled monitor is DPMS-on."""
+    out = subprocess.run(
+        ["hyprctl", "monitors", "-j"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    monitors = json.loads(out)
+    return not any(m.get("dpmsStatus") for m in monitors)
+
+
+def dispatch(cmd: str) -> None:
+    """Fire-and-forget shell command via Popen."""
+    log.info("dispatching: %s", cmd)
+    subprocess.Popen(["sh", "-c", cmd])
+
+
+def event_loop(sock_path: Path, lid_open_cmd: str, lid_closed_cmd: str) -> None:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(str(sock_path))
+    log.info("connected to %s", sock_path)
+
+    buf = b""
+    while True:
+        chunk = s.recv(4096)
+        if not chunk:
+            log.info("socket closed; exiting")
+            return
+        buf += chunk
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            event = line.decode("utf-8", errors="replace")
+            if not event.startswith(RECOVERY_TRIGGERS):
+                continue
+            log.debug("event: %s", event)
+            if not all_dark():
+                continue
+            if lid_closed():
+                log.info("blackout + lid closed → lid-closed-action")
+                dispatch(lid_closed_cmd)
+            else:
+                log.info("blackout + lid open → lid-open-action")
+                dispatch(lid_open_cmd)
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "--lid-open-action",
+        required=True,
+        metavar="CMD",
+        help='shell command to run on blackout when lid is open '
+             '(e.g. "hyprctl reload && hyprctl dispatch dpms on eDP-1")',
+    )
+    p.add_argument(
+        "--lid-closed-action",
+        required=True,
+        metavar="CMD",
+        help='shell command to run on blackout when lid is closed '
+             '(e.g. "systemctl hibernate")',
+    )
+    p.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="log every monitor event (default: only blackouts)",
+    )
+    args = p.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    if not sig:
+        sys.exit("HYPRLAND_INSTANCE_SIGNATURE not set; run inside Hyprland")
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    sock_path = runtime / "hypr" / sig / ".socket2.sock"
+    if not sock_path.exists():
+        sys.exit(f"hyprland socket not found at {sock_path}")
+
+    try:
+        event_loop(sock_path, args.lid_open_action, args.lid_closed_action)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
