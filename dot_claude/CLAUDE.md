@@ -10,6 +10,32 @@
 
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`).
 
+## Don't attribute Claude in commits, issues, or PRs
+
+Anything that ends up in a public artifact under my name — git commits, GitHub issues, GitHub PR titles/bodies/comments, code review comments — should not advertise that Claude wrote it. Specifically:
+
+- **No `Co-Authored-By: Claude …` trailer in commit messages.** Commit as me (`fnrhombus` / Thomas Butler) without the bot trailer.
+- **No `🤖 Generated with [Claude Code]` footer** in PR descriptions or issue bodies.
+- **No "Claude here" / "as an AI" / "happy to" / "I'd love to" filler** in issue or PR text. Write the way I'd write — direct, technical, first-person.
+- **Don't sign work as Claude** anywhere a human reader will see it.
+
+This applies even if I don't repeat the instruction every time. If you're about to write something that will be public and signed as me, strip Claude attribution by default.
+
+## Use `sudonf` for any auth that needs a fingerprint
+
+The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Use the `sudonf` wrapper (`~/.local/bin/sudonf`, chezmoi-managed in `rhombu5/dots`) for **anything that triggers sudo or polkit auth** — `sudo`, `pkexec`, `pacman -S/-U/-R`, `tee /etc/...`, `systemctl restart` of root services, AUR `makepkg -si`, etc. It fires a Critical notify-send (which swaync plays a sound on via its `critical-sound` script) and dismisses the notification once auth resolves.
+
+```bash
+sudonf '<short hint of what is about to run>' <sudo args>
+# e.g. sudonf 'pacman -S blueman' pacman -S blueman
+```
+
+- The `<short hint>` lets me scan back to see what triggered the cue.
+- Multi-step sudo in one Bash call: only `sudonf` the first one — sudo's `timestamp_timeout` covers the rest.
+- Across multiple Bash calls within ~5 min: same — first one only.
+- After the batch is done, say "no more sudo for the rest of this batch" so I can stop watching the sensor.
+- **Don't** fall back to raw `notify-send + sudo` (leftover Critical notifications replay their sound next session). **Don't** use `printf '\a'` (silent here). **Don't** call `paplay` directly (the wrapper handles it).
+
 ## Disruptive testing requires explicit hands-off confirmation
 
 Any time you're about to do testing where I need to stay hands off — switching workspaces, rearranging windows, moving the mouse, sending input events, anything that visibly changes my screen or interrupts what I'm doing — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing. Read-only inspection (querying state, reading files, running validators) does not need confirmation. Anything that perturbs my live session does.
