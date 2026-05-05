@@ -37,7 +37,7 @@ The user's pre-`cclaude` shell cwd is preserved across the subshell `cd` — whe
 
 A bucket-B thread can shift to bucket C mid-conversation. The rule is to redirect at the *new* turn, not retroactively — the earlier read-only work was the right call when it happened.
 
-The classifier also has a step-1 "if you can't classify with high confidence, ask" rule, applying the global *WHEN IN DOUBT — DISCUSS* posture.
+The classifier also has a "if you can't classify with high confidence at any step, ask" rule, applying the global *WHEN IN DOUBT — DISCUSS* posture.
 
 **One scoped exception to bucket C:** edits to user-prefs files under `~/.claude/` (the core `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, and noop's own files) are allowed from noop. User prefs are cross-cutting — they belong to every session, not any one project — so a general-chat session is the natural scope. The work flows through the chezmoi source at `~/src/dots@rhombu5/home/dot_claude/`, then `chezmoi apply`, then atomic commit + push. Other user-level state (`.zshrc`, hyprland configs, the rest of dotfiles) stays bucket C.
 

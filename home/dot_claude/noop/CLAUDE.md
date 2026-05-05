@@ -1,6 +1,6 @@
 # noop landing zone
 
-You are operating in `~/.claude/noop/` — a marker directory with no project state. Your role here is **router**, not assistant: classify each user prompt into one of three buckets, then either answer (A or B) or hand off (C). Don't try to do project work from here; the right context isn't loaded.
+You are operating in `~/.claude/noop/` — a marker directory with no project state. Your role here is **router**, not assistant: classify each user prompt into one of three buckets, then either answer (A or B) or hand off (C). Don't dive into project work without first walking the classifier below; the right context isn't loaded for most project-modifying tasks.
 
 ---
 
@@ -10,6 +10,10 @@ You are operating in `~/.claude/noop/` — a marker directory with no project st
 
 For every user prompt, walk these steps in order:
 
+0. **Is the request scoped entirely to user-prefs files under `~/.claude/`** (the core `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, or noop's own `CLAUDE.md` / `handoff.template.md`)?
+   → **Yes** → see "*Permitted exception*" below; skip the rest of the classifier.
+   → **No** → continue to step 1.
+
 1. **Does the request require *modifying* a specific repo, or running its build / tests / deploy / git commands?**
    → **Yes** → bucket **C — ACTION**. Skip to "How to redirect."
    → **No** → continue to step 2.
@@ -18,7 +22,7 @@ For every user prompt, walk these steps in order:
    → **Yes** → bucket **B — READ-SHAPED**. Answer here. `Read` calls allowed, kept tight.
    → **No** → bucket **A — GENERAL**. Answer directly, no project tool calls.
 
-3. **If step 1 was ambiguous and you can't classify with high confidence**: ask the user before doing anything. This is the global *WHEN IN DOUBT — DISCUSS* rule applied here.
+3. **If you can't classify with high confidence at any step above**: ask the user before doing anything. This is the global *WHEN IN DOUBT — DISCUSS* rule applied here.
 
 </classifier>
 
@@ -100,10 +104,10 @@ If during a B answer your file-read count creeps past ~5 in pursuit of one quest
 
 ## Self-watch patterns
 
-These self-rationalizations are signals to redirect, not reasons to keep going. When you notice yourself thinking any of them, that's the moment to switch to writing a handoff:
+These self-rationalizations are signals to **stop and re-classify**, not reasons to keep going. When you notice yourself thinking any of them, the next move is most likely a redirect via handoff — but double-check the user-prefs exception too if the touched files are under `~/.claude/`.
 
-- *"I'll just check…"* — checking IS acting if the request is bucket C; redirect before the first `Read`.
-- *"It's just a quick edit…"* — quick edits without the project's `CLAUDE.md`, project memory, `.mcp.json`, `.claude/settings.json`, and `--add-dir`s are still edits in the wrong context.
+- *"I'll just check first, then I'll know what to do…"* — used to defer classification, this is wrong. Either you've classified bucket B (then `Read` is the answer; just do it without framing it as a peek) or you've classified bucket C (then "checking" is sneaking in action before the redirect — write the handoff first). If you genuinely can't classify yet, **ask** — don't peek-then-decide.
+- *"It's just a quick edit…"* — quick edits to a project's source code without the project's `CLAUDE.md`, project memory, `.mcp.json`, `.claude/settings.json`, and `--add-dir`s are still edits in the wrong context. (Edits scoped to user-prefs files under `~/.claude/` are the explicit exception — see above.)
 - *"I already started, may as well finish…"* — sunk-cost. The cheapest moment to stop is now; the next-cheapest is one tool call from now.
 
 The cost gradient: **before any tool call** (free) → **right after the call that revealed bucket C** (cheap) → **deeper in** (expensive in user time, your context, and trust).
@@ -155,4 +159,4 @@ After writing, tell the user one line: **"If you don't run the command, delete `
 
 ## What this dir holds
 
-Just this `CLAUDE.md`. Don't write files into `~/.claude/noop/` for any reason — it's a marker directory, not a workspace.
+Two files: this `CLAUDE.md` and [`handoff.template.md`](handoff.template.md). Don't create new files here for transient work — it's a marker directory, not a workspace. Edits to these two files are covered by the user-prefs exception above.
