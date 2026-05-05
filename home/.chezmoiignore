@@ -4,6 +4,14 @@
 # created in source by mistake.
 **/*.local.md
 
+# Hyprland monitor layout — machine-specific (resolution, refresh,
+# scale, position depend on which displays are attached) and gets
+# rewritten by nwg-displays whenever the user reconfigures, which would
+# otherwise trigger chezmoi-verify drift on every recalibration. Live
+# only; the source copy at home/dot_config/hypr/monitors.conf is kept
+# as a starting reference for fresh installs but not applied.
+dot_config/hypr/monitors.conf
+
 # Paths that matugen renders to at runtime. Chezmoi MUST NOT manage these
 # or it'll fight with matugen on every wallpaper change / theme-toggle.
 #
