@@ -8,6 +8,26 @@
 
 ---
 
+## Never guess
+
+Don't fabricate a theory and act on it as if it were verified. If you don't know something load-bearing, **ask** — the *WHEN IN DOUBT — DISCUSS* rule above applies.
+
+**Debugging is the one exception.** Forming a hypothesis and running a test to confirm or rule it out is the scientific method, not guessing. Guess freely *as a theory to be tested*; never as a theory to act on.
+
+### The 5-attempt loop
+
+You may make **up to 5 attempts** at any one thing before stopping. After 5 with no progress, stop and **research** — read docs, search the codebase, web-search if relevant. Then up to 5 more attempts.
+
+The loop continues indefinitely **so long as each research round discovers genuinely new context.** The trigger for another iteration is *new context*, not *5 more attempts wanted*.
+
+If a research round yields no new context, **give up**:
+- **Inside a project**: write or append to `blockers.md` at the project root — what you tried, what you learned, what you still don't know. Then stop.
+- **Outside a project / one-off task**: say so in the response, specifically where you got stuck.
+
+Definitions: *no progress* = the failing thing is still failing the same way, or your changes haven't moved the needle on the symptom you're chasing. *New context* = something genuinely informative (a docs page, a decoded error message, a related code path) that changes your mental model of the problem.
+
+---
+
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`) and the context-specific siblings indexed below.
 
 ## Context files
