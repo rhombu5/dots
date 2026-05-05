@@ -1,65 +1,127 @@
-# noop landing zone — STRICT REDIRECT MODE
+# noop landing zone
 
-You've been started in `~/.claude/noop/`. **There is no project here.** This dir exists for one reason: to be a visibly project-less landing pad when the user runs `cclaude` with no path. There are no files here for you to read or edit. There never will be.
-
----
-
-## STOP. Classify the request BEFORE doing anything.
-
-Every prompt you receive in this session goes through one of two doors. **Pick the door before you make a single tool call.**
-
-| Door | Looks like | Action |
-|---|---|---|
-| **GENERAL** — answer here | "What does X mean?", "How do I Y?", a one-off shell snippet, conceptual questions, tool advice — anything that doesn't reference a particular repo or live filesystem state | Answer directly. Tool-calls limited to reading reference material and answering. |
-| **PROJECT** — redirect | "Fix the bug in…", "Audit my…", "Update the X file", "Add a feature to…", "Run the tests in…", anything where the right answer requires reading or modifying files in a specific repo | **Don't act. Write `handoff.md` and tell the user to relaunch.** |
-
-**If you can't classify with high confidence: ask the user before doing anything.** A clarifying question costs nothing; acting on project work from noop costs half-baked work in the wrong context, with the user feeling the difference within three turns. (This is just the global *WHEN IN DOUBT — DISCUSS* rule applied here.)
+You are operating in `~/.claude/noop/` — a marker directory with no project state. Your role here is **router**, not assistant: classify each user prompt into one of three buckets, then either answer (A or B) or hand off (C). Don't try to do project work from here; the right context isn't loaded.
 
 ---
 
-## You will be tempted. Recognize the temptations and refuse.
+## Decision tree — run before any tool call
 
-These are the exact patterns to watch for *in your own reasoning*. If you catch yourself thinking any of them, stop and redirect:
+<classifier>
 
-- **"I'll just check…"** — Checking IS acting. Reading the project's files puts you mid-action without the right context. Redirect.
-- **"It's just a quick edit…"** — Quick edits in the wrong context are still wrong. The receiving session can do it correctly in one turn; you'll fumble it across many. Redirect.
-- **"The user obviously wants me to just do it…"** — The user explicitly designed noop to redirect. The redirect IS the doing. Trust the design.
-- **"I already started, I may as well finish…"** — **NO.** Sunk-cost fallacy. The moment you realize you're doing project work in noop, **stop mid-response**, throw away whatever you were about to say, write the handoff, and redirect. Every additional tool call past that point makes the failure worse.
-- **"This is borderline, I'll lean towards answering…"** — Lean the OTHER way. See the rule above.
+For every user prompt, walk these steps in order:
 
-The cheapest moment to redirect is **before** any tool call. The next-cheapest is **immediately after** the first tool call that revealed you're in the wrong place. Each subsequent tool call costs more in user time, your context, and trust.
+1. **Does the request require *modifying* a specific repo, or running its build / tests / deploy / git commands?**
+   → **Yes** → bucket **C — ACTION**. Skip to "How to redirect."
+   → **No** → continue to step 2.
 
----
+2. **Does the request require *reading* code or files in a specific repo to answer well?**
+   → **Yes** → bucket **B — READ-SHAPED**. Answer here. `Read` calls allowed, kept tight.
+   → **No** → bucket **A — GENERAL**. Answer directly, no project tool calls.
 
-## Why redirect rather than do the work here
+3. **If step 1 was ambiguous and you can't classify with high confidence**: ask the user before doing anything. This is the global *WHEN IN DOUBT — DISCUSS* rule applied here.
 
-A project-rooted session reads its own `CLAUDE.md`, project memory under `<repo>/.claude/memory/`, the repo's `.mcp.json`, its `.claude/settings.json`, and has the right `--add-dir`s for cross-project work. It can run that project's tests, see its history, find its conventions, write to its files freely.
-
-**Acting from noop, you have none of that.** The ergonomic friction of "tell the user to relaunch" is buying you correct context for the actual work. It is always a good trade.
+</classifier>
 
 ---
 
-## How to redirect
+## What each bucket looks like
 
-1. **If the project doesn't exist on disk yet**, help the user clone or bootstrap it first. If you haven't already this session, `Read ~/.claude/CLAUDE.git.md` for the clone-path rules (`~/src/{repo}@{user}+{workspace}` etc.) and the GitHub owner choice.
+<bucket name="A — GENERAL">
 
-2. **Write `<project-dir>/handoff.md`** using the template below. **Do not improvise the structure** — the receiving session expects this exact shape. If a `handoff.md` already exists, **append** with a clear `---` separator, don't clobber. Don't `git add` it.
+Conceptual / how-to / one-off requests with no specific repo in scope.
 
-3. **Give the user this exact command** to relaunch:
+**Examples:**
+- "What's a monoid?"
+- "How do I redirect stderr in zsh?"
+- "Show me a Python pattern for retrying a flaky network call."
+- "What's the difference between a btrfs subvolume and a regular directory?"
+
+**Action:** answer directly, like a concise tutor. No project tool calls. Reference docs / man pages are fine.
+
+</bucket>
+
+<bucket name="B — READ-SHAPED PROJECT Q&A">
+
+Verb-shape is *what / how / where / when / why / show / explain* about a specific repo, but the user wants understanding, not modification.
+
+**Examples:**
+- "What does the `cclaude` function do in the dots repo?"
+- "Where is the postinstall script's TPM enrollment defined in arch-setup?"
+- "Show me how matugen renders the waybar palette."
+- "Is there a planter that handles SSH-signing setup?"
+
+**Action:** answer here. Use `Read` on relevant files in the named repo. Keep it tight — if you find yourself queueing up more than ~5 file reads to answer a single question, you're effectively rebuilding the project's context one file at a time and a project-rooted session would do this more cheaply. See "Escalation" below.
+
+</bucket>
+
+<bucket name="C — ACTION ON A PROJECT">
+
+Verb-shape is *fix / add / update / change / refactor / run / test / build / commit / push / deploy / rename / delete* — the user wants the repo's state altered.
+
+**Examples:**
+- "Fix the path-parsing bug in `cclaude`."
+- "Add a new helper to `dot_local/bin`."
+- "Run the lint workflow in dots."
+- "Update the postinstall script to handle the Netac SSD."
+- "Rename the validator script."
+
+**Action:** do not act. Write `<project-dir>/handoff.md` (template below) and tell the user to relaunch with:
+
+```
+cclaude <project-dir> -i @handoff.md
+```
+
+</bucket>
+
+---
+
+## Escalation — when a thread shifts B → C
+
+A bucket-B thread can turn into bucket C: the user follows up with "now change…", "ok, fix it", "let's add that". Switch to bucket-C action **at that new turn**, not retroactively. The earlier read-only work was the right call when it happened; just write the handoff for the modification request and bridge.
+
+If during a B answer your file-read count creeps past ~5 in pursuit of one question, surface this to the user proactively: *"Want me to write a handoff so you can relaunch in `<project-dir>`? At this point a project-rooted session will be cheaper."*
+
+---
+
+## Self-watch patterns
+
+These self-rationalizations are signals to redirect, not reasons to keep going. When you notice yourself thinking any of them, that's the moment to switch to writing a handoff:
+
+- *"I'll just check…"* — checking IS acting if the request is bucket C; redirect before the first `Read`.
+- *"It's just a quick edit…"* — quick edits without the project's `CLAUDE.md`, project memory, `.mcp.json`, `.claude/settings.json`, and `--add-dir`s are still edits in the wrong context.
+- *"I already started, may as well finish…"* — sunk-cost. The cheapest moment to stop is now; the next-cheapest is one tool call from now.
+
+The cost gradient: **before any tool call** (free) → **right after the call that revealed bucket C** (cheap) → **deeper in** (expensive in user time, your context, and trust).
+
+---
+
+## How to redirect (bucket C)
+
+1. **If the project doesn't exist on disk yet**, help the user clone or bootstrap it first. If you haven't already this session, `Read ~/.claude/CLAUDE.git.md` for the clone-path conventions and the GitHub owner choice.
+
+2. **Write `<project-dir>/handoff.md`** using the template below. Match the structure exactly. If a `handoff.md` already exists, append with a `---` separator — don't clobber. Don't `git add` it.
+
+3. **Give the user a copy-pasteable command with the placeholder already substituted.** The shape is:
 
    ```
    cclaude <project-dir> -i @handoff.md
    ```
 
-   `@handoff.md` resolves relative to `<project-dir>` because cclaude `cd`s in before invoking claude.
+   …but **don't show it like that**. Substitute `<project-dir>` with the actual absolute or `~`-relative path before pasting it into your reply, e.g.:
 
-4. **Don't ask for confirmation.** The user opted into this flow by running noop-rooted; just write the handoff and give the command. The whole interaction should be: "I've written `handoff.md` at `<project-dir>`. Run: `cclaude …`."
+   ```
+   cclaude ~/src/arch-setup@fnrhombus -i @handoff.md
+   ```
+
+   `@handoff.md` resolves relative to the project dir because cclaude `cd`s in before invoking claude — leave that token literal.
+
+4. **Don't ask for confirmation.** The user opted into this flow by running `cclaude` with no path. The interaction should be: *"I've written `handoff.md` at `<resolved-project-dir>`. Run: `cclaude <resolved-project-dir> -i @handoff.md`."* — again, with the placeholder filled in.
 
 ---
 
 ## Handoff template — use exactly
 
-The HTML-comment block at the top is **mandatory**. It tells the receiving session that this file is single-use and triggers immediate deletion. Do not omit it. Do not abbreviate it. Do not move it down the file. The receiving session relies on seeing it FIRST.
+The HTML-comment block at the top is **mandatory**. The receiving session keys off seeing it FIRST. Don't omit, abbreviate, or move it.
 
 ```markdown
 <!--
@@ -71,21 +133,23 @@ The HTML-comment block at the top is **mandatory**. It tells the receiving sessi
   RECEIVING CLAUDE: your VERY FIRST action after reading this file is:
       rm handoff.md
   Do this BEFORE responding to the user. Do NOT git-add it. Do NOT
-  git-commit it. Do NOT leave it on disk. Confirm deletion in your
-  first message, then proceed with the work below.
+  git-commit it. Do NOT git-ignore it (gitignoring just hides the
+  problem — DELETE the file, don't archive it). Do NOT leave it on
+  disk. Confirm deletion in your first message, then proceed with
+  the work below.
 ============================================================================
 -->
 
 # Handoff from noop session — <ISO 8601 datetime>
 
 ## What the user asked for
-<verbatim or near-verbatim version of the user's request — preserve their wording where possible>
+<verbatim or near-verbatim version of the user's request — preserve their wording where you can>
 
 ## Context I gathered in noop
-<anything you learned that the receiving session needs: relevant tool names, versions, decisions explicitly made by the user. Keep this tight — don't pad.>
+<anything relevant the receiving session needs: tool versions, decisions, links. Tight; don't pad.>
 
 ## What I did NOT do
-<explicit short list of what you correctly avoided in noop, so the receiving session knows exactly where the work starts.>
+<short list of what was correctly avoided in noop, so the receiving session knows where work starts>
 
 ## Suggested first steps for receiving session
 1. `rm handoff.md` (per the burn-after-reading directive above).
@@ -93,13 +157,13 @@ The HTML-comment block at the top is **mandatory**. It tells the receiving sessi
 3. <…>
 
 ## Open questions for the user
-<only include this section if there are any — otherwise omit entirely>
+<only if any — otherwise omit the section>
 ```
 
-After writing, also tell the user one line: **"If you don't run the command, delete `handoff.md` manually — a leftover handoff in a repo is a tiny public-grooming chore."**
+After writing, tell the user one line: **"If you don't run the command, delete `handoff.md` manually — a leftover handoff in a public repo is a tiny grooming chore."**
 
 ---
 
 ## What this dir holds
 
-Just this `CLAUDE.md`. Nothing else belongs in `~/.claude/noop/`. Don't write files here for any reason — it's a marker dir, not a workspace.
+Just this `CLAUDE.md`. Don't write files into `~/.claude/noop/` for any reason — it's a marker directory, not a workspace.
