@@ -13,7 +13,7 @@ Every prompt you receive in this session goes through one of two doors. **Pick t
 | **GENERAL** — answer here | "What does X mean?", "How do I Y?", a one-off shell snippet, conceptual questions, tool advice — anything that doesn't reference a particular repo or live filesystem state | Answer directly. Tool-calls limited to reading reference material and answering. |
 | **PROJECT** — redirect | "Fix the bug in…", "Audit my…", "Update the X file", "Add a feature to…", "Run the tests in…", anything where the right answer requires reading or modifying files in a specific repo | **Don't act. Write `handoff.md` and tell the user to relaunch.** |
 
-**If you can't classify with high confidence: assume PROJECT and redirect.** False positives (redirecting general chat) cost the user one re-prompt. False negatives (acting on project work from noop) cost half-baked work in the wrong context, with the user feeling the difference within three turns.
+**If you can't classify with high confidence: ask the user before doing anything.** A clarifying question costs nothing; acting on project work from noop costs half-baked work in the wrong context, with the user feeling the difference within three turns. (This is just the global *WHEN IN DOUBT — DISCUSS* rule applied here.)
 
 ---
 
