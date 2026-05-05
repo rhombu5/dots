@@ -9,19 +9,24 @@ Theme system is **matugen** (Material You from wallpaper) — no Catppuccin.
 
 ## Layout (Arch / Hyprland host)
 
+The chezmoi source state lives under `home/` (redirected via
+`.chezmoiroot`); everything at the repo root (this `README.md`,
+`docs/`, `.github/`, `package.json`, etc.) is repo metadata that
+chezmoi never applies.
+
 ```
-dot_config/             → ~/.config/
-├── hypr/               → Hyprland: split-file config
-├── waybar/             → status bar
-├── swaync/             → notification daemon + panel
-├── fuzzel/             → app launcher
-├── ghostty/            → terminal
+home/dot_config/             → ~/.config/
+├── hypr/                    → Hyprland: split-file config
+├── waybar/                  → status bar
+├── swaync/                  → notification daemon + panel
+├── fuzzel/                  → app launcher
+├── ghostty/                 → terminal
 ├── yazi/, helix/, imv/, zathura/
-└── matugen/            → theme generator: config + templates
-dot_local/bin/          → ~/.local/bin/   (helper scripts)
-dot_local/share/        → ~/.local/share/ (wallpapers, desktop entries)
-dot_config/systemd/user/ → user-level systemd units
-.chezmoiscripts/        → pre-apply hooks (wallpaper seeding, etc.)
+└── matugen/                 → theme generator: config + templates
+home/dot_local/bin/          → ~/.local/bin/   (helper scripts)
+home/dot_local/share/        → ~/.local/share/ (wallpapers, desktop entries, user-dirs/)
+home/dot_config/systemd/user/ → user-level systemd units
+home/symlink_{docs,dl,pics}  → ~/{docs,dl,pics} → user-dirs subdirs
 ```
 
 System-level files for the Arch install (greetd, PAM stacks, limine config)
@@ -47,11 +52,18 @@ exist on disk:
 
 ## Shell helpers
 
-Functions defined in [`dot_zsh_aliases`](dot_zsh_aliases) that have enough
-surface area to warrant their own page:
+Functions defined in [`home/dot_zsh_aliases`](home/dot_zsh_aliases) that
+have enough surface area to warrant their own page:
 
 - [`cclaude`](docs/cclaude.md) — launch `claude` across multiple project
   roots, auto-loading each root's `.mcp.json` and `.claude/settings.json`.
+
+## Layout decisions
+
+- [`xdg-user-dirs.md`](docs/xdg-user-dirs.md) — the freedesktop user-dirs
+  (Desktop / Documents / Downloads / …) live under
+  `~/.local/share/user-dirs/`, with short symlinks `~/docs`, `~/dl`,
+  `~/pics` for the three frequent ones.
 
 ## Secrets
 
