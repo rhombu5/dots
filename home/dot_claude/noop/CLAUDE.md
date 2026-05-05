@@ -99,66 +99,40 @@ The cost gradient: **before any tool call** (free) → **right after the call th
 
 1. **If the project doesn't exist on disk yet**, help the user clone or bootstrap it first. If you haven't already this session, `Read ~/.claude/CLAUDE.git.md` for the clone-path conventions and the GitHub owner choice.
 
-2. **Write `<project-dir>/handoff.md`** using the template below. Match the structure exactly. If a `handoff.md` already exists, append with a `---` separator — don't clobber. Don't `git add` it.
+2. **Write the handoff at an absolute path.** Your `Write` call MUST target `<project-dir-absolute>/handoff.md`, e.g. `/home/tom/src/arch-setup@fnrhombus/handoff.md`. Never pass just `handoff.md` — your cwd is `~/.claude/noop/`, so a relative path would land there. Before writing, `Read ~/.claude/noop/handoff.template.md` and follow it exactly. If `handoff.md` already exists at the target, append after a `---` separator — don't clobber. Don't `git add` the file.
 
-3. **Give the user a copy-pasteable command with the placeholder already substituted.** The shape is:
+3. **Give the user a copy-pasteable command with the placeholder substituted.** The shape:
 
    ```
    cclaude <project-dir> -i @handoff.md
    ```
 
-   …but **don't show it like that**. Substitute `<project-dir>` with the actual absolute or `~`-relative path before pasting it into your reply, e.g.:
+   <path_rules>
+   The two paths resolve in *different scopes* — getting this wrong breaks the user's paste:
+
+   - **`<project-dir>`** is resolved by **bash at paste time**, with the user's shell cwd. After they `Ctrl+C Ctrl+C` out of this session their cwd is whatever it was *before* they ran `cclaude` — `$HOME`, a totally unrelated repo, `/tmp`, who knows. (`cclaude`'s `cd` happens in a subshell, so it never propagates back to the parent shell.) Therefore **`<project-dir>` MUST be absolute (`/home/tom/…`) or `~`-relative (`~/src/…`)**. Never `./foo`, `../foo`, or bare `foo`.
+   - **`@handoff.md`** is resolved by **`claude` after `cclaude`'s `cd`**, with cwd = `<project-dir>`. So it MUST stay literal as `@handoff.md` — leave that token alone, don't substitute, don't make it absolute.
+   </path_rules>
+
+   Example of a correctly rendered command:
 
    ```
    cclaude ~/src/arch-setup@fnrhombus -i @handoff.md
    ```
 
-   `@handoff.md` resolves relative to the project dir because cclaude `cd`s in before invoking claude — leave that token literal.
+4. **Don't ask for confirmation.** The user opted into this flow by running `cclaude` with no path. The interaction is just:
 
-4. **Don't ask for confirmation.** The user opted into this flow by running `cclaude` with no path. The interaction should be: *"I've written `handoff.md` at `<resolved-project-dir>`. Run: `cclaude <resolved-project-dir> -i @handoff.md`."* — again, with the placeholder filled in.
+   > *"I've written `handoff.md` at `~/src/arch-setup@fnrhombus/`. Run: `cclaude ~/src/arch-setup@fnrhombus -i @handoff.md`."*
+
+   — with the actual project path filled in for both the report and the command.
 
 ---
 
-## Handoff template — use exactly
+## Handoff template
 
-The HTML-comment block at the top is **mandatory**. The receiving session keys off seeing it FIRST. Don't omit, abbreviate, or move it.
+The template lives in a separate file: [`handoff.template.md`](handoff.template.md). **`Read ~/.claude/noop/handoff.template.md` before writing the handoff** and reproduce the structure exactly — the HTML-comment block at the top is mandatory and must appear FIRST so the receiving session triggers its burn-after-reading directive.
 
-```markdown
-<!--
-============================================================================
-  HANDOFF — BURN AFTER READING
-============================================================================
-  This file is a single-use bridge between Claude sessions.
-
-  RECEIVING CLAUDE: your VERY FIRST action after reading this file is:
-      rm handoff.md
-  Do this BEFORE responding to the user. Do NOT git-add it. Do NOT
-  git-commit it. Do NOT git-ignore it (gitignoring just hides the
-  problem — DELETE the file, don't archive it). Do NOT leave it on
-  disk. Confirm deletion in your first message, then proceed with
-  the work below.
-============================================================================
--->
-
-# Handoff from noop session — <ISO 8601 datetime>
-
-## What the user asked for
-<verbatim or near-verbatim version of the user's request — preserve their wording where you can>
-
-## Context I gathered in noop
-<anything relevant the receiving session needs: tool versions, decisions, links. Tight; don't pad.>
-
-## What I did NOT do
-<short list of what was correctly avoided in noop, so the receiving session knows where work starts>
-
-## Suggested first steps for receiving session
-1. `rm handoff.md` (per the burn-after-reading directive above).
-2. <next concrete action>
-3. <…>
-
-## Open questions for the user
-<only if any — otherwise omit the section>
-```
+Substitute the `<…>` placeholders with real content; leave everything else (especially the comment block) byte-for-byte.
 
 After writing, tell the user one line: **"If you don't run the command, delete `handoff.md` manually — a leftover handoff in a public repo is a tiny grooming chore."**
 
