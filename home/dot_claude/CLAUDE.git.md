@@ -15,6 +15,23 @@ Load when the task touches: git operations (clone/push/PR), choosing where on di
 
 If you can't tell which category the repo falls into → **ask me** before cloning.
 
+## Resolving repo short-names to local paths
+
+When I say *"put it in arch-setup"*, *"look in dots"*, *"check the planters in dots"* — I mean the **repo**, not a literal directory at `~/src/arch-setup/` or `~/src/dots/`. Those directories don't exist by convention. The local checkout always follows the `{repo}@{user}+{workspace}` rule above, so resolve like:
+
+- `dots` → `~/src/dots@rhombu5/`
+- `arch-setup` → `~/src/arch-setup@fnrhombus/` (currently; will move to `rhombu5/arch-setup` eventually)
+
+If you're unsure or there could be multiple checkouts (forks, worktrees), confirm with:
+
+```sh
+ls -d ~/src/<name>@* ~/.local/src/<name>@* 2>/dev/null
+```
+
+Multiple hits → ask which one. Zero hits → it's not cloned yet; clone it (or ask) before continuing.
+
+Never assume `~/src/<name>/` (no `@user` suffix) is a valid path — folder names always include the owner.
+
 ## Always clone via SSH
 
 Use `git@<host>:<user>/<repo>.git` URLs, never `https://`. The SSH agent is Bitwarden Desktop (socket at `~/.bitwarden-ssh-agent.sock`); if a non-interactive shell doesn't have `SSH_AUTH_SOCK` set, prepend `SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock` to the git command — don't bypass signing.
