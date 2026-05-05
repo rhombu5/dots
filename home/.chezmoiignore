@@ -1,16 +1,15 @@
-# Repo-level files that exist for git-hook plumbing or repo metadata,
-# NOT to be applied to $HOME by chezmoi.
-package.json
-package-lock.json
-node_modules
-.githooks
+# Per-machine override files: CLAUDE.<context>.local.md (and any other
+# *.local.md). Never apply to destination — these only ever live on the
+# live system, never in source. This entry is defensive in case one is
+# created in source by mistake.
+**/*.local.md
 
 # Paths that matugen renders to at runtime. Chezmoi MUST NOT manage these
 # or it'll fight with matugen on every wallpaper change / theme-toggle.
 #
-# These ignore entries are listed in source-tree form (path inside dotfiles/)
-# but they ALSO must not appear in destination state — never add files at
-# these paths to the source tree.
+# These ignore entries are listed in source-tree form (path inside source
+# state) but they ALSO must not appear in destination state — never add
+# files at these paths to the source tree.
 #
 # If you find yourself wanting to template one of these, do it through
 # matugen's template system (dot_config/matugen/templates/<file>) instead.

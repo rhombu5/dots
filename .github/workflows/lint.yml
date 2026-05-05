@@ -17,9 +17,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run validator
         run: |
-          chmod +x dot_local/bin/executable_validate-hypr-binds
-          HYPR_DIR=dot_config/hypr \
-            bash dot_local/bin/executable_validate-hypr-binds
+          chmod +x home/dot_local/bin/executable_validate-hypr-binds
+          HYPR_DIR=home/dot_config/hypr \
+            bash home/dot_local/bin/executable_validate-hypr-binds
 
   shellcheck:
     name: shellcheck

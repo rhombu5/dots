@@ -10,7 +10,7 @@
 #
 #   2. (if Hyprland config staged) validate-hypr-binds
 #      Refuses commits introducing binding conflicts or unknown
-#      dispatchers in dot_config/hypr/*.conf.
+#      dispatchers in home/dot_config/hypr/*.conf.
 #
 # Activate with:
 #   git config core.hooksPath .githooks
@@ -47,8 +47,8 @@ else
 fi
 
 # ---- Check 2: hypr binds (only if hypr/*.conf is staged) ----------------------
-if git diff --cached --name-only | grep -qE '^dot_config/hypr/.*\.conf$'; then
-    validator="$repo_root/dot_local/bin/executable_validate-hypr-binds"
+if git diff --cached --name-only | grep -qE '^home/dot_config/hypr/.*\.conf$'; then
+    validator="$repo_root/home/dot_local/bin/executable_validate-hypr-binds"
     if [[ ! -f "$validator" ]]; then
         echo "pre-commit: validate-hypr-binds not found at $validator (skipping)" >&2
         exit 0
@@ -57,7 +57,7 @@ if git diff --cached --name-only | grep -qE '^dot_config/hypr/.*\.conf$'; then
     # `executable_` prefix only sets exec bit on the APPLIED copy, not the
     # source. (We do chmod +x it in-repo for direct invocations, but belt-
     # and-braces.)
-    if ! HYPR_DIR="$repo_root/dot_config/hypr" bash "$validator"; then
+    if ! HYPR_DIR="$repo_root/home/dot_config/hypr" bash "$validator"; then
         cat >&2 <<EOF
 
 ================================================================================
