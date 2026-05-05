@@ -60,6 +60,18 @@ project config natively when launched from that directory.
 `--setting-sources …` in the passthrough args, cclaude suppresses its
 auto-`--settings` injection so `claude` doesn't error.
 
+### Multi-root `CLAUDE.md` loading
+
+By default, `claude` only reads `CLAUDE.md` from its primary working
+directory. The global setting
+`CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` (set in
+`~/.claude/settings.json` under `env`) tells `claude` to also load
+`CLAUDE.md` from every `--add-dir`'d root, so each extra path's
+project rules apply alongside the primary's. cclaude doesn't pass
+this flag itself — it inherits from the global config — but the
+behavior is the natural complement to multi-root sessions and is
+worth knowing about when you compose them.
+
 ## Always passed
 
 `claude` is always invoked with `--dangerously-skip-permissions` — this
