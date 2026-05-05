@@ -158,3 +158,16 @@ bw() {
     fi
     command bw "$@"
 }
+
+# --- sudoa: unattended sudo for Claude / scripts (no swipe / type prompt) ---
+# Pulls the local password from Bitwarden via ~/.local/bin/claude-askpass
+# and feeds it to sudo -A. Use `sudoa <cmd>` instead of `sudo <cmd>` when
+# you want sudo to authenticate silently — typical when Claude is running
+# a batch and can't drive an interactive auth prompt.
+#
+# Pre-req: `bwu` once per fresh login (caches the master password in
+# libsecret). After that sudoa is silent for the life of the keyring.
+#
+# Trust model: anyone with an unlocked vault can sudo as you.
+# Same surface as the desktop app's "Unlock with system authentication".
+sudoa() { SUDO_ASKPASS="$HOME/.local/bin/claude-askpass" command sudo -A "$@"; }

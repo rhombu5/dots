@@ -2,19 +2,40 @@
 
 Load when the task touches: Arch package management, systemd units, the FHS / XDG layout, sudo or polkit prompts, anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 
-## Use `sudonf` for any auth that needs a fingerprint
+## Two sudo wrappers — pick the right one
 
-The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Use the `sudonf` wrapper (`~/.local/bin/sudonf`, chezmoi-managed in `rhombu5/dots`) for **anything that triggers sudo or polkit auth** — `sudo`, `pkexec`, `pacman -S/-U/-R`, `tee /etc/...`, `systemctl restart` of root services, AUR `makepkg -si`, etc. It plays an audible cue and self-clears.
+The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Two wrappers cover the cases:
+
+- **`sudoa`** — *unattended.* Pulls the local password from Bitwarden via `~/.local/bin/claude-askpass` and feeds it to `sudo -A`. No prompt, no notification, no swipe. Use this when running a batch where the user can't or shouldn't be at the keyboard.
+- **`sudonf`** — *interactive, with audible cue.* Plays a Critical notification + sound (so the user knows to swipe / type) and self-clears the notification when sudo returns.
+
+### When to use which
+
+- **Default to `sudoa`** for any sudo call that doesn't need user input — system inspections, package installs/removes once decided, file writes the user has already approved, batched setup steps. Pre-req: `bwu` once per fresh login (caches the master password in libsecret); after that sudoa is silent forever.
+- **Use `sudonf`** when the user is genuinely choosing whether to authenticate — e.g. you're asking them to validate a destructive change *via the auth itself*, or `bwu` hasn't been seeded yet on this login.
+- **Don't mix** sudonf and sudoa in one batch. Pick one.
+
+### `sudoa` usage
+
+```bash
+sudoa <cmd>     # = SUDO_ASKPASS=~/.local/bin/claude-askpass sudo -A <cmd>
+```
+
+If `claude-askpass` errors (master password not cached, vault sync stale, ambiguous Bitwarden item), sudo prints the askpass error to stderr — read it and fix the underlying issue. Common case: tell the user to run `bwu` once.
+
+Trust model: anyone with an unlocked vault can `sudoa`. Same surface as the Bitwarden desktop app's "Unlock with system authentication" toggle.
+
+### `sudonf` usage
 
 ```bash
 sudonf '<short hint of what is about to run>' <sudo args>
 # e.g. sudonf 'pacman -S blueman' pacman -S blueman
 ```
 
-- The `<short hint>` lets me scan back to see what triggered the cue.
+- The `<short hint>` lets the user scan back to see what triggered the cue.
 - Multi-step sudo in one Bash call: only `sudonf` the first one — sudo's `timestamp_timeout` covers the rest.
 - Across multiple Bash calls within ~5 min: same — first one only.
-- After the batch is done, say "no more sudo for the rest of this batch" so I can stop watching the sensor.
+- After the batch is done, say "no more sudo for the rest of this batch" so the user can stop watching the sensor.
 - **Don't** fall back to raw `notify-send + sudo` (leftover Critical notifications replay their sound next session). **Don't** use `printf '\a'` (silent here). **Don't** call `paplay` directly (the wrapper handles it).
 
 ## System changes go to both the live system AND the dotfiles repo

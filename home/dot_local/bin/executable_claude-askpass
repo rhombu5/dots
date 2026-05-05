@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#
+# claude-askpass — SUDO_ASKPASS helper that pulls tom's local password
+# from the Bitwarden vault. Designed to run unattended in any shell
+# context (Claude Code bash tool, cron, systemd --user services)
+# provided libsecret has the Bitwarden master password cached.
+#
+# Usage (via the `sudoa` zsh alias defined in ~/.zsh_aliases):
+#   sudoa <cmd>     # = SUDO_ASKPASS=~/.local/bin/claude-askpass sudo -A <cmd>
+#
+# Pre-req: run `bwu` once interactively after a fresh login so the
+# Bitwarden master password is cached in libsecret. After that
+# claude-askpass runs silently forever (until the keyring is wiped or
+# the master password is rotated, both of which require another bwu).
+#
+# Trust model: the Bitwarden Microsoft/thomas@butler.software item is
+# treated as authoritative for tom's local password — the laptop is
+# Azure-joined to that identity, so the Microsoft account password IS
+# the local password. Anyone with an unlocked vault can use this for
+# unattended privilege elevation; that's intentional, same as the
+# desktop app's "Unlock with system authentication" toggle.
+#
+# Bail conditions (each prints to stderr; sudo forwards askpass stderr
+# to the user, so the message lands wherever the sudo invocation lives):
+#   1. master password not in libsecret → run `bwu` interactively first
+#   2. bw unlock failed → master password may have been rotated
+#   3. ambiguous match → multiple Bitwarden items named Microsoft with
+#      the same username (file a bug or use a more specific filter)
+#   4. no match → entry doesn't exist or username doesn't match
+
+set -euo pipefail
+
+err() { printf 'claude-askpass: %s\n' "$*" >&2; }
+
+# 1. Get a usable BW_SESSION. Try cached first; if locked/empty, unlock
+#    silently using the master password from libsecret. Never prompt.
+BW_SESSION="$(secret-tool lookup service bitwarden type session 2>/dev/null || true)"
+
+needs_unlock=0
+if [[ -z "$BW_SESSION" ]]; then
+    needs_unlock=1
+else
+    status="$(BW_SESSION="$BW_SESSION" bw status 2>/dev/null | jq -r .status 2>/dev/null || true)"
+    [[ "$status" != "unlocked" ]] && needs_unlock=1
+fi
+
+if (( needs_unlock )); then
+    pw="$(secret-tool lookup service bitwarden user master 2>/dev/null || true)"
+    if [[ -z "$pw" ]]; then
+        err "no cached master password — run 'bwu' once interactively first"
+        exit 1
+    fi
+    BW_SESSION="$(BW_PASSWORD="$pw" bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null || true)"
+    unset pw
+    if [[ -z "$BW_SESSION" ]]; then
+        err "bw unlock failed — master password may be stale; rotate via bwu"
+        exit 2
+    fi
+    # Refresh cached session for subsequent silent calls.
+    printf '%s' "$BW_SESSION" \
+        | secret-tool store \
+            --label='Bitwarden CLI session' \
+            service bitwarden type session 2>/dev/null || true
+fi
+export BW_SESSION
+
+# 2. Find the Microsoft entry with username=thomas@butler.software.
+items_json="$(bw list items --search Microsoft 2>/dev/null || true)"
+if [[ -z "$items_json" ]]; then
+    err "bw list items returned empty — vault sync may be needed (\`bw sync\`)"
+    exit 3
+fi
+
+# Filter on name="MicrosoftAccount" + username=thomas@butler.software.
+# The bare username filter isn't unique here — the vault has multiple
+# items named "Microsoft Remote Desktop" sharing that username. We
+# disambiguate on the explicit Microsoft identity record name.
+# If the user renames the item, this fails loudly with a clear message.
+matches="$(printf '%s' "$items_json" | jq -c '
+    [ .[] | select(.name == "MicrosoftAccount"
+                   and .login.username == "thomas@butler.software") ]
+' 2>/dev/null || true)"
+if [[ -z "$matches" || "$matches" == "null" ]]; then
+    err "jq parse failed on bw output"
+    exit 4
+fi
+
+n="$(printf '%s' "$matches" | jq 'length' 2>/dev/null)"
+if [[ "$n" -eq 0 ]]; then
+    err "no Bitwarden item matched (name=MicrosoftAccount, username=thomas@butler.software)"
+    exit 5
+fi
+if [[ "$n" -gt 1 ]]; then
+    err "ambiguous: $n Bitwarden items match name=MicrosoftAccount + username=thomas@butler.software"
+    exit 6
+fi
+
+password="$(printf '%s' "$matches" | jq -r '.[0].login.password // ""')"
+if [[ -z "$password" ]]; then
+    err "matched item has no .login.password"
+    exit 7
+fi
+
+printf '%s\n' "$password"
