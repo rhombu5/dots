@@ -33,9 +33,12 @@ window#waybar.empty {
 }
 
 #workspaces button {
-    color: @on-surface;
+    color: @primary;
     padding: 0 8px;
     background-color: transparent;
+    border: 1px solid @outline;
+    border-radius: 8px;
+    margin: 0 1px;
     transition: all 0.2s ease;
 }
 
