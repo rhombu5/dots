@@ -40,7 +40,7 @@ When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`
 
 Each entry below states when to load that file. `Read` it from `~/.claude/` as soon as the trigger conditions apply — and pull in any `CLAUDE.<context>.local.md` sibling alongside it for per-machine overrides that aren't committed to the dotfiles repo.
 
-- [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts, anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
+- [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 - [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), choosing where on disk a repo should live, or picking the GitHub owner for a new project.
 
 **Load on context-shift.** When the task evolves into a domain whose context file hasn't been loaded yet (you started on Linux config and the user pivoted to git work, etc.), `Read` the matching file *now* before continuing. Don't re-check the listing every turn — the index above is always in context, that's enough.
@@ -94,6 +94,14 @@ Subagent prompts should include the substance, the style/format constraints, and
 Any time you're about to do testing where I need to stay hands off — switching workspaces, rearranging windows, moving the mouse, sending input events, anything that visibly changes my screen or interrupts what I'm doing — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing. Read-only inspection (querying state, reading files, running validators) does not need confirmation. Anything that perturbs my live session does.
 
 **Why this matters:** if you're testing window/workspace/input behaviour and I'm using the machine at the same time, my keystrokes and clicks contaminate your readings — you'll see state changes I caused, attribute them to your dispatch, and draw the wrong conclusion. Telling me to keep my hands off for the duration is the only way the test gives a clean signal. Don't skip the ask just because the change is small.
+
+## Keep dev tooling project-local
+
+Default to `mise.toml` for any dev tool a project needs — compilers, build runners, formatters, linters, language runtimes. Don't suggest `pacman -S <devtool>`, `apt install`, `pip install --user`, or `npm i -g` without explicitly flagging it as a system-level install I may reject.
+
+The distinction that matters: *dev tools* are the things that build, lint, format, or run your code — make those hermetic via mise. *Runtime system libs* — graphics stack, libc, anything kernel-bound or compositor-bound — must be system-provided and can't go hermetic without containers, which create more friction than they solve in the inner dev loop.
+
+**Why:** I don't want past project experiments leaking into future ones, and I want clean uninstall paths. Mise gives per-project pinning that travels with the repo.
 
 ## Project memory lives in the project tree
 
