@@ -34,7 +34,7 @@ When the loop ends, **give up**:
 
 ---
 
-When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`) and the context-specific siblings indexed below.
+When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`), the context-specific `CLAUDE.<context>.md` siblings indexed below, and any `CLAUDE.<context>.local.md` per-machine overrides alongside them.
 
 ## Context files
 
@@ -78,9 +78,16 @@ To make the shape concrete: "rename a function across 30 files" is an hour solo,
 
 ## Subagent model selection
 
-**Any prose-shaped task — dispatch a sonnet subagent, even when *I* asked for it directly.** Rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md` itself, comparing wordings — all of these. Don't fall back to "but the user asked me to write it" and do it inline on opus. Sonnet's prose is reliably tighter than opus's.
+**Right-size the model to the task.** Opus is the default for the main thread, but if a smaller model can do the work at the same or better quality with lower token cost, dispatch a subagent on that model. Don't burn opus on work a smaller model handles equivalently.
 
-Use **opus** in the main thread to sort out substance, structure, or tricky design decisions first; once the *what* is settled, hand the *how it reads* to sonnet. The sonnet subagent should get the substance + the style constraints + (where useful) a pointer to a sibling doc to mirror tone from, and return the prose ready to drop in.
+Concrete cases:
+
+- **Prose-shaped work** — rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md` itself, comparing wordings → **sonnet**, even when the user asked for it directly. Sonnet's prose is reliably tighter than opus's.
+- **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; if quality drops, escalate.
+
+Substance, structure, and tricky design decisions stay on **opus** — only the *execution* gets handed off. Pattern: opus decides *what*, subagent does the *how*.
+
+Subagent prompts should include the substance, the style/format constraints, and (where useful) pointers to sibling docs or files to mirror tone from. Return ready-to-drop-in output.
 
 ## Disruptive testing requires explicit hands-off confirmation
 
