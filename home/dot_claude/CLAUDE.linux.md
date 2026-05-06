@@ -1,7 +1,5 @@
 # Linux / Arch context rules
 
-Load when the task touches: Arch package management, systemd units, the FHS / XDG layout, sudo or polkit prompts, anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
-
 ## Two sudo wrappers — pick the right one
 
 The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Two wrappers cover the cases:

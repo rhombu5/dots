@@ -38,14 +38,14 @@ When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`
 
 ## Context files
 
-When the task touches a domain below, also `Read` the matching file from `~/.claude/`. Pull in any `CLAUDE.<context>.local.md` sibling alongside it — those carry per-machine overrides that aren't committed to the dotfiles repo.
+Each entry below states when to load that file. `Read` it from `~/.claude/` as soon as the trigger conditions apply — and pull in any `CLAUDE.<context>.local.md` sibling alongside it for per-machine overrides that aren't committed to the dotfiles repo.
 
-- [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch/distro tooling: `sudonf` for fingerprint auth, three-layer reinstall reproducibility, FHS/XDG paths, chezmoi workflow.
-- [`CLAUDE.git.md`](CLAUDE.git.md) — Git + GitHub: clone-path conventions, SSH-only remotes, GitHub owner/org choice.
+- [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts, anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
+- [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), choosing where on disk a repo should live, or picking the GitHub owner for a new project.
 
-**Load on context-shift.** When the task evolves into a domain whose context file hasn't been loaded yet (you started on Linux config and the user pivoted to TypeScript, etc.), `Read` the matching file *now* before continuing. Don't re-check the listing every turn — the index above is always in context, that's enough.
+**Load on context-shift.** When the task evolves into a domain whose context file hasn't been loaded yet (you started on Linux config and the user pivoted to git work, etc.), `Read` the matching file *now* before continuing. Don't re-check the listing every turn — the index above is always in context, that's enough.
 
-**Authoring new context files.** Always create or edit them in the chezmoi source tree at `~/src/dots@rhombu5/home/dot_claude/CLAUDE.<context>.md` — never the live `~/.claude/` copies, since `chezmoi apply` will overwrite them — and run `chezmoi apply` after each change. When you add a new context file, also add a one-line entry to the index above so it's discoverable next session.
+**Authoring new context files.** Always create or edit them in the chezmoi source tree at `~/src/dots@rhombu5/home/dot_claude/CLAUDE.<context>.md` — never the live `~/.claude/` copies, since `chezmoi apply` will overwrite them — and run `chezmoi apply` after each change. When you add a new context file, also add a one-line entry to the index above with its trigger conditions so it's discoverable next session.
 
 ## Don't attribute Claude in commits, issues, or PRs
 

@@ -1,7 +1,5 @@
 # Git / GitHub context rules
 
-Load when the task touches: git operations (clone/push/PR), choosing where on disk a repo should live, picking the GitHub owner for a new project.
-
 ## Repo clone paths and naming
 
 **Folder name (hard rule):** `{repo}@{user}+{workspace}` — drop the `+{workspace}` suffix when there is no workspace. The `@user` part is **always** included so forks and upstreams of same-named repos can coexist.
