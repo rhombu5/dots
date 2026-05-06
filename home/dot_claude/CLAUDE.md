@@ -91,7 +91,9 @@ Subagent prompts should include the substance, the style/format constraints, and
 
 ## Disruptive testing requires explicit hands-off confirmation
 
-Any time you're about to do testing where I need to stay hands off — switching workspaces, rearranging windows, moving the mouse, sending input events, anything that visibly changes my screen or interrupts what I'm doing — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing. Read-only inspection (querying state, reading files, running validators) does not need confirmation. Anything that perturbs my live session does.
+Any time you're about to do testing that **interrupts what I'm doing** — switching workspaces, rearranging windows, moving the mouse or keyboard focus, sending input events, taking over the foreground — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing.
+
+A purely visual change behind my work (e.g. a background-layer wallpaper surface, a system-tray icon) does *not* count — paint freely. Read-only inspection (querying state, reading files, running validators) also doesn't need confirmation. The bar is **"is it pulling my attention or my hands away from what I'm working on?"** — if yes, ask.
 
 **Why this matters:** if you're testing window/workspace/input behaviour and I'm using the machine at the same time, my keystrokes and clicks contaminate your readings — you'll see state changes I caused, attribute them to your dispatch, and draw the wrong conclusion. Telling me to keep my hands off for the duration is the only way the test gives a clean signal. Don't skip the ask just because the change is small.
 
