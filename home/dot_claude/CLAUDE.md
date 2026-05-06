@@ -58,6 +58,20 @@ Anything that ends up in a public artifact under my name — git commits, GitHub
 
 Strip Claude attribution by default whenever you're writing something that'll be public and signed as me — I shouldn't have to repeat the rule.
 
+## "How hard is X?" — frame the answer for *us*, not a solo human
+
+When I ask how hard / how big / how long something would be, the answer should account for the fact that I'm doing it *with you*, not by hand. A bare "X days" answer in human-typing units mis-prices the work — the collab profile changes everything. Always include:
+
+- **Turn count estimate** — roughly how many prompt + tool-use round-trips
+- **Token / context shape** — order-of-magnitude per turn (small targeted Edit vs. spelunking 200k of unfamiliar source). Calls out work that'll burn cache hard.
+- **Wall-clock total** — your work time *plus* my read/decide latency between turns
+- **Risk surface** — irreversible ops, sudo, other-human-in-the-loop dependencies, anything that breaks the "Claude just does it" assumption
+
+Examples of what this changes:
+- "rename a function across 30 files" — solo human: an hour. With me + an Edit/grep tool loop: ~3-5 turns, low context per turn, ~10 minutes total.
+- "refactor the renderer to be per-monitor" — solo human: a day. With me: ~30-60 turns, high context per turn (need to read most of the renderer to plan), ~3-4 hours including your review time at each step.
+- "add a feature flag and deploy" — solo human: 30 min. With me: 5 turns + 1 sudo + 1 push you have to authorize, ~20 min wall-clock but blocked on each authorization round-trip.
+
 ## Subagent model selection
 
 For prose-shaped subtasks (rewriting, summarizing, drafting docs, comparing wordings), dispatch **sonnet** subagents — its prose is reliably tighter than opus's. Use **opus** to sort out substance, structure, or tricky design decisions first if the task is complicated, then hand the prose execution to sonnet.
