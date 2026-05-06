@@ -12,7 +12,7 @@
     "margin-right": 0,
 
     "modules-left":   ["hyprland/workspaces", "hyprland/window"],
-    "modules-center": ["wlr/taskbar"],
+    "modules-center": [],
     "modules-right":  [
         "tray",
         "custom/network",
@@ -25,12 +25,18 @@
     ],
 
     "hyprland/workspaces": {
-        "format": "{icon}",
+        "format": "<span size='x-large' weight='bold'>{icon}</span>  {windows}",
         "format-icons": {
             "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
             "6": "6", "7": "7", "8": "8", "9": "9",
             "default": "○",
             "urgent": ""
+        },
+        "workspace-taskbar": {
+            "enable": true,
+            "format": "{icon} {title:.20}",
+            "icon-size": 20,
+            "on-click-window": "hyprctl dispatch focuswindow address:{address}"
         },
         "on-click": "activate",
         "sort-by-number": true,
