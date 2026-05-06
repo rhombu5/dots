@@ -58,6 +58,13 @@ Anything that ends up in a public artifact under my name — git commits, GitHub
 
 Strip Claude attribution by default whenever you're writing something that'll be public and signed as me — I shouldn't have to repeat the rule.
 
+## Commit discipline
+
+- **Commit on task completion.** Never leave a finished task as uncommitted work.
+- **Atomic commits** — one logical change per commit. If uncommitted changes span multiple tasks, split them (`git add -p` or path-scoped `git add`).
+- **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
+- **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
+
 ## "How hard is X?" — frame the answer for *us*, not a solo human
 
 When I ask how hard / how big / how long something would be, account for the fact that I'm doing it *with you*. A bare "X days" in human-typing units mis-prices the work. Always include:
