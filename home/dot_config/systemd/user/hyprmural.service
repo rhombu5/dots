@@ -1,0 +1,25 @@
+[Unit]
+Description=Per-workspace wallpaper layer (hyprmural)
+# Only meaningful inside a Wayland/Hyprland session — there's no
+# compositor surface to attach to before then.
+ConditionEnvironment=WAYLAND_DISPLAY
+# graphical-session.target is activated by exec.conf §0; gating on it
+# means hyprmural starts only once Hyprland has imported its env into
+# the user systemd manager (HYPRLAND_INSTANCE_SIGNATURE, WAYLAND_DISPLAY).
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/hyprmural
+# Replaces the old `exec-once = hyprmural` in exec.conf, which had no
+# auto-restart and no logging — a silent stop (observed 2026-05-06,
+# background layer empty on both outputs while the process was still
+# alive) left the desktop wallpaperless until reboot. Restart=always
+# brings it back; stdout/stderr go to journald so the next failure
+# leaves a trail (`journalctl --user -u hyprmural`).
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

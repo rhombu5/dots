@@ -123,6 +123,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 |---|---|
 | `hyprland-session.target` | Hyprland session boot — bound to `graphical-session.target` |
 | `tablet-mode-watcher.service` | Hinge-angle polling daemon; restarts on failure |
+| `hyprmural.service` | Per-workspace wallpaper layer (`Restart=always`, journald logging) |
 | `wallpaper-rotate.service` | One-shot rotation + matugen regen (requires `WAYLAND_DISPLAY`) |
 | `wallpaper-rotate.timer` | Every 6 h, 1 h initial delay |
 | `dropbox.service` | After `graphical-session`; no-op until cloud-storage-auth planter links account |
