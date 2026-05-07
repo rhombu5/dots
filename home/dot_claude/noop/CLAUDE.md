@@ -10,8 +10,10 @@ You are operating in `~/.claude/noop/` — a marker directory with no project st
 
 For every user prompt, walk these steps in order:
 
-0. **Is the request scoped entirely to user-prefs files under `~/.claude/`** (the core `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, or noop's own `CLAUDE.md` / `handoff.template.md`)?
-   → **Yes** → see "*Permitted exception*" below; skip the rest of the classifier.
+0. **Does the request fit a permitted noop exception below?**
+   - **User-prefs maintenance** — edits scoped entirely to `~/.claude/` (the core `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, or noop's own `CLAUDE.md` / `handoff.template.md`).
+   - **One-off system change** — a single install, system-pref flip, service enable, or small config snippet, *including* the small mirror commit it implies in `dots` or `arch-setup` per `CLAUDE.linux.md`.
+   → **Yes** → jump to the matching "*Permitted exception*" section below; skip the rest of the classifier.
    → **No** → continue to step 1.
 
 1. **Does the request require *modifying* a specific repo, or running its build / tests / deploy / git commands?**
@@ -90,7 +92,26 @@ When you do this work:
 3. **Commit and push the dots repo** atomically — one logical change per commit, immediately. `Read ~/.claude/CLAUDE.git.md` first if you haven't this session, for the SSH/commit conventions.
 4. **If you create a new `CLAUDE.<context>.md`,** add a one-line entry to the *Context files* index in `~/.claude/CLAUDE.md` so it's discoverable next session.
 
-This exception is scoped to `~/.claude/` only. Other user-level state — `.zshrc`, hyprland configs, the rest of dotfiles — is still bucket C; redirect via handoff.
+This exception is scoped to `~/.claude/` only. Larger work on other dotfiles is still bucket C — but for *one-off* system tweaks see the next exception.
+
+---
+
+## Permitted exception: one-off system changes
+
+A small system-level task — installing a package, flipping a system preference, enabling a service, dropping in a single config snippet — is **allowed from noop** even though `CLAUDE.linux.md` says every system change must be mirrored to `arch-setup` or `dots`, which would normally route it through bucket C. The handoff overhead would dwarf the actual work.
+
+The mirroring rule still applies in full: apply the change live AND propagate it to the right repo (`dots` for chezmoi-managed user configs, `arch-setup` for bootstrap / system-level changes), with an immediate atomic commit + push. You just do all of it from noop instead of handing off to a project session.
+
+**Counts as one-off — do it here:**
+- "Install firefox" → `sudoa pacman -S firefox` + add to the arch-setup package list.
+- "Bump the keyboard repeat rate" → edit the live config + `chezmoi re-add` + commit dots.
+- "Enable the bluetooth service" → `sudoa systemctl enable bluetooth` + arch-setup mirror.
+- "Add this one line to `.zshrc`" → edit + `chezmoi re-add` + commit dots.
+
+**Doesn't count — still bucket C, write a handoff:**
+- Multi-step refactor of `arch-setup` or `dots`.
+- Anything that needs the project's tests / lints / build, or its own `CLAUDE.md` and memory loaded to do well.
+- Work growing past ~3 turns or touching more than ~2 files in the mirror repo. Surface it: *"This is past one-off — want me to write a handoff and move it to a project session?"*
 
 ---
 
@@ -107,7 +128,7 @@ If during a B answer your file-read count creeps past ~5 in pursuit of one quest
 These self-rationalizations are signals to **stop and re-classify**, not reasons to keep going. When you notice yourself thinking any of them, the next move is most likely a redirect via handoff — but double-check the user-prefs exception too if the touched files are under `~/.claude/`.
 
 - *"I'll just check first, then I'll know what to do…"* — used to defer classification, this is wrong. Either you've classified bucket B (then `Read` is the answer; just do it without framing it as a peek) or you've classified bucket C (then "checking" is sneaking in action before the redirect — write the handoff first). If you genuinely can't classify yet, **ask** — don't peek-then-decide.
-- *"It's just a quick edit…"* — quick edits to a project's source code without the project's `CLAUDE.md`, project memory, `.mcp.json`, `.claude/settings.json`, and `--add-dir`s are still edits in the wrong context. (Edits scoped to user-prefs files under `~/.claude/` are the explicit exception — see above.)
+- *"It's just a quick edit…"* — quick edits to a project's source code without the project's `CLAUDE.md`, project memory, `.mcp.json`, `.claude/settings.json`, and `--add-dir`s are still edits in the wrong context. (User-prefs edits under `~/.claude/`, and one-off system-change mirrors to `dots` / `arch-setup`, are the explicit exceptions — see above.)
 - *"I already started, may as well finish…"* — sunk-cost. The cheapest moment to stop is now; the next-cheapest is one tool call from now.
 
 The cost gradient: **before any tool call** (free) → **right after the call that revealed bucket C** (cheap) → **deeper in** (expensive in user time, your context, and trust).
