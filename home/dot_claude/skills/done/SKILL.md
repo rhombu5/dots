@@ -1,9 +1,9 @@
 ---
-name: loose-ends
-description: End-of-session wrap-up check. Walks a checklist to confirm work is finished, committed, pushed, with no orphans and full parity between live system, dots, and arch-setup.
+name: done
+description: End-of-session wrap-up checklist. Confirms work is finished, committed, pushed, with no orphans and full parity between live system, dots, and arch-setup. Trigger when the user asks any variant of "are we done?", "is it finished?", "all wrapped up?", "anything left?", "ready to stop?", "good to go?", "can I close this?", "all set?", "loose ends?" — or otherwise signals they're checking whether the session can end.
 ---
 
-# Loose ends
+# Done?
 
 Walk this checklist before stopping. For each item: **check, then report status** (✓ clear / ✗ outstanding / ⚠ N/A) with a one-line note. Don't fix anything silently — surface every ✗ or ⚠ for the user to decide.
 
