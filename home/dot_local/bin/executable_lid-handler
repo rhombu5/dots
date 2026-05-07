@@ -4,14 +4,36 @@
 # (Handle*=ignore across the board).
 #
 # Rule: hibernate on lid close, UNLESS we're on AC AND an external monitor is
-# attached — in that case DPMS-off eDP-1 (DPMS-on on lid open).
+# attached — in that case disable eDP-1 (re-enabled via reload on lid open).
 #
-# DPMS instead of `monitor=…,disable` is deliberate: disabling tears down the
-# wlr_output, which propagates "invalid object" Wayland protocol errors to any
-# client with a surface on eDP-1. That kills waybar, hyprlax, swaync,
-# hyprpolkitagent, and any toplevels on workspaces 6-9 (observed 2026-05-05).
-# DPMS-off keeps the output configured — surfaces survive, the panel just
-# powers down — and clients pick up where they left off on lid open.
+# Approach history (decision lives here, not in commit messages, because the
+# next person to touch this needs the why):
+#
+#   1. monitor=,disable  (initial)
+#      Native: Hyprland migrates workspaces + cursor confined to remaining
+#      output. The "right" UX, but observed a cascade-crash 2026-05-05 that
+#      looked client-fatal; we abandoned it.
+#
+#   2. dispatch dpms off (2026-05-05)
+#      Avoids surface destruction → no client crashes. But: layout is
+#      unchanged so cursor still wanders into the dark eDP-1 area, AND
+#      misc:{key_press,mouse_move}_enables_dpms wakes the panel on any
+#      input from the (lid-close-immune) USB keyboard. Ineffective.
+#
+#   3. monitor=,mirror  (tested 2026-05-06)
+#      Workspaces auto-migrate, cursor maps to external, no client deaths.
+#      But the un-mirror cycle leaves eDP-1's wl_output unadvertised to
+#      layer-shell clients (waybar's eDP-1 bar never comes back). Needed
+#      a disable+reload cycle anyway to restore it.
+#
+#   4. monitor=,disable  (current)
+#      Returned to disable after re-testing on Hyprland 0.54.3 — clients
+#      survive cleanly today. Yesterday's "cascade" was actually a
+#      pre-existing waybar SIGSEGV that fired ~90s *before* the lid event;
+#      we mis-attributed it. Disable is the cleanest match to the desired
+#      UX. Lid-open does the reverse via `hyprctl reload`, plus a waybar
+#      restart because waybar doesn't reliably re-attach to a re-added
+#      output.
 set -euo pipefail
 
 action=${1:-}
@@ -28,16 +50,33 @@ external_attached() {
     hyprctl monitors -j | jq -e --arg n "$internal" 'any(.[]; .name != $n)' >/dev/null
 }
 
+restart_waybar() {
+    # Waybar doesn't reliably re-attach per-output bars when an output is
+    # re-added at runtime; a fresh process is the simplest reliable fix.
+    pkill -x waybar 2>/dev/null || true
+    sleep 0.3
+    setsid waybar >/dev/null 2>&1 & disown
+}
+
 case $action in
     close)
         if on_ac && external_attached; then
-            hyprctl dispatch dpms off "$internal"
+            # Hyprland natively migrates workspaces + toplevels off eDP-1
+            # and confines the cursor to the remaining outputs. Layer-shell
+            # surfaces on eDP-1 are destroyed; well-behaved clients survive.
+            # If waybar ever dies in the cascade, lid-open's restart catches
+            # it on the way back.
+            hyprctl keyword monitor "$internal,disable"
         else
             systemctl hibernate
         fi
         ;;
     open)
-        hyprctl dispatch dpms on "$internal"
+        # Reload re-applies monitors.conf, bringing eDP-1 back at its
+        # configured position/scale and re-binding workspaces 6-9.
+        hyprctl reload
+        sleep 0.3
+        restart_waybar
         ;;
     *)
         echo "usage: $0 {open|close}" >&2
