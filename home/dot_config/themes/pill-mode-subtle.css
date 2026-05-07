@@ -17,22 +17,28 @@
  * :nth-child is the only mechanism. Correct in single-output (persistent
  * "*": [1..9]) and on any output that holds 1..N from the start. */
 
-#workspaces button:nth-child(1) { color: @ws1_pill_fg; background-color: @ws1_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(2) { color: @ws2_pill_fg; background-color: @ws2_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(3) { color: @ws3_pill_fg; background-color: @ws3_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(4) { color: @ws4_pill_fg; background-color: @ws4_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(5) { color: @ws5_pill_fg; background-color: @ws5_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(6) { color: @ws6_pill_fg; background-color: @ws6_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(7) { color: @ws7_pill_fg; background-color: @ws7_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(8) { color: @ws8_pill_fg; background-color: @ws8_bg; border: 1px solid transparent; }
-#workspaces button:nth-child(9) { color: @ws9_pill_fg; background-color: @ws9_bg; border: 1px solid transparent; }
+#workspaces button:nth-child(1) { color: @ws1_pill_fg; background-color: @ws1_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(2) { color: @ws2_pill_fg; background-color: @ws2_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(3) { color: @ws3_pill_fg; background-color: @ws3_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(4) { color: @ws4_pill_fg; background-color: @ws4_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(5) { color: @ws5_pill_fg; background-color: @ws5_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(6) { color: @ws6_pill_fg; background-color: @ws6_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(7) { color: @ws7_pill_fg; background-color: @ws7_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(8) { color: @ws8_pill_fg; background-color: @ws8_bg; border: 3px solid transparent; }
+#workspaces button:nth-child(9) { color: @ws9_pill_fg; background-color: @ws9_bg; border: 3px solid transparent; }
 
-#workspaces button:nth-child(1).active { color: @ws1_pill_fg; background-color: @ws1_bg; border: 1px solid @ws1_pill_fg; }
-#workspaces button:nth-child(2).active { color: @ws2_pill_fg; background-color: @ws2_bg; border: 1px solid @ws2_pill_fg; }
-#workspaces button:nth-child(3).active { color: @ws3_pill_fg; background-color: @ws3_bg; border: 1px solid @ws3_pill_fg; }
-#workspaces button:nth-child(4).active { color: @ws4_pill_fg; background-color: @ws4_bg; border: 1px solid @ws4_pill_fg; }
-#workspaces button:nth-child(5).active { color: @ws5_pill_fg; background-color: @ws5_bg; border: 1px solid @ws5_pill_fg; }
-#workspaces button:nth-child(6).active { color: @ws6_pill_fg; background-color: @ws6_bg; border: 1px solid @ws6_pill_fg; }
-#workspaces button:nth-child(7).active { color: @ws7_pill_fg; background-color: @ws7_bg; border: 1px solid @ws7_pill_fg; }
-#workspaces button:nth-child(8).active { color: @ws8_pill_fg; background-color: @ws8_bg; border: 1px solid @ws8_pill_fg; }
-#workspaces button:nth-child(9).active { color: @ws9_pill_fg; background-color: @ws9_bg; border: 1px solid @ws9_pill_fg; }
+/* Active: double border using the pill's own two colors. Inner border
+ * is pill_fg (matches the text); outer ring is bg (matches the fill).
+ * Because pill_fg and bg are guaranteed ≥4.5:1 against each other, the
+ * active marker reads no matter what the bar/wallpaper behind the pill
+ * happens to be — if it matches one ring, the other still separates
+ * pill from background. */
+#workspaces button:nth-child(1).active { color: @ws1_pill_fg; background-color: @ws1_bg; border: 3px solid @ws1_pill_fg; box-shadow: 0 0 0 4px @ws1_bg; }
+#workspaces button:nth-child(2).active { color: @ws2_pill_fg; background-color: @ws2_bg; border: 3px solid @ws2_pill_fg; box-shadow: 0 0 0 4px @ws2_bg; }
+#workspaces button:nth-child(3).active { color: @ws3_pill_fg; background-color: @ws3_bg; border: 3px solid @ws3_pill_fg; box-shadow: 0 0 0 4px @ws3_bg; }
+#workspaces button:nth-child(4).active { color: @ws4_pill_fg; background-color: @ws4_bg; border: 3px solid @ws4_pill_fg; box-shadow: 0 0 0 4px @ws4_bg; }
+#workspaces button:nth-child(5).active { color: @ws5_pill_fg; background-color: @ws5_bg; border: 3px solid @ws5_pill_fg; box-shadow: 0 0 0 4px @ws5_bg; }
+#workspaces button:nth-child(6).active { color: @ws6_pill_fg; background-color: @ws6_bg; border: 3px solid @ws6_pill_fg; box-shadow: 0 0 0 4px @ws6_bg; }
+#workspaces button:nth-child(7).active { color: @ws7_pill_fg; background-color: @ws7_bg; border: 3px solid @ws7_pill_fg; box-shadow: 0 0 0 4px @ws7_bg; }
+#workspaces button:nth-child(8).active { color: @ws8_pill_fg; background-color: @ws8_bg; border: 3px solid @ws8_pill_fg; box-shadow: 0 0 0 4px @ws8_bg; }
+#workspaces button:nth-child(9).active { color: @ws9_pill_fg; background-color: @ws9_bg; border: 3px solid @ws9_pill_fg; box-shadow: 0 0 0 4px @ws9_bg; }
