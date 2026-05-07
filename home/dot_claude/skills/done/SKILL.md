@@ -7,37 +7,80 @@ description: End-of-session wrap-up checklist. Confirms work is finished, commit
 
 Walk this checklist before stopping. For each item: **check, then report status** (✓ clear / ✗ outstanding / ⚠ N/A) with a one-line note. Don't fix anything silently — surface every ✗ or ⚠ for the user to decide.
 
+**Scope: only what this session actually touched.** This is a wrap-up, not an audit. If the session didn't write code, correctness gates are ⚠ N/A — don't run the test suite to be thorough. If no behavior changed, docs are ⚠ N/A — don't go reading the README. If you didn't push, CI is ⚠ N/A. Items only get a ✓ or ✗ when they're *in scope for this session*. The default for "we didn't touch that" is ⚠ N/A with one word of justification, not investigation.
+
 ## 1. Task complete
 
 - Is the thing the user asked for actually done end-to-end? Not "code written" — *done*.
 - Any TODOs, stubs, half-implementations, or "I'll come back to this" left in the diff?
 - If a UI/feature change: did you actually exercise it, or only type-check it?
 
-## 2. Tasks / workitems
+## 2. Correctness gates
+
+**Only if this session changed code.** Otherwise ⚠ N/A.
+
+Run only the gates the project already uses, scoped to the diff:
+
+- **Tests** — unit / integration suites green? New code covered?
+- **Type-check** — `tsc`, `mypy`, `cargo check`, etc.
+- **Lint / format** — eslint, ruff, clippy, prettier, gofmt — clean?
+- **Build** — does it actually build / bundle / compile?
+
+Don't invent gates that don't exist. Don't run a full repo-wide suite when only one file changed.
+
+## 3. Docs in sync
+
+**Only if this session changed observable behavior or established a new convention.** Otherwise ⚠ N/A.
+
+- User-facing docs (README, man pages, `--help` text) still match the new behavior?
+- Inline doc comments / docstrings on the touched code still accurate?
+- New convention or rule that emerged — does it belong in `CLAUDE.md` (project or user-prefs)?
+- Did a config example or quickstart drift?
+
+## 4. Tasks / workitems
 
 - Run `TaskList`. Any task not in `completed` state?
 - Anything you mentally tracked but never put in the task list? Surface it.
 
-## 3. Git: committed
+## 5. Secrets check
+
+**Only the diff this session produced.** Don't audit existing repo content.
+
+- Anything sensitive in this session's staged or pushed diff? `.env`, tokens, keys, API secrets, internal hostnames, tenant IDs?
+- For the dots/arch-setup split: are private things landing in a private repo (`rhombu5`) and not a public one (`fnrhombus`)?
+- Accidentally checked-in build artefacts that might embed secrets?
+
+## 6. Git: committed
 
 - `git status` in every repo touched this session — clean working tree?
 - If there are stray changes: are they yours from this session, or pre-existing? Don't commit pre-existing without asking.
 - Commits atomic (one logical change each)? If you batched multiple tasks into one commit, flag it.
 
-## 4. Git: pushed
+## 7. Git: pushed
 
 - `git log @{u}..` in every repo touched — empty?
 - If a feature spans multiple commits, all of them landed before pushing? (Per user prefs: push on feature completion, not partial.)
 - Any branch that should have a PR but doesn't?
 
-## 5. Orphans
+## 8. CI green
+
+- For anything pushed this session, did remote CI actually pass? `gh pr checks` or equivalent.
+- Local clean ≠ remote clean. Don't claim done if CI is still running or red.
+
+## 9. Orphans
 
 - Files created during the work that aren't referenced anywhere (`handoff.md`, scratch notes, `*.bak`, debug scripts, generated artefacts)?
 - Imports/symbols left dead by a refactor?
 - Empty directories from moves/renames?
-- Memory entries written this session that turned out wrong or stale?
 
-## 6. System parity (Linux machines only)
+## 10. Memory hygiene
+
+**Scoped to this session only.** Don't audit the existing memory store.
+
+- **Stale** — any memory entry written *this session* that turned out wrong, or any pre-existing memory that this session contradicted? Update or remove the affected ones.
+- **Missing** — anything notable that came up *this session* that should be in memory but isn't? User prefs, project gotchas, surprising behavior, validated approaches. Save it now. Don't invent — only save things that genuinely surfaced.
+
+## 11. System parity (Linux machines only)
 
 For every system change made this session, all three states must agree:
 
@@ -53,7 +96,7 @@ Verify with:
 
 ⚠ = N/A on non-Linux.
 
-## 7. Anything weird
+## 12. Anything weird
 
 - Background processes still running you forgot about?
 - Sudo state, env vars, or shell mutations that'd surprise the user's next session?
@@ -66,13 +109,18 @@ Verify with:
 Report as a compact checklist:
 
 ```
-1. Task complete       ✓ feature shipped end-to-end
-2. Tasks / workitems   ✓ TaskList empty
-3. Committed           ✗ 2 untracked files in dots/
-4. Pushed              ✓ both repos up to date
-5. Orphans             ⚠ handoff.md still in arch-setup/ — delete?
-6. System parity       ✓ live ↔ dots ↔ arch-setup agree
-7. Anything weird      ✓
+ 1. Task complete       ✓ feature shipped end-to-end
+ 2. Correctness gates   ✓ tsc + eslint + vitest all green
+ 3. Docs in sync        ⚠ README still shows old flag name
+ 4. Tasks / workitems   ✓ TaskList empty
+ 5. Secrets check       ✓ nothing sensitive in diff
+ 6. Committed           ✗ 2 untracked files in dots/
+ 7. Pushed              ✓ both repos up to date
+ 8. CI green            ⚠ CI still running on PR #42
+ 9. Orphans             ⚠ handoff.md still in arch-setup/ — delete?
+10. Memory hygiene      ✓ saved one project memory; nothing stale
+11. System parity       ✓ live ↔ dots ↔ arch-setup agree
+12. Anything weird      ✓
 ```
 
 Then list the ✗ / ⚠ items as concrete next actions, and ask the user how to proceed. Don't just fix them — the point of this skill is the *checkpoint*, not silent cleanup.
