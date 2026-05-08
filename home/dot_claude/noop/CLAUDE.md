@@ -141,11 +141,15 @@ The cost gradient: **before any tool call** (free) → **right after the call th
 
 2. **Write the handoff at an absolute or `~`-anchored path.** Your `Write` call MUST target the project's full path with `handoff.md` appended — for example `~/src/arch-setup@fnrhombus/handoff.md` (or the OS-native absolute form, whatever works for your `Write` tool on this platform). Never pass just `handoff.md` — your cwd is `~/.claude/noop/`, so a relative path would land there. Before writing, `Read ~/.claude/noop/handoff.template.md` and follow it exactly. If `handoff.md` already exists at the target, append after a `---` separator — don't clobber. Don't `git add` the file.
 
-3. **Give the user a copy-pasteable command with the placeholder substituted.** The shape:
+3. **Give the user a copy-pasteable command with the placeholders substituted.** The shape:
 
    ```
-   cclaude <project-dir> -i @handoff.md
+   cclaude <project-dir> --name <topic> @handoff.md
    ```
+
+   <arg_order_rule>
+   `--name` MUST come before `@handoff.md`. `cclaude` treats every leading non-flag arg as a *path* until it sees its first `-`-prefixed arg; after that, remaining non-flag args (like `@handoff.md`) pass through to `claude` as the prompt. Putting `--name` first flips that switch, so `@handoff.md` is correctly handed to `claude` instead of being mis-parsed as a second `--add-dir` path. Don't reorder these, and don't add `-i` — the bare `@handoff.md` positional is what `claude` wants.
+   </arg_order_rule>
 
    <path_rules>
    The two paths resolve in *different scopes* — getting this wrong breaks the user's paste:
@@ -154,17 +158,29 @@ The cost gradient: **before any tool call** (free) → **right after the call th
    - **`@handoff.md`** is resolved by **`claude` after `cclaude`'s `cd`**, with cwd = `<project-dir>`. So it MUST stay literal as `@handoff.md` — leave that token alone, don't substitute, don't make it absolute.
    </path_rules>
 
+   <name_rules>
+   `--name` sets the session's display label (shown in the prompt box, `/resume` picker, and terminal title). Derive `<topic>` from the user's request — short (3–6 words), lowercase, **no spaces** (use hyphens), descriptive enough to recognize in a `/resume` list a week later. No quotes needed since there are no spaces. Examples: `fix-cclaude-path-parsing`, `netac-ssd-in-postinstall`, `ssh-signing-planter`.
+   </name_rules>
+
    Example of a correctly rendered command:
 
    ```
-   cclaude ~/src/arch-setup@fnrhombus -i @handoff.md
+   cclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md
    ```
 
-4. **Don't ask for confirmation.** The user opted into this flow by running `cclaude` with no path. The interaction is just:
+4. **Copy the rendered command to the clipboard.** Use the Bash tool to pipe it into the platform's clipboard utility — on this machine that's `wl-copy` (Wayland):
 
-   > *"I've written `handoff.md` at `~/src/arch-setup@fnrhombus/`. Run: `cclaude ~/src/arch-setup@fnrhombus -i @handoff.md`."*
+   ```
+   printf '%s' 'cclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md' | wl-copy
+   ```
 
-   — with the actual project path filled in for both the report and the command.
+   No trailing newline — paste should populate the prompt without auto-executing, so the user gets to eyeball the command first. On macOS substitute `pbcopy`; on X11 substitute `xclip -selection clipboard`.
+
+5. **Don't ask for confirmation.** The user opted into this flow by running `cclaude` with no path. The interaction is just:
+
+   > *"I've written `handoff.md` at `~/src/arch-setup@fnrhombus/`. The relaunch command is in your clipboard — paste and run: `cclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md`."*
+
+   — with the actual project path and topic filled in for the report, the command, and the `wl-copy` payload.
 
 ---
 
