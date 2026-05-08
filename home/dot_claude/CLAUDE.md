@@ -105,20 +105,12 @@ The distinction that matters: *dev tools* are the things that build, lint, forma
 
 **Why:** I don't want past project experiments leaking into future ones, and I want clean uninstall paths. Mise gives per-project pinning that travels with the repo.
 
-## Project memory lives in the project tree
+## Project memory lives in `~/.claude/projects/`
 
-When working inside a git repo, Claude's auto-memory files belong in `<project-root>/.claude/memory/`, not the per-session home-dir path (`~/.claude/projects/<encoded-cwd>/memory/`). Reasons:
+Claude Code's auto-memory files belong at `~/.claude/projects/<encoded-cwd>/memory/` — the path Claude Code computes from the session's CWD. Write there directly; no symlinks, no per-repo bookkeeping.
 
-- Memory travels with the repo across reinstalls, machines, and worktrees.
-- Each repo's learnings stay scoped to that repo — no leakage from one project's gotchas into another project's session.
-- The project-root path is stable; the home-dir path is encoded from the absolute CWD and breaks if the repo moves.
+**Don't put memory in `<project-root>/.claude/memory/`.** Earlier policy was to keep memory in-tree so it travelled with the repo. In practice that fragmented memory across many trees, required a per-machine symlink rebuild after every clone, and still didn't give cross-machine continuity (each machine had its own clone path). Cross-machine durability now comes from Dropbox-syncing `~/.claude/projects/`, not from in-tree storage.
 
-**The project is the project the work is about, not the CWD.** A session may start in one repo and end up doing work in another (e.g., started in `arch-setup` but the user asks for changes in `dots`). Sort each memory file into the `.claude/memory/` of the project it actually describes, not the launch directory. If a single memory genuinely spans projects, route it to the more affected one.
+**The project is still the project the work is about, not the CWD.** A session may start in one repo and end up doing work in another. Sort each memory file into the `~/.claude/projects/<encoded-cwd>/memory/` whose CWD matches the project it actually describes — not the launch directory. If a session is doing work on `dots` from a CWD inside `arch-setup`, write that memory under the dots-encoded path.
 
-Claude Code's hardcoded home-dir path is reconciled with this via a **symlink**: `~/.claude/projects/<encoded-cwd>/memory` → `<project-root>/.claude/memory/`. Both paths resolve to the same files. The symlink itself is per-machine (lives under `~/.claude/`, not the repo); set it up after cloning a project on a new machine.
-
-**Commit policy is per-repo:**
-- **Public repos** (most things under `fnrhombus`): `.gitignore` `/.claude/memory/`. Memories often contain tenant IDs, internal endpoints, or other identifiers safer kept local.
-- **Private repos** (most things under `rhombu5`): commit memory files. They're part of the project's institutional knowledge.
-
-When in doubt, gitignore — easier to opt-in to commit later than to redact a public commit.
+Stale `<project-root>/.claude/memory/` directories from the old policy should be migrated back to the home-dir path; existing `.gitignore` rules for `/.claude/memory/` can stay (harmless when the directory is absent).
