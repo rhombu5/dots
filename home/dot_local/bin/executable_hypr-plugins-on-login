@@ -80,3 +80,19 @@ for entry in "${plugins[@]}"; do
         hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/${conf}.conf" >/dev/null 2>&1 || true
     fi
 done
+
+# Phase 4: re-apply lid-closed clamshell disable. Phase 2's `hyprpm reload`
+# triggers a full `hyprctl reload`, which re-parses monitors.conf and wipes
+# any `monitor=eDP-1,disable` keyword override previously set by exec.conf
+# or by lid-handler close. Re-evaluate AC + external + lid-closed here, AFTER
+# the last reload of the session-start path, so a boot-with-lid-closed lands
+# in the same clamshell state as closing the lid in-session.
+#
+# Inline (rather than calling lid-handler close) so the battery/no-external
+# else-branch (systemctl hibernate) cannot fire from a config reload — that
+# branch is the binddl's job, not ours.
+if awk '/state/ {print $2}' /proc/acpi/button/lid/*/state 2>/dev/null | grep -q closed \
+    && [[ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" == 1 ]] \
+    && hyprctl monitors -j 2>/dev/null | jq -e 'any(.[]; .name != "eDP-1")' >/dev/null; then
+    hyprctl keyword monitor "eDP-1,disable" >/dev/null 2>&1 || true
+fi
