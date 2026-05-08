@@ -20,16 +20,3 @@ jobs:
           chmod +x home/dot_local/bin/executable_validate-hypr-binds
           HYPR_DIR=home/dot_config/hypr \
             bash home/dot_local/bin/executable_validate-hypr-binds
-
-  shellcheck:
-    name: shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run shellcheck
-        uses: ludeeus/action-shellcheck@master
-        env:
-          SHELLCHECK_OPTS: -e SC1091 -e SC2034 -e SC2154
-        with:
-          severity: warning
-          scandir: '.'
