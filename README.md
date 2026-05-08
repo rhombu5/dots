@@ -124,8 +124,10 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 | `wallpaper-rotate.service` | One-shot rotation + matugen regen (requires `WAYLAND_DISPLAY`) |
 | `wallpaper-rotate.timer` | Every 6 h, 1 h initial delay |
 | `dropbox.service` | After `graphical-session`; no-op until cloud-storage-auth planter links account |
-| `rclone-gdrive-bisync.service` | Bidirectional `gdrive:` ↔ `~/GoogleDrive` (resilient + max-delete safeguard) |
+| `rclone-gdrive-bisync.service` | Bidirectional `gdrive:` ↔ `~/GoogleDrive` (resilient + max-delete safeguard; filter excludes Google Photos videos via `~/.config/rclone/gdrive-filters.txt`) |
 | `rclone-gdrive-bisync.timer` | Every 5 min, 2 min boot delay, 30 s randomization |
+| `rclone-dropbox-claude-bisync.service` | Bidirectional `dropbox:claude` ↔ `~/.claude` (memory + plans only, scoped via `~/.config/rclone/claude-filters.txt`) |
+| `rclone-dropbox-claude-bisync.timer` | Every 5 min, 2 min boot delay, 30 s randomization |
 
 ### Shell environment
 
