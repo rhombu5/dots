@@ -8,6 +8,11 @@ ConditionPathExistsGlob=%h/.config/rclone/rclone.conf
 [Service]
 Type=oneshot
 ExecStartPre=/usr/bin/mkdir -p %h/GoogleDrive
+# --filter-from: exclude Google Photos videos. Google transcodes them
+#   server-side, so the MD5 returned by the Drive metadata API doesn't
+#   match the bytes downloaded — bisync aborts with "corrupted on
+#   transfer". Photos sync fine; videos don't. Filter file is
+#   chezmoi-managed and stays in sync with the planter's --resync.
 # --resilient: bisync v1.62+ flag, recovers from interrupted runs without
 #   needing a manual --resync. Critical for laptop use (suspends, network
 #   drops mid-sync).
@@ -15,4 +20,4 @@ ExecStartPre=/usr/bin/mkdir -p %h/GoogleDrive
 #   against an accidental rm -rf ~/GoogleDrive nuking the cloud copy.
 # --create-empty-src-dirs: preserves directory structure even when one
 #   side has empty dirs that bisync would otherwise drop.
-ExecStart=/usr/bin/rclone bisync gdrive: %h/GoogleDrive --resilient --max-delete 25 --create-empty-src-dirs
+ExecStart=/usr/bin/rclone bisync gdrive: %h/GoogleDrive --filter-from %h/.config/rclone/gdrive-filters.txt --resilient --max-delete 25 --create-empty-src-dirs

@@ -1,0 +1,12 @@
+# rclone gdrive bisync filter — exclude Google Photos videos.
+# Google Photos transcodes videos server-side; the MD5 returned by the
+# Drive metadata API doesn't match the bytes downloaded, so bisync
+# aborts on a hash-mismatch error every time. Photos (JPG/PNG/HEIC)
+# sync fine; videos don't. Exclude common video extensions under
+# the Google Photos folder only.
+- /Google Photos/**.mp4
+- /Google Photos/**.MP4
+- /Google Photos/**.mov
+- /Google Photos/**.MOV
+- /Google Photos/**.m4v
+- /Google Photos/**.M4V
