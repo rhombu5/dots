@@ -1,3 +1,21 @@
+# --- Bootstrap planters (must run BEFORE Powerlevel10k instant prompt) ---
+# Planters print to the terminal (OAuth URLs, "Log in" prompts, bisync
+# seeding output, etc.). Anything written between p10k's instant-prompt
+# block and the actual p10k load triggers p10k's "Console output during
+# zsh initialization detected" warning — so plant *before* instant-prompt
+# buffering starts. Each planter self-checks its own preconditions and
+# self-deletes from $_bootstrap_dir on success.
+if [[ -z "${_POSTINSTALL_NONINTERACTIVE:-}" ]]; then
+    _bootstrap_dir="$HOME/.local/share/arch-setup-bootstraps"
+    if [[ -d "$_bootstrap_dir" ]]; then
+        for _bs in "$_bootstrap_dir"/*.sh(N); do
+            source "$_bs"
+        done
+        [[ -z "$(ls -A "$_bootstrap_dir" 2>/dev/null)" ]] && rmdir "$_bootstrap_dir" 2>/dev/null
+    fi
+    unset _bs _bootstrap_dir
+fi
+
 # --- Powerlevel10k instant prompt (must be near top) ---
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
