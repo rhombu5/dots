@@ -22,20 +22,6 @@ Criteria for being here: (a) self-contained — no hard dependency on the rest o
 
 ---
 
-### wpws — per-workspace wallpaper + accent daemon
-
-**Location:** `~/.local/bin/wpws`, `~/.config/wpws/config.toml` (dots)
-
-**What it is:** Python daemon. Watches Hyprland IPC for workspace-switch events; on each switch, sets the wallpaper and recomputes the matugen Material You accent for that workspace. Fast-path: PIL-based color extractor for snappy switching. Slow-path: full `matugen image` render for cold starts and theme changes.
-
-**Why extract:** Hyprland has no per-workspace wallpaper concept upstream. The "different wallpaper + matching theme per workspace" idea is novel and the implementation handles both the latency problem (fast-path) and the accuracy problem (slow-path matugen) in a way that isn't obvious.
-
-**What's blocking clean extraction:** Likely hardcoded paths to my matugen template directory and wallpaper pool. Needs: clean CLI args (or a config file) for theme dir and wallpaper-pool dir; possibly factor out the fast-path PIL color extractor as its own importable component so it can be reused or swapped.
-
-**Status:** Actively used. Previously flagged in session memory as an extraction candidate.
-
----
-
 ### claude-askpass — Bitwarden-backed SUDO_ASKPASS helper
 
 **Location:** `~/.local/bin/claude-askpass` (dots)

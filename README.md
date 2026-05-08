@@ -73,8 +73,6 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
   - `config.toml` — pipeline definition with 15+ component templates
   - `templates/` — output templates for ghostty, helix, yazi, zathura, gtk3/4, qt5/6, tmux, regreet, hyprlock, and shared accent (`shared-accent.{css,conf,ini}`)
 - **`themes/`** — static base + matugen-rendered accent files; pill-mode workspace indicator variants (bold / subtle / layered)
-- **`wpws/`** — per-workspace wallpaper + dynamic accent daemon (Python; designed for extraction to its own repo — see memory `project_wpws.md`)
-- **`hyprlax/`** — wallpaper parallax on workspace transitions
 - **`hyprmural/`** — per-workspace static-wallpaper / accent extractor (`accent.py`, `pill-accents.py`, `vibrant.py`)
 - **`qt5ct/`, `qt6ct/`** — Qt 5/6 style + palette integration
 
@@ -110,7 +108,6 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 **Theme / wallpaper**
 - `theme-toggle` — flip dark / light, re-run matugen, broadcast via gsettings
 - `wallpaper-rotate` — pick next wallpaper, set via awww, regenerate matugen palette
-- `wpws` — per-workspace wallpaper + accent daemon CLI (`daemon`, `switch`, `rotate`, `status`, `theme`)
 
 **System helpers**
 - `claude-askpass` — `SUDO_ASKPASS` helper that pulls password from Bitwarden (unattended `sudo -A`)

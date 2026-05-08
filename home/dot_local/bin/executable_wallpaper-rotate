@@ -106,11 +106,11 @@ esac
 
 [[ -r "$wallpaper" ]] || { echo "wallpaper unreadable: $wallpaper" >&2; exit 1; }
 
-# Wallpaper display is owned by wpws + hyprlax (stitched per-workspace
-# canvas, panning viewport). This script's only job is to regen the M3
-# palette via matugen for the static-themed apps (gtk, qt, ghostty,
-# helix, tmux, yazi, zathura, hyprlock, regreet). The chosen wallpaper
-# is the *seed* for the M3 palette, not the displayed image.
+# Wallpaper display is owned by hyprmural (per-workspace static images,
+# mapped in ~/.config/hyprmural/hyprmural.conf). This script's only job
+# is to regen the M3 palette via matugen for the static-themed apps
+# (gtk, qt, ghostty, helix, tmux, yazi, zathura, hyprlock). The chosen
+# wallpaper is the *seed* for the M3 palette, not the displayed image.
 
 echo "$wallpaper" > "$wp_file"
 

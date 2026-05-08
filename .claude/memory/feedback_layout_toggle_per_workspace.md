@@ -27,7 +27,6 @@ shipped pattern is:
   apply doesn't clobber the runtime-rewritten version.
 - The toggle script regenerates the conf file then `hyprctl keyword
   workspace "<id>,layout:<target>"` for live migration of the active ws.
-- `wpws` does NOT touch layout — only accent.
 
 **Hyprland 0.54.3 gotchas learned the hard way:**
 

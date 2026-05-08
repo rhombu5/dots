@@ -2,7 +2,7 @@
  *
  * Color slots split across two files:
  *   ~/.config/themes/static.css  chezmoi-managed, never regenerated
- *   ~/.config/themes/accent.css  matugen on full regen, wpws on workspace switch
+ *   ~/.config/themes/accent.css  matugen on full regen
  * `swaync-client --reload-css` reloads CSS without restarting swaync. */
 
 @import url("../themes/static.css");

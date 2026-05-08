@@ -12,8 +12,8 @@
 #   - `hyprctl reload` re-reads disk and discards in-session keyword
 #     state. So the rule has to also live in a sourced config file to
 #     survive reloads.
-#   - We don't need wpws to re-apply on focus: once a workspace's algo
-#     is migrated (by toggle, or by reload reading the file), it sticks.
+#   - Once a workspace's algo is migrated (by toggle, or by reload
+#     reading the file), it sticks; nothing needs to re-apply on focus.
 #
 # Two state writes per toggle:
 #   1. $XDG_STATE_HOME/hypr-layout/ws-<id>.mode — the per-ws choice

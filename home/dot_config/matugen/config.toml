@@ -12,11 +12,11 @@ custom_colors = {}
 # ---- Component templates ----
 
 # --- Shared accent (waybar + swaync + fuzzel + Hyprland borders/groupbar) ---
-# These three writes go to ~/.config/themes/accent.{css,conf,ini}, the same
-# files wpws-daemon writes on per-workspace switches. The split: matugen on
-# full regen (slow path, gives the M3 palette to all the static themes too);
-# wpws on per-workspace switch (fast dominant-color extractor, only writes
-# these three files + pushes hyprctl keywords).
+# These three writes go to ~/.config/themes/accent.{css,conf,ini}. matugen
+# (slow path) gives the M3 palette to all the static themes; per-workspace
+# accent push is owned by hyprmural's accent.py hook, which writes per-output
+# colors to $XDG_RUNTIME_DIR/hyprmural/accent-<mon>.rgb and pushes them live
+# via `hyprctl setprop ... bordercolor` per-window.
 [templates.shared-accent-css]
 input_path = "~/.config/matugen/templates/shared-accent.css"
 output_path = "~/.config/themes/accent.css"

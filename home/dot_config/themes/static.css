@@ -2,7 +2,7 @@
  * Imported by waybar/style.css and swaync/style.css *before* accent.css.
  * Owned by chezmoi, never regenerated.
  *
- * Pair with accent.css (matugen + wpws-managed) for the dynamic accent slots. */
+ * Pair with accent.css (matugen-managed) for the dynamic accent slots. */
 
 @define-color background        #1e1e1e;
 @define-color on-background     #d4d4d4;
