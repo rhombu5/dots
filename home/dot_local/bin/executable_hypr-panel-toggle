@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Super+Ctrl+B handler. Toggles waybar (SIGUSR1) when it's running.
-# When it's not running — typically because waybar crashed — re-launches it.
+# Super+Ctrl+B handler. Toggles waybar visibility (SIGUSR1) when running.
+# If waybar isn't running, start the unit. With waybar.service's
+# Restart=always, this fallback only fires for intentional stops or
+# after the StartLimitBurst flap-cap has tripped.
 set -u
 
 if pkill -SIGUSR1 waybar 2>/dev/null; then
     exit 0
 fi
 
-setsid -f waybar </dev/null >/dev/null 2>&1
+systemctl --user start waybar.service

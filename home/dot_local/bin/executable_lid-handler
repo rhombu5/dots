@@ -53,9 +53,11 @@ external_attached() {
 restart_waybar() {
     # Waybar doesn't reliably re-attach per-output bars when an output is
     # re-added at runtime; a fresh process is the simplest reliable fix.
-    pkill -x waybar 2>/dev/null || true
-    sleep 0.3
-    setsid waybar >/dev/null 2>&1 & disown
+    # waybar.service (Restart=always) owns the process lifecycle now —
+    # `systemctl restart` deterministically kills and respawns; the old
+    # pkill+setsid approach would race with the unit's auto-respawn and
+    # could leave two processes contending for the same bar.
+    systemctl --user restart waybar.service
 }
 
 case $action in
