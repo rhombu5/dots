@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Windows (RDP)
+GenericName=Remote Desktop
+Comment=Connect to the WinApps Windows VM via Remmina
+Exec=remmina -c %h/.config/remmina/Windows.remmina
+Icon=org.remmina.Remmina
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=rdp;remote;remmina;windows;winapps;
+StartupNotify=true
