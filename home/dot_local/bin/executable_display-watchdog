@@ -33,11 +33,18 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from glob import glob
 from pathlib import Path
 
 LID_STATE_GLOB = "/proc/acpi/button/lid/*/state"
 RECOVERY_TRIGGERS = ("monitorremoved>>", "monitorremovedv2>>")
+# Debounce window (seconds) between detecting a recovery trigger and
+# firing the action. A transient `monitorremoved>>` from a chvts-back
+# / HDMI re-handshake / TV power-cycle is normally followed by a
+# `monitoradded>>` within milliseconds; we want to ride that out before
+# committing to an irreversible action like systemctl hibernate.
+DEBOUNCE_SEC = 2.0
 
 log = logging.getLogger("display-watchdog")
 
@@ -88,6 +95,17 @@ def event_loop(sock_path: Path, lid_open_cmd: str, lid_closed_cmd: str) -> None:
                 continue
             log.debug("event: %s", event)
             if not all_dark():
+                continue
+            # Debounce: physlock unlocks chvts back to Hyprland's VT,
+            # which briefly drops the HDMI handshake. Hyprland fires
+            # `monitorremoved>>DP-1`, lands `monitoradded>>DP-1` a
+            # split-second later. Without this sleep we'd race the
+            # second event and fire `systemctl hibernate` on a
+            # blackout that didn't actually persist. Observed
+            # 2026-05-08 in a clamshell-on-HDMI setup.
+            time.sleep(DEBOUNCE_SEC)
+            if not all_dark():
+                log.debug("transient blackout — monitor recovered, no-op")
                 continue
             if lid_closed():
                 log.info("blackout + lid closed → lid-closed-action")
