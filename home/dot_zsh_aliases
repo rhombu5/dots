@@ -76,7 +76,10 @@ cclaude() {
     done
 
     if [[ -n "$init_prompt" ]]; then
-        ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" "$init_prompt" )
+        # `--` terminates option parsing so that claude's variadic flags (e.g.
+        # `--add-dir <directories...>`) can't slurp the trailing prompt as one
+        # of their values when nothing else separates them.
+        ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" -- "$init_prompt" )
     else
         ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" )
     fi
