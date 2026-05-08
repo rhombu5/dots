@@ -1,0 +1,8 @@
+# rclone bisync filter for the Claude folders sync.
+# Source: ~/.claude    Remote: dropbox:claude
+# Strategy: include only the per-encoded-cwd memory dirs and the
+# top-level plans dir — everything else (transcripts, sessions, cache,
+# shell snapshots, plugins, etc.) stays machine-local.
++ /projects/*/memory/**
++ /plans/**
+- *

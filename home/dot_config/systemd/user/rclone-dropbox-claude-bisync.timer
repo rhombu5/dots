@@ -1,0 +1,16 @@
+# /home/tom/.config/systemd/user/rclone-dropbox-claude-bisync.timer
+[Unit]
+Description=Run rclone Dropbox bisync (claude memory+plans) every 5 minutes
+Requires=rclone-dropbox-claude-bisync.service
+
+[Timer]
+# 2 min after boot avoids firing during early-login / matugen / waybar
+# warmup. Subsequent runs fire 5 min after the previous run *completes*
+# (vs OnUnitActiveSec which would race against long syncs).
+OnBootSec=2min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
