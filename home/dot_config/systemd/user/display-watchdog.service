@@ -1,0 +1,20 @@
+[Unit]
+Description=Hyprland blackout-recovery watchdog (lid-aware)
+Documentation=file:%h/.local/share/doc/display-watchdog/README.md
+ConditionEnvironment=WAYLAND_DISPLAY
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# Quoted args preserve the space inside --lid-open-action's value.
+# Systemd expands %h before argument parsing.
+ExecStart=%h/.local/bin/display-watchdog --lid-open-action "%h/.local/bin/lid-handler open" --lid-closed-action "systemctl hibernate"
+# Replaces the old `exec-once`. The script's outer loop already absorbs
+# transient Hyprland-IPC reconnects, so a crash that escapes that loop
+# is genuinely unexpected — bring it back, but don't flap.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

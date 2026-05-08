@@ -121,6 +121,11 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 | `hyprland-session.target` | Hyprland session boot — bound to `graphical-session.target` |
 | `tablet-mode-watcher.service` | Hinge-angle polling daemon; restarts on failure |
 | `hyprmural.service` | Per-workspace wallpaper layer (`Restart=always`, journald logging) |
+| `hypridle.service` | Upstream unit + drop-in raising `Restart=on-failure` → `Restart=always` (silent exits observed; idle daemon must not stay dead) |
+| `cliphist.service` | Upstream unit (`wl-paste --watch cliphist store`) — clipboard history |
+| `swayosd-server.service` | OSD server for volume / brightness / capslock keys |
+| `iio-hyprland.service` | IIO sensor → Hyprland transform daemon (auto-rotate) |
+| `display-watchdog.service` | Lid-aware blackout-recovery watchdog |
 | `wallpaper-rotate.service` | One-shot rotation + matugen regen (requires `WAYLAND_DISPLAY`) |
 | `wallpaper-rotate.timer` | Every 6 h, 1 h initial delay |
 | `dropbox.service` | After `graphical-session`; no-op until cloud-storage-auth planter links account |

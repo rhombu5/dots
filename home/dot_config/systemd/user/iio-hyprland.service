@@ -1,0 +1,18 @@
+[Unit]
+Description=IIO sensor → Hyprland transform daemon (auto-rotate)
+ConditionEnvironment=WAYLAND_DISPLAY
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/iio-hyprland
+# Replaces the old `exec-once = iio-hyprland`. Wraps Hyprland's IPC for
+# accelerometer-driven rotation; transient sensor-not-ready paths are
+# handled internally, so on-failure restart is for genuinely unexpected
+# exits.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

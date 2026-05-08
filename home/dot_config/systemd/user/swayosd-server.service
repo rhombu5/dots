@@ -1,0 +1,18 @@
+[Unit]
+Description=swayosd OSD server (volume / brightness / capslock indicators)
+ConditionEnvironment=WAYLAND_DISPLAY
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/swayosd-server
+# Replaces the old `exec-once = swayosd-server`. swayosd-server has
+# SIGABRT'd at session start (coredumps observed 2026-05-08 04:45:14)
+# with no auto-recovery — keys silently stop showing OSD until reboot.
+# on-failure restart catches that; clean exits are not restarted.
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
