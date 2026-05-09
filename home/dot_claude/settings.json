@@ -1,10 +1,22 @@
 {
-  "effortLevel": "xhigh",
-  "skipDangerousModePermissionPrompt": true,
-  "theme": "auto",
-  "skipAutoPermissionPrompt": true,
-  "agentPushNotifEnabled": true,
   "env": {
     "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"
-  }
+  },
+  "worktree": {
+    "baseRef": "fresh"
+  },
+  "effortLevel": "xhigh",
+  "awaySummaryEnabled": false,
+  "autoUpdatesChannel": "latest",
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "auto",
+  "verbose": true,
+  "remoteControlAtStartup": true,
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": true
 }
