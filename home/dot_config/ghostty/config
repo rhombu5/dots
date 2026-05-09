@@ -21,6 +21,7 @@ gtk-titlebar = false
 gtk-tabs-location = top
 adw-toolbar-style = flat
 window-save-state = always
+working-directory = home
 
 scrollback-limit = 100000000
 shell-integration = zsh
