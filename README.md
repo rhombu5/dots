@@ -73,7 +73,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
   - `config.toml` — pipeline definition with 15+ component templates
   - `templates/` — output templates for ghostty, helix, yazi, zathura, gtk3/4, qt5/6, tmux, regreet, hyprlock, and shared accent (`shared-accent.{css,conf,ini}`)
 - **`themes/`** — static base + matugen-rendered accent files; pill-mode workspace indicator variants (bold / subtle / layered)
-- **`hyprmural/`** — per-workspace static-wallpaper / accent extractor (`accent.py`, `pill-accents.py`, `vibrant.py`)
+- **`hyprmural/`** — per-workspace wallpaper config + accent extraction pipeline. `hyprmural.conf` runs in randomize mode (fresh shuffle each session, in-place reshuffle on `Super+Shift+W`); `hook.sh` chains `accent.py` (per-window border colors) and `pill-accents.py` (waybar workspace pills, derived from `$XDG_RUNTIME_DIR/hyprmural/assignments.json`); `vibrant.py` is the shared swatch extractor.
 - **`qt5ct/`, `qt6ct/`** — Qt 5/6 style + palette integration
 
 ### Apps

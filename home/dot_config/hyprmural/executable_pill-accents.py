@@ -1,93 +1,117 @@
 #!/usr/bin/env python3
 """Generate per-workspace pill colors for waybar.
 
-Reads ~/.config/hyprmural/hyprmural.conf, extracts the full Vibrant
-swatch dict for each `workspace = N, <path>` mapping, and writes
-~/.config/themes/workspace-accents.css with @define-color entries:
+Reads hyprmural's per-workspace assignment file at
+$XDG_RUNTIME_DIR/hyprmural/assignments.json — written by hyprmural at
+startup (after pre-picking numeric workspaces 1..9 when randomize is on)
+and refreshed on each new lazy pick. The CSS is then a pure function of
+that map.
 
-    @define-color ws1_vibrant        #...;
-    @define-color ws1_light_vibrant  #...;
-    @define-color ws1_dark_vibrant   #...;
-    @define-color ws1_muted          #...;
-    @define-color ws1_light_muted    #...;
-    @define-color ws1_dark_muted     #...;
-    @define-color ws1_on             #...;     /* black or white, contrast */
-    /* …per workspace */
+Two invocation modes:
 
-Missing swatches fall back: vibrant -> light_vibrant -> muted -> #888;
-muted -> dark_muted -> light_muted -> #444. The CSS always has every
-@define-color so consumers don't see gaps.
+  1. **Hook mode** — invoked from hyprmural's `hook =` chain on each
+     per-output image change. Re-reads assignments.json (which hyprmural
+     just refreshed), regenerates the CSS, and SIGUSR2s waybar only if
+     the CSS content actually changed.
 
-Sends a single SIGUSR2 to waybar at the end. Static file → consumer
-waybar reads it once at startup; per-workspace switches don't re-read
-or re-render anything CSS-related.
+  2. **Seed mode** — invoked at session start (Hyprland exec-once) before
+     the user has switched workspaces. Polls briefly for assignments.json
+     to appear (hyprmural starts after Hyprland exec-once), then renders
+     the full CSS and SIGUSR2s waybar.
 
-Wire via Hyprland exec.conf:
+The CSS always emits @define-color entries for ws1..ws9 (configurable via
+PILL_ACCENTS_RANGE env, e.g. `1-12`). Workspaces missing from the
+assignment map fall back to neutral grey so GTK doesn't choke on
+undefined color references.
+
+Wire via hyprmural.conf:
+    hook = ~/.config/hyprmural/hook.sh
+
+…and via Hyprland exec.conf:
     exec-once = ~/.config/hyprmural/pill-accents.py
 """
 from __future__ import annotations
 
+import json
 import os
 import pathlib
-import re
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vibrant import accent_for_bg, cached_swatches, resolve  # noqa: E402
 
 
-CONFIG_PATH = pathlib.Path(
-    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-) / "hyprmural" / "hyprmural.conf"
-
 OUTPUT_PATH = pathlib.Path(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 ) / "themes" / "workspace-accents.css"
 
-
-def parse_workspaces(config_path: pathlib.Path) -> list[tuple[int, str]]:
-    """Return [(workspace_int, image_abs_path), ...] for numeric workspaces."""
-    out: list[tuple[int, str]] = []
-    if not config_path.is_file():
-        return out
-    for raw in config_path.read_text().splitlines():
-        # Strip comments
-        line = raw.split("#", 1)[0].strip()
-        if not line.startswith("workspace"):
-            continue
-        m = re.match(r"workspace\s*=\s*([^,]+),\s*(.+)$", line)
-        if not m:
-            continue
-        ws, path = m.group(1).strip(), m.group(2).strip()
-        if not ws.isdigit():
-            continue
-        path = os.path.expanduser(path)
-        out.append((int(ws), path))
-    return out
+ASSIGNMENTS_PATH = pathlib.Path(
+    os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+) / "hyprmural" / "assignments.json"
 
 
-def write_css(workspaces: list[tuple[int, str]]) -> None:
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+def parse_range(spec: str) -> list[int]:
+    out: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            out.update(range(int(lo), int(hi) + 1))
+        else:
+            out.add(int(part))
+    return sorted(out)
+
+
+WORKSPACE_RANGE = parse_range(os.environ.get("PILL_ACCENTS_RANGE", "1-9"))
+
+
+def load_assignments(timeout_s: float = 0.0) -> dict[int, str]:
+    """Return {workspace_int: image_abs_path}. Polls up to timeout_s for
+    the file to appear; returns {} if it never does."""
+    deadline = time.monotonic() + max(timeout_s, 0.0)
+    while True:
+        if ASSIGNMENTS_PATH.is_file():
+            try:
+                raw = json.loads(ASSIGNMENTS_PATH.read_text())
+            except (OSError, json.JSONDecodeError):
+                return {}
+            out: dict[int, str] = {}
+            for k, v in raw.items():
+                if isinstance(k, str) and k.isdigit() and isinstance(v, str) and v:
+                    out[int(k)] = v
+            return out
+        if time.monotonic() >= deadline:
+            return {}
+        time.sleep(0.1)
+
+
+def render_css(assignments: dict[int, str]) -> str:
     lines = [
         "/* workspace-accents.css — generated by hyprmural pill-accents.py.",
-        " * Static colors per workspace, derived from each workspace's mapped",
-        " * wallpaper via Vibrant-style extraction. Re-run pill-accents.py to",
-        " * regenerate. */",
+        " * Per-workspace colors derived from each workspace's current",
+        " * wallpaper via Vibrant-style extraction. Source of truth is",
+        " * $XDG_RUNTIME_DIR/hyprmural/assignments.json (written by",
+        " * hyprmural). */",
         "",
     ]
-    for ws, path in sorted(workspaces):
-        if not os.path.isfile(path):
-            lines.append(f"/* ws{ws}: missing image '{path}' — using neutral fallback */")
+    for ws in WORKSPACE_RANGE:
+        path = assignments.get(ws)
+        if not path or not os.path.isfile(path):
+            lines.append(f"/* ws{ws}: no assignment — neutral fallback */")
             for slot in ("vibrant", "light_vibrant", "dark_vibrant"):
                 lines.append(f"@define-color ws{ws}_{slot} #888888;")
             for slot in ("muted", "light_muted", "dark_muted"):
                 lines.append(f"@define-color ws{ws}_{slot} #444444;")
-            lines.append(f"@define-color ws{ws}_on #ffffff;")
+            lines.append(f"@define-color ws{ws}_bg            #333333;")
+            lines.append(f"@define-color ws{ws}_pill_fg       #ffffff;")
+            lines.append(f"@define-color ws{ws}_on            #ffffff;")
             lines.append("")
             continue
         s = cached_swatches(path)
-        # Fallback chains so every slot is always present
         v = resolve(s, "vibrant", "light_vibrant", "muted", default="888888")
         lv = resolve(s, "light_vibrant", "vibrant", "light_muted", default="bbbbbb")
         dv = resolve(s, "dark_vibrant", "vibrant", "dark_muted", default="555555")
@@ -96,10 +120,7 @@ def write_css(workspaces: list[tuple[int, str]]) -> None:
         dm = resolve(s, "dark_muted", "muted", "dark_vibrant", default="333333")
         bg = resolve(s, "bg", "dark_muted", "muted", default="333333")
         on = s.get("on", "ffffff")
-        # Contrast-corrected accent: vibrant if it passes WCAG-AA against bg,
-        # else the darker/lighter variant that does, else black/white fallback.
         fg = accent_for_bg(s, bg)
-
         lines.extend([
             f"/* ws{ws}: {os.path.basename(path)} */",
             f"@define-color ws{ws}_vibrant       #{v};",
@@ -113,22 +134,39 @@ def write_css(workspaces: list[tuple[int, str]]) -> None:
             f"@define-color ws{ws}_on            #{on};",
             "",
         ])
-    OUTPUT_PATH.write_text("\n".join(lines))
+    return "\n".join(lines)
 
 
 def reload_waybar() -> None:
-    subprocess.run(["pkill", "-SIGUSR2", "waybar"], check=False, stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["pkill", "-SIGUSR2", "waybar"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def write_if_changed(path: pathlib.Path, content: str) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_file() and path.read_text() == content:
+        return False
+    path.write_text(content)
+    return True
 
 
 def main() -> int:
-    workspaces = parse_workspaces(CONFIG_PATH)
-    if not workspaces:
-        sys.stderr.write(f"pill-accents: no numeric workspace mappings in {CONFIG_PATH}\n")
-        return 1
-    write_css(workspaces)
-    reload_waybar()
-    print(f"pill-accents: wrote {OUTPUT_PATH} ({len(workspaces)} workspace(s))")
+    # Hook mode passes env vars; seed mode (exec-once) doesn't. Hook mode
+    # gets a fresh file (hyprmural just wrote it), seed mode may need to
+    # wait briefly for hyprmural to come up after Hyprland exec-once.
+    is_hook = bool(os.environ.get("HYPRMURAL_IMAGE"))
+    timeout = 0.0 if is_hook else 30.0
+
+    assignments = load_assignments(timeout)
+    css = render_css(assignments)
+    if write_if_changed(OUTPUT_PATH, css):
+        reload_waybar()
+        if not is_hook:
+            print(f"pill-accents: wrote {OUTPUT_PATH} ({len(assignments)} workspace(s))")
     return 0
 
 
