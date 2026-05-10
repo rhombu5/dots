@@ -12,7 +12,7 @@
   "tui": "fullscreen",
   "voice": {
     "enabled": true,
-    "mode": "tap"
+    "mode": "hold"
   },
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
