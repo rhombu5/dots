@@ -1,0 +1,9 @@
+# Per-host shortcuts.
+Host callisto
+    HostName callisto.rhombus.rocks
+    User thoma
+
+# Bitwarden SSH agent — populated by bitwarden-desktop's "Enable SSH agent"
+# (the Vaultwarden-backed self-hosted vault). Wildcard so every host uses it.
+Host *
+    IdentityAgent ~/.bitwarden-ssh-agent.sock

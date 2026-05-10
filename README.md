@@ -41,6 +41,7 @@ home/dot_config/systemd/user/ → user-level systemd units
 home/dot_claude/             → ~/.claude/      (Claude Code global config)
 home/dot_zshrc, dot_zprofile, dot_zshenv, dot_zsh_aliases, dot_zshrc.d/
 home/dot_p10k.zsh, dot_tmux.conf, dot_gitconfig
+home/private_dot_ssh/        → ~/.ssh/   (mode 0700; bw-agent + host shortcuts)
 home/symlink_{docs,dl,pics}  → short symlinks into ~/.local/share/user-dirs/
 ```
 
@@ -151,6 +152,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 - **`dot_p10k.zsh`** — Powerlevel10k rainbow / 2-line prompt
 - **`dot_tmux.conf`** — `Ctrl+a` prefix, mouse, 50 k history, focus-events on (Helix), RGB override for Ghostty, splits open in CWD, matugen colours
 - **`dot_gitconfig`** — pulls in `~/.gitconfig.local` for the per-host user identity / signing key
+- **`private_dot_ssh/private_config`** — `~/.ssh/config` (mode 0600 in mode 0700 dir); `Host *` wildcard wires `IdentityAgent ~/.bitwarden-ssh-agent.sock` + per-host shortcuts (`Host callisto` → `thoma@callisto.rhombus.rocks`)
 
 ### Claude Code (`~/.claude/`)
 
