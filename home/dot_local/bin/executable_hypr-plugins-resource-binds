@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# hypr-plugins-resource-binds — re-source per-plugin config inside a
+# live Hyprland session. Counterpart to hypr-plugins-on-login: that
+# script (run once per session via hypr-plugins-on-login.service) does
+# the heavy plugin enable/load/clamshell-sync work; this one fires on
+# every Hyprland reload (sourced from exec.conf as `exec = ...`) and
+# only re-registers post-plugin binds.
+#
+# Why split: hyprctl reload re-parses hyprland.conf and discards any
+# bindd lines previously injected via `hyprctl keyword source
+# post-plugins.d/*.conf` — so without re-firing on reload, the
+# Hyprspace overview bind (etc.) would vanish until the next session.
+#
+# Why NOT just keep the full hypr-plugins-on-login script in `exec`:
+# at boot Hyprland's `exec` line and graphical-session.target's
+# WantedBy units race; hyprmural.service / waybar.service can start
+# before Phase 4 (clamshell-sync) lands, leading to a wl_output yank
+# mid-startup that breaks hyprmural and exposes a waybar UAF
+# (observed 2026-05-09).
+
+set -u
+
+# Sanity gates: matches hypr-plugins-on-login's preconditions.
+[[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || exit 0
+command -v hyprpm >/dev/null || exit 0
+
+# KEY = plugin display name as `hyprpm list` reports (case-insensitive
+# grep match), VALUE = filename stem in ~/.config/hypr/post-plugins.d/.
+# Keep in sync with hypr-plugins-on-login's plugins array.
+plugins=(
+    "hyprgrass:hyprgrass"
+    "Hyprspace:hyprspace"
+)
+
+for entry in "${plugins[@]}"; do
+    name="${entry%%:*}"
+    conf="${entry##*:}"
+
+    # Only re-source if hyprpm has the plugin loaded — sourcing a
+    # post-plugins.d/<name>.conf that references unregistered
+    # dispatchers (e.g. overview:toggle from Hyprspace) just produces
+    # noisy errors with no effect.
+    if ! hyprpm list 2>/dev/null | grep -qi "$name"; then
+        continue
+    fi
+
+    if [[ -f "$HOME/.config/hypr/post-plugins.d/${conf}.conf" ]]; then
+        hyprctl keyword source "$HOME/.config/hypr/post-plugins.d/${conf}.conf" >/dev/null 2>&1 || true
+    fi
+done

@@ -1,0 +1,29 @@
+[Unit]
+Description=Hyprland plugin enable/load + clamshell sync (one-shot, per session)
+# Why this is a unit rather than `exec` from exec.conf:
+#   - hyprmural.service and waybar.service start as soon as
+#     graphical-session.target activates. The script's Phase 4 disables
+#     eDP-1 when the lid is closed; if it runs *concurrently* with
+#     hyprmural/waybar startup, those daemons bind to wl_output for
+#     eDP-1 just before it's yanked from the registry. Hyprmural in
+#     particular gets a fatal `wl_registry: error 0: global wl_output
+#     unavailable` and never paints (observed 2026-05-09).
+#   - Promoting this to a unit lets hyprmural and waybar `After=` it,
+#     so they only start after Phase 4 has finished and the wl_output
+#     surface is stable.
+#   - The script's Phase 3 (re-source post-plugins.d/*.conf) still
+#     needs to fire on every Hyprland reload to recover binds clobbered
+#     by the reload. That stays in exec.conf — but as a thin separate
+#     helper (`hypr-plugins-resource-binds`) so the heavy phases don't
+#     re-fire unnecessarily.
+ConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/bin/hypr-plugins-on-login
+
+[Install]
+WantedBy=graphical-session.target
