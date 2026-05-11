@@ -33,7 +33,8 @@ Bias toward action when the move is **reversible, in scope, and matches what the
 - **Memory entries that should be saved** based on what surfaced this session → save them. Don't invent — only what genuinely came up.
 - **Stale memory entries this session contradicted** → update or remove the affected ones.
 - **`chezmoi re-add` / `chezmoi apply` parity** when a live edit this session has an obvious chezmoi-source counterpart → reconcile.
-- **TaskList items this session left in non-`completed` state** for work that's actually finished → mark completed.
+- **TaskList items this session left in non-`completed` state** for work that's actually finished → mark `completed`. For tasks that turned out unnecessary or got superseded → `delete`. **Leave nothing in `pending` or `in_progress`** — the user sees those as not-crossed-out items in the task UI, which reads as unfinished work.
+- **Background shells you started that have already completed** → fold their output into the work (or dismiss it), then move on. Don't leave finished-but-unread shells dangling in the status bar. If a shell is still genuinely running and its result is needed: you're *not done* — keep working. If it's running but no longer needed: kill it.
 - **`arch-setup` mirror commits** for one-off system changes the session made → write and push them.
 
 If a category above doesn't apply to this session, **don't go looking for work in it.** No session has all of them; many sessions have none.

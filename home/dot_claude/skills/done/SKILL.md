@@ -39,7 +39,7 @@ Don't invent gates that don't exist. Don't run a full repo-wide suite when only 
 
 ## 4. Tasks / workitems
 
-- Run `TaskList`. Any task not in `completed` state?
+- Run `TaskList`. **Every task must be `completed` or `deleted` before reporting done.** Anything in `pending` or `in_progress` is visible to the user as a *not-crossed-out* item in the task UI — that's a direct visual signal of unfinished work, and the user should not see any of them when you wrap up. If a task got abandoned or turned out unnecessary, `delete` it; don't leave it as `pending` to rot.
 - Anything you mentally tracked but never put in the task list? Surface it.
 
 ## 5. Secrets check
@@ -98,7 +98,7 @@ Verify with:
 
 ## 12. Anything weird
 
-- Background processes still running you forgot about?
+- **No background shells still running.** Any process you started with `Bash(... run_in_background: true)` — and which is therefore still showing in the **status bar at the bottom of the user's window** — is a direct visual signal of unfinished work. The user should not see any active shell indicator when you wrap up. Either wait for it (if it's near completion), kill it (if its output is no longer needed), or — if it's load-bearing for the task — you're *not done*; keep working until it's finished or explicitly surface it as outstanding.
 - Sudo state, env vars, or shell mutations that'd surprise the user's next session?
 - Open editor windows / dialogs you spawned for testing?
 
