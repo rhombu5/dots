@@ -41,6 +41,7 @@ if ! zgenom saved; then
   zgenom load zsh-users/zsh-history-substring-search
   zgenom load zsh-users/zsh-completions
   zgenom load Aloxaf/fzf-tab
+  zgenom load fnrhombus/zsh-line-toggles
   zgenom load romkatv/powerlevel10k powerlevel10k
   zgenom save
   zgenom compile "$HOME/.zshrc"
