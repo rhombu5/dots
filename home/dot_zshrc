@@ -101,6 +101,14 @@ typeset -aU path
 eval "$(mise activate zsh)"
 eval "$(zoxide init zsh)"
 eval "$(direnv hook zsh)"
+# fzf: source command + previews. Uses fd (respects .gitignore) for the file/dir
+# crawl, eza for directory previews, bat for file previews.
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
+export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+export FZF_CTRL_T_OPTS="--preview '[ -d {} ] && eza --tree --level=2 --color=always --icons {} || bat --color=always --style=plain --line-range=:500 {}'"
+export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+export FZF_ALT_C_OPTS="--preview 'eza --tree --level=2 --color=always --icons {}'"
 eval "$(fzf --zsh)"   # upstream fzf: Ctrl-R history, Ctrl-T files, Alt-C cd, **<TAB>
 
 # --- Keybinds ---
