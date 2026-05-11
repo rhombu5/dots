@@ -99,11 +99,42 @@ A purely visual change behind my work (e.g. a background-layer wallpaper surface
 
 ## Keep dev tooling project-local
 
-Default to `mise.toml` for any dev tool a project needs — compilers, build runners, formatters, linters, language runtimes. Don't suggest `pacman -S <devtool>`, `apt install`, `pip install --user`, or `npm i -g` without explicitly flagging it as a system-level install I may reject.
+> # NO SYSTEM-WIDE DEVTOOL INSTALLS
+>
+> **Hard rule.** Compilers, language runtimes, build runners, formatters, linters, and language package managers do **not** go in `/usr/`, `/opt/`, or any system-managed location. **Mise is the path** — per-project (`mise use <tool>@<ver>`), or `mise use --global` if a tool is genuinely cross-project. `cargo install`, `pip install --user`, `npm i -g`, `pacman -S <devtool>`, `yay -S <devtool>`, `brew install <devtool>` — all banned for devtools by default.
 
-The distinction that matters: *dev tools* are the things that build, lint, format, or run your code — make those hermetic via mise. *Runtime system libs* — graphics stack, libc, anything kernel-bound or compositor-bound — must be system-provided and can't go hermetic without containers, which create more friction than they solve in the inner dev loop.
+### What counts as a "devtool"
 
-**Why:** I don't want past project experiments leaking into future ones, and I want clean uninstall paths. Mise gives per-project pinning that travels with the repo.
+Things that build, lint, format, type-check, test, package, or run **your code**: `rust`, `go`, `node`, `python`, `ruby`, `java`, `dotnet`, their toolchain bins (`cargo`, `rustup`, `npm`, `pnpm`, `pip`, `poetry`, `gradle`, `maven`, `bundler`), and dev-time CLIs like `prettier`, `eslint`, `ruff`, `shellcheck`, `pre-commit`, `terraform`, `kubectl`, `helm`.
+
+**Not** devtools: runtime system libs (graphics stack, libc, audio, kernel/compositor-bound bits), end-user CLI utilities (`fd`, `rg`, `bat`, `eza`, `jq`, `fzf`, `tldr`, etc.), and the system shell. Those are correctly system-installed.
+
+### The transitive trap (yay / AUR)
+
+AUR packages frequently declare `rust`, `go`, `npm`, `electron`, `gradle`, etc. as `makedepends`. **`yay -S <pkg>` will pacman-install those system-wide as a side effect and leave them after the build completes** — silently violating this rule.
+
+**Always pass `--rmdeps` to `yay -S`.** It tells makepkg to uninstall build deps once the package itself is installed, leaving only the actual runtime dependencies. Without it, the global rule is broken every time an AUR package needs a compiler.
+
+```sh
+yay -S --rmdeps <pkg>     # good — orphans cleaned up automatically
+yay -S <pkg>              # forbidden — leaves the compiler globally installed
+```
+
+Equivalent at the makepkg level: `makepkg -src` (`-r` removes build deps).
+
+### Escape hatch — "the alternative is unacceptable"
+
+There are real cases where system-wide is the only option:
+
+- The tool only ships as a system package (no upstream binary release, no language registry version).
+- The tool **is** a system component that happens to be devtool-shaped (`pkgconf`, `bash`, the system git you use for `cd`-time hooks).
+- The per-project install would itself break something load-bearing (e.g. nested mise managing the same binary mise is shimming).
+
+When you think the escape hatch applies, **say so out loud** before acting: *"X needs to go system-wide because Y — confirm?"* Wait for confirmation. Don't just `pacman -S` and explain in the summary.
+
+### Why I care
+
+Past project experiments leak forward. A system-wide `rust` installed five months ago as a build dep for Edge is still there, frozen at whatever version was current then, silently used by every project that doesn't pin its own. Mise gives per-project pinning that travels with the repo and has a clean uninstall path. System installs do neither.
 
 ## Project memory lives in `~/.claude/projects/`
 
