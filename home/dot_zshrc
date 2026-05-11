@@ -41,7 +41,6 @@ if ! zgenom saved; then
   zgenom load zsh-users/zsh-history-substring-search
   zgenom load zsh-users/zsh-completions
   zgenom load Aloxaf/fzf-tab
-  zgenom load unixorn/fzf-zsh-plugin
   zgenom load romkatv/powerlevel10k powerlevel10k
   zgenom save
   zgenom compile "$HOME/.zshrc"
@@ -59,6 +58,13 @@ setopt APPEND_HISTORY SHARE_HISTORY HIST_EXPIRE_DUPS_FIRST HIST_IGNORE_DUPS \
 setopt NO_BEEP INTERACTIVE_COMMENTS MULTIOS
 
 # --- Completion ---
+# XDG-clean paths; ensure they exist before compinit reads/writes the cache.
+_zsh_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+_zsh_completions_dir="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/completions"
+[[ -d "$_zsh_cache_dir" ]] || mkdir -p "$_zsh_cache_dir"
+[[ -d "$_zsh_completions_dir" ]] || mkdir -p "$_zsh_completions_dir"
+fpath=("$_zsh_completions_dir" $fpath)
+
 autoload -Uz compinit
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
   compinit
@@ -74,9 +80,18 @@ if command -v claude &>/dev/null; then
     eval "$(claude --print-completion zsh 2>/dev/null)" || true
 fi
 zstyle ':completion:*' use-cache on
-zstyle ':completion:*' cache-path ~/.zsh/cache
-zstyle ':completion:*' menu select
+zstyle ':completion:*' cache-path "$_zsh_cache_dir"
+# `menu no` cedes the menu to fzf-tab; without this, fzf-tab is loaded but inert.
+zstyle ':completion:*' menu no
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# --- fzf-tab previews (eza, since `ls` is aliased to eza) ---
+_eza_preview='eza -1 --color=always --icons --group-directories-first $realpath'
+zstyle ':fzf-tab:complete:cd:*'         fzf-preview "$_eza_preview"
+zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview "$_eza_preview"
+zstyle ':fzf-tab:complete:__zoxide_zi:*' fzf-preview "$_eza_preview"
+unset _eza_preview
 
 # --- PATH ---
 export PATH="$HOME/.local/bin:$PATH"
@@ -86,6 +101,12 @@ typeset -aU path
 eval "$(mise activate zsh)"
 eval "$(zoxide init zsh)"
 eval "$(direnv hook zsh)"
+eval "$(fzf --zsh)"   # upstream fzf: Ctrl-R history, Ctrl-T files, Alt-C cd, **<TAB>
+
+# --- Keybinds ---
+# zsh-history-substring-search is loaded above but does nothing without binds.
+bindkey '^P' history-substring-search-up
+bindkey '^N' history-substring-search-down
 
 # --- Aliases ---
 source ~/.zsh_aliases 2>/dev/null
