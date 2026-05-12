@@ -51,7 +51,7 @@ Conceptual / how-to / one-off requests with no specific repo in scope.
 Verb-shape is *what / how / where / when / why / show / explain* about a specific repo, but the user wants understanding, not modification.
 
 **Examples:**
-- "What does the `cclaude` function do in the dots repo?"
+- "What does the `fnclaude` CLI do?"
 - "Where is the postinstall script's TPM enrollment defined in arch-setup?"
 - "Show me how matugen renders the waybar palette."
 - "Is there a planter that handles SSH-signing setup?"
@@ -65,7 +65,7 @@ Verb-shape is *what / how / where / when / why / show / explain* about a specifi
 Verb-shape is *fix / add / update / change / refactor / run / test / build / commit / push / deploy / rename / delete* — the user wants the repo's state altered.
 
 **Examples:**
-- "Fix the path-parsing bug in `cclaude`."
+- "Fix the path-parsing bug in `fnclaude`."
 - "Add a new helper to `dot_local/bin`."
 - "Run the lint workflow in dots."
 - "Update the postinstall script to handle the Netac SSD."
@@ -74,7 +74,7 @@ Verb-shape is *fix / add / update / change / refactor / run / test / build / com
 **Action:** do not act. Write `<project-dir>/handoff.md` (template below) and tell the user to relaunch with:
 
 ```
-cclaude <project-dir> -i @handoff.md
+fnclaude <project-dir> --name <topic> @handoff.md
 ```
 
 </bucket>
@@ -144,41 +144,41 @@ The cost gradient: **before any tool call** (free) → **right after the call th
 3. **Give the user a copy-pasteable command with the placeholders substituted.** The shape:
 
    ```
-   cclaude <project-dir> --name <topic> @handoff.md
+   fnclaude <project-dir> --name <topic> @handoff.md
    ```
 
    <arg_order_rule>
-   `--name` MUST come before `@handoff.md`. `cclaude` treats every leading non-flag arg as a *path* until it sees its first `-`-prefixed arg; after that, remaining non-flag args (like `@handoff.md`) pass through to `claude` as the prompt. Putting `--name` first flips that switch, so `@handoff.md` is correctly handed to `claude` instead of being mis-parsed as a second `--add-dir` path. Don't reorder these, and don't add `-i` — the bare `@handoff.md` positional is what `claude` wants.
+   `--name` MUST come before `@handoff.md`. `fnclaude` treats every leading non-flag arg as a *path* until it sees its first `-`-prefixed arg; after that, remaining non-flag args (like `@handoff.md`) pass through to `claude` as the prompt. Putting `--name` first flips that switch, so `@handoff.md` is correctly handed to `claude` instead of being mis-parsed as a second `--add-dir` path. Don't reorder these. (Setting `--name` explicitly also suppresses fnclaude's auto-name LLM call, which is what we want when the noop session has already chosen a meaningful topic label.)
    </arg_order_rule>
 
    <path_rules>
    The two paths resolve in *different scopes* — getting this wrong breaks the user's paste:
 
-   - **`<project-dir>`** is resolved by **the shell at paste time**, with the user's shell cwd. After they `Ctrl+C Ctrl+C` out of this session their cwd is whatever it was *before* they ran `cclaude` — could be anywhere. (`cclaude`'s `cd` happens in a subshell, so it never propagates back to the parent shell.) Therefore **`<project-dir>` MUST be absolute or `~`-anchored**. Never `./foo`, `../foo`, or a bare repo name. The `~` form is portable across Linux/macOS/Windows shells; native absolute paths (`/home/...`, `/Users/...`, `C:\Users\...`) are also fine if you know the platform.
-   - **`@handoff.md`** is resolved by **`claude` after `cclaude`'s `cd`**, with cwd = `<project-dir>`. So it MUST stay literal as `@handoff.md` — leave that token alone, don't substitute, don't make it absolute.
+   - **`<project-dir>`** is resolved by **the shell at paste time**, with the user's shell cwd. After they `Ctrl+C Ctrl+C` out of this session their cwd is whatever it was *before* they ran `fnclaude` — could be anywhere. (`fnclaude`'s `cd` happens in a subshell, so it never propagates back to the parent shell.) Therefore **`<project-dir>` MUST be absolute or `~`-anchored**. Never `./foo`, `../foo`, or a bare repo name. The `~` form is portable across Linux/macOS/Windows shells; native absolute paths (`/home/...`, `/Users/...`, `C:\Users\...`) are also fine if you know the platform.
+   - **`@handoff.md`** is resolved by **`claude` after `fnclaude`'s `cd`**, with cwd = `<project-dir>`. So it MUST stay literal as `@handoff.md` — leave that token alone, don't substitute, don't make it absolute.
    </path_rules>
 
    <name_rules>
-   `--name` sets the session's display label (shown in the prompt box, `/resume` picker, and terminal title). Derive `<topic>` from the user's request — short (3–6 words), lowercase, **no spaces** (use hyphens), descriptive enough to recognize in a `/resume` list a week later. No quotes needed since there are no spaces. Examples: `fix-cclaude-path-parsing`, `netac-ssd-in-postinstall`, `ssh-signing-planter`.
+   `--name` sets the session's display label (shown in the prompt box, `/resume` picker, and terminal title). Derive `<topic>` from the user's request — short (3–6 words), lowercase, **no spaces** (use hyphens), descriptive enough to recognize in a `/resume` list a week later. No quotes needed since there are no spaces. Examples: `fix-fnclaude-path-parsing`, `netac-ssd-in-postinstall`, `ssh-signing-planter`.
    </name_rules>
 
    Example of a correctly rendered command:
 
    ```
-   cclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md
+   fnclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md
    ```
 
 4. **Copy the rendered command to the clipboard.** Use the Bash tool to pipe it into the platform's clipboard utility — on this machine that's `wl-copy` (Wayland):
 
    ```
-   printf '%s' 'cclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md' | wl-copy
+   printf '%s' 'fnclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md' | wl-copy
    ```
 
    No trailing newline — paste should populate the prompt without auto-executing, so the user gets to eyeball the command first. On macOS substitute `pbcopy`; on X11 substitute `xclip -selection clipboard`.
 
-5. **Don't ask for confirmation.** The user opted into this flow by running `cclaude` with no path. The interaction is just:
+5. **Don't ask for confirmation.** The user opted into this flow by running `fnclaude` with no path. The interaction is just:
 
-   > *"I've written `handoff.md` at `~/src/arch-setup@fnrhombus/`. The relaunch command is in your clipboard — paste and run: `cclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md`."*
+   > *"I've written `handoff.md` at `~/src/arch-setup@fnrhombus/`. The relaunch command is in your clipboard — paste and run: `fnclaude ~/src/arch-setup@fnrhombus --name netac-ssd-in-postinstall @handoff.md`."*
 
    — with the actual project path and topic filled in for the report, the command, and the `wl-copy` payload.
 
