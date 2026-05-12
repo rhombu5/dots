@@ -1,2 +1,4 @@
 [include]
     path = ~/.gitconfig.local
+[user]
+	email = 2511516+fnrhombus@users.noreply.github.com
