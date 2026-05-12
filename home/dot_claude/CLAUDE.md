@@ -89,14 +89,6 @@ Substance, structure, and tricky design decisions stay on **opus** — only the 
 
 Subagent prompts should include the substance, the style/format constraints, and (where useful) pointers to sibling docs or files to mirror tone from. Return ready-to-drop-in output.
 
-## Spawning agents — worktree isolation pitfall
-
-When spawning an Agent with `isolation: "worktree"`, **do not name the main repo's absolute path in the prompt**. Agents read their prompts literally; if you say "the repo at `/home/tom/src/foo@bar/`", the agent will `cd` there and write to the main worktree, silently bypassing the worktree it was given. Resolved with no warning, no error — just the wrong files modified.
-
-Phrase locations as "your worktree", "the current working tree", or "this directory" — let the agent rely on the initial cwd that `isolation: "worktree"` set for it. After the agent reports done, **verify with `git log` on the worktree branch** before merging; an empty branch means the agent wrote elsewhere and you'll need to salvage the work from the main worktree manually.
-
-The bypass is **non-deterministic** — some agents respect their worktree even when the prompt names the main path; others don't. Don't depend on either outcome; just keep paths out of the prompt.
-
 ## Disruptive testing requires explicit hands-off confirmation
 
 Any time you're about to do testing that **interrupts what I'm doing** — switching workspaces, rearranging windows, moving the mouse or keyboard focus, sending input events, taking over the foreground — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing.
