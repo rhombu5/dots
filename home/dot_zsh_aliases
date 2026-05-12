@@ -15,7 +15,10 @@ alias cat='bat --paging=never'
 
 # --- claude ---
 # fnclaude (Go reimplementation of the old cclaude function) lives at
-# ~/src/fnclaude@fnrhombus. Use `fnclaude` directly — no shim alias.
+# ~/src/fnclaude@fnrhombus. The system binary is /usr/bin/fnclaude (AUR
+# fnclaude-bin). `fnc` is the ergonomic shortcut — also recognised by the
+# shell-completion scripts shipped with fnclaude.
+alias fnc=fnclaude
 
 # --- mc: make directory and cd into it ---
 mc() { mkdir -p "$1" && cd "$1"; }
