@@ -129,7 +129,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 | `iio-hyprland.service` | IIO sensor → Hyprland transform daemon (auto-rotate) |
 | `display-watchdog.service` | Lid-aware blackout-recovery watchdog |
 | `wallpaper-rotate.service` | One-shot rotation + matugen regen (requires `WAYLAND_DISPLAY`) |
-| `wallpaper-rotate.timer` | Every 6 h, 1 h initial delay |
+| `wallpaper-rotate.timer` | Static (no `[Install]`); rotation is user-initiated only — Super+Shift+W, control-panel, or manual `wallpaper-rotate`. Re-arm by restoring `[Install] WantedBy=timers.target` |
 | `dropbox.service` | After `graphical-session`; no-op until cloud-storage-auth planter links account |
 | `rclone-gdrive-bisync.service` | Bidirectional `gdrive:` ↔ `~/GoogleDrive` (resilient + max-delete safeguard; filter excludes Google Photos videos via `~/.config/rclone/gdrive-filters.txt`) |
 | `rclone-gdrive-bisync.timer` | Every 5 min, 2 min boot delay, 30 s randomization |
