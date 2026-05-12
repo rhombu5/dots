@@ -14,11 +14,8 @@ alias tree='eza --tree --icons'
 alias cat='bat --paging=never'
 
 # --- claude ---
-# cclaude is now an alias for fnclaude (Go reimplementation at
-# ~/src/fnclaude@fnrhombus). Keeping the alias so muscle memory keeps
-# working during the transition; remove it once `fnclaude` / `fnc` feel
-# natural.
-alias cclaude=fnclaude
+# fnclaude (Go reimplementation of the old cclaude function) lives at
+# ~/src/fnclaude@fnrhombus. Use `fnclaude` directly — no shim alias.
 
 # --- mc: make directory and cd into it ---
 mc() { mkdir -p "$1" && cd "$1"; }
