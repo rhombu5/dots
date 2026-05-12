@@ -14,76 +14,11 @@ alias tree='eza --tree --icons'
 alias cat='bat --paging=never'
 
 # --- claude ---
-# cclaude: launch `claude` rooted in the first path, with extra paths
-# added via --add-dir + their .mcp.json / project .claude/settings.json
-# auto-loaded. Everything after the leading paths is passed through to
-# `claude` verbatim — minus cclaude's own flags below.
-cclaude() {
-    local -a paths passthrough injected
-    local arg
-    local skip_mcp=0 skip_settings=0
-    local init_prompt=""
-    local in_flags=0
-
-    while (( $# )); do
-        arg="$1"
-        # Leading positional paths run until the first flag-looking token.
-        if (( ! in_flags )) && [[ "$arg" != -* ]]; then
-            paths+=("$arg")
-            shift
-            continue
-        fi
-        in_flags=1
-        case "$arg" in
-            -m|--no-mcp)      skip_mcp=1; shift ;;
-            -s|--no-settings) skip_settings=1; shift ;;
-            -i|--init)
-                if (( $# < 2 )); then
-                    echo "cclaude: $arg requires a prompt string" >&2
-                    return 1
-                fi
-                init_prompt="$2"
-                shift 2
-                ;;
-            *)
-                passthrough+=("$arg")
-                shift
-                ;;
-        esac
-    done
-
-    # No path given → land in the noop dir for general questions / one-off
-    # instructions. Its CLAUDE.md tells claude to redirect project-specific
-    # work to a per-project handoff.md instead of acting from here.
-    if (( ${#paths[@]} == 0 )); then
-        paths=("$HOME/.claude/noop")
-    fi
-
-    # --setting-sources is incompatible with --settings; suppress auto-injection if the user set it explicitly.
-    for arg in "${passthrough[@]}"; do
-        [[ "$arg" == --setting-sources* ]] && { skip_settings=1; break }
-    done
-
-    local d
-    for d in "${paths[@]:1}"; do
-        injected+=(--add-dir "$d")
-        if (( ! skip_mcp )) && [[ -f "$d/.mcp.json" ]]; then
-            injected+=(--mcp-config "$d/.mcp.json")
-        fi
-        if (( ! skip_settings )) && [[ -f "$d/.claude/settings.json" ]]; then
-            injected+=(--settings "$d/.claude/settings.json")
-        fi
-    done
-
-    if [[ -n "$init_prompt" ]]; then
-        # `--` terminates option parsing so that claude's variadic flags (e.g.
-        # `--add-dir <directories...>`) can't slurp the trailing prompt as one
-        # of their values when nothing else separates them.
-        ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" -- "$init_prompt" )
-    else
-        ( cd -- "${paths[1]}" && claude --dangerously-skip-permissions "${injected[@]}" "${passthrough[@]}" )
-    fi
-}
+# cclaude is now an alias for fnclaude (Go reimplementation at
+# ~/src/fnclaude@fnrhombus). Keeping the alias so muscle memory keeps
+# working during the transition; remove it once `fnclaude` / `fnc` feel
+# natural.
+alias cclaude=fnclaude
 
 # --- mc: make directory and cd into it ---
 mc() { mkdir -p "$1" && cd "$1"; }
