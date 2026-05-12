@@ -6,6 +6,18 @@
   "worktree": {
     "baseRef": "fresh"
   },
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.local/bin/fnclaude-worktree-create-hook"
+          }
+        ]
+      }
+    ]
+  },
   "effortLevel": "xhigh",
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "latest",

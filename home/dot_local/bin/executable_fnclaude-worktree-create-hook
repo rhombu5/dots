@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+#
+# fnclaude-worktree-create-hook — WorktreeCreate hook for Claude Code
+#
+# Dispatches on FNCLAUDE_INVOCATION:
+#   set (any non-empty value) → Tom's ~/src/<repo>@<user>+<wtname> convention
+#   unset/empty              → Claude Code default: <repo_root>/.claude/worktrees/<name>
+#
+# Reads JSON from stdin. Relevant fields:
+#   worktree_name   name passed to --worktree (may also appear as .name in older API)
+#   base_path       path where the worktree will land (.git/worktrees inside the repo)
+#   base_commit     git SHA to base the new worktree on (may be empty → HEAD)
+#
+# Outputs the absolute path of the created worktree to stdout on success.
+# Logs to stderr. Exits non-zero on failure.
+
+set -euo pipefail
+
+err() { printf 'fnclaude-worktree-create-hook: %s\n' "$*" >&2; }
+die() { err "$*"; exit 1; }
+
+# --- Parse stdin JSON ----------------------------------------------------------
+stdin_json="$(cat)"
+
+# Accept both .worktree_name (hooks doc schema) and .name (worktrees doc example)
+wt_name="$(printf '%s' "$stdin_json" | jq -r '(.worktree_name // .name) // empty')"
+[[ -n "$wt_name" ]] || die "could not read worktree_name from stdin JSON"
+
+base_path="$(printf '%s' "$stdin_json" | jq -r '.base_path // empty')"
+[[ -n "$base_path" ]] || die "could not read base_path from stdin JSON"
+
+base_commit="$(printf '%s' "$stdin_json" | jq -r '.base_commit // empty')"
+
+# --- Resolve repo root from base_path -----------------------------------------
+# base_path is the path Claude would use for the worktree directory, e.g.:
+#   /home/tom/src/foo@bar/.claude/worktrees   (default mode)
+#   /home/tom/src/foo@bar/.git/worktrees      (per hooks doc)
+# Walk up until we find a git repo root (has .git or is a worktree itself).
+repo_root=""
+probe="$base_path"
+for _ in 1 2 3 4 5 6 7 8; do
+    if git -C "$probe" rev-parse --show-toplevel &>/dev/null; then
+        repo_root="$(git -C "$probe" rev-parse --show-toplevel)"
+        break
+    fi
+    probe="$(dirname "$probe")"
+    [[ "$probe" == "/" ]] && break
+done
+[[ -n "$repo_root" ]] || die "could not find git repo root from base_path=$base_path"
+
+# --- Determine target dir and branch ------------------------------------------
+if [[ -n "${FNCLAUDE_INVOCATION:-}" ]]; then
+    # Tom's convention: ~/src/<repo>@<user>+<wtname>
+    # repo_root basename may already be <repo>@<user>+<something> (a prior worktree).
+    # Strip any existing +<workspace> suffix to get the clean <repo>@<user> slug.
+    repo_basename="$(basename "$repo_root")"
+    repo_slug="${repo_basename%%+*}"   # drop +<workspace> if present
+
+    [[ -n "$repo_slug" ]] || die "could not derive repo slug from basename=$repo_basename"
+
+    target_dir="$HOME/src/${repo_slug}+${wt_name}"
+    target_branch="$wt_name"
+
+    err "fnclaude mode: creating $target_dir on branch $target_branch"
+else
+    # Default Claude Code behavior
+    target_dir="$repo_root/.claude/worktrees/$wt_name"
+    target_branch="worktree-$wt_name"
+
+    err "default mode: creating $target_dir on branch $target_branch"
+fi
+
+# --- Sanity check: target must not already exist ------------------------------
+if [[ -e "$target_dir" ]]; then
+    die "target directory already exists: $target_dir"
+fi
+
+# Ensure parent directory exists
+mkdir -p "$(dirname "$target_dir")"
+
+# --- Create the worktree ------------------------------------------------------
+# Build the git worktree add command.
+# If base_commit is non-empty, use it; otherwise git will use HEAD / fresh base.
+# Use -b to create a new branch; if the branch already exists, fall back without -b.
+worktree_add_args=("$target_dir")
+
+if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$target_branch" 2>/dev/null; then
+    # Branch already exists — check it out without -b
+    err "branch '$target_branch' already exists, checking out without -b"
+    worktree_add_args+=("$target_branch")
+else
+    worktree_add_args+=("-b" "$target_branch")
+    if [[ -n "$base_commit" ]]; then
+        worktree_add_args+=("$base_commit")
+    fi
+fi
+
+if ! git -C "$repo_root" worktree add "${worktree_add_args[@]}" 2>&1 | while IFS= read -r line; do err "$line"; done; then
+    die "git worktree add failed"
+fi
+
+# Verify the directory was created
+[[ -d "$target_dir" ]] || die "git worktree add succeeded but $target_dir does not exist"
+
+# Output the path for Claude Code
+printf '%s\n' "$target_dir"
