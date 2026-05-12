@@ -1,11 +1,12 @@
 [Unit]
-Description=Rotate wallpaper every 6 hours
+# Rotation is now strictly user-initiated (Super+Shift+W, control-panel
+# "Wallpaper: rotate now", or manual `wallpaper-rotate` invocation). The
+# timer unit is kept for easy re-arming, but the [Install] section is
+# intentionally absent so `systemctl --user enable` is a deliberate act.
+Description=Rotate wallpaper every 6 hours (disabled; user-initiated only)
 Requires=wallpaper-rotate.service
 
 [Timer]
 OnBootSec=1h
 OnUnitActiveSec=6h
 Persistent=false
-
-[Install]
-WantedBy=timers.target
