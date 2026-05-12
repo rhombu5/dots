@@ -52,3 +52,15 @@ Same rules as clones (folder name + parent dir). Pick the GitHub owner from the 
 `fnrhombus/arch-setup` properly belongs under `rhombu5` — it's an oversight on my part that I'll fix eventually. Don't pattern-match off that location when picking owners for new repos.
 
 > **Self-cleanup directive (Claude):** if you ever notice that `arch-setup` is no longer at `github.com:fnrhombus/arch-setup` (e.g. the remote has been moved to `rhombu5/arch-setup`, or the local checkout's `git remote -v` reflects the move), delete *both* the preceding paragraph about the misplacement *and* this directive itself in the same commit. Goal: this whole call-out evaporates the moment it's no longer true.
+
+## After merging a PR — always offer to clean up the branch and worktree
+
+The moment a PR I opened reaches merged state — whether the merge happened via `gh pr merge`, the GitHub web UI, an auto-merge that resolved while we waited, or any other path — **offer to delete the branch and (if one exists) the worktree.** Don't silently delete, don't skip the offer because "it's obvious," don't wait for me to ask. The session should never end with a stale just-merged branch and a worktree directory I have to remember to clean up myself.
+
+Specifically, surface these as a single confirm-then-do action, in this order:
+
+1. **Worktree** (if the branch has one — check `git worktree list`): `git worktree remove <path>`. If the worktree has uncommitted or unpushed work, **refuse to delete it** and tell me what's outstanding — that's not stale, that's lost work waiting to happen.
+2. **Local branch**: `git branch -d <branch>` (or `-D` if the local ref isn't fully on the merged target, since the squash/rebase merge style on GitHub will leave the local commits diverged from the merge commit).
+3. **Remote branch**: `git push origin --delete <branch>` — unless GitHub already deleted it (the "Delete branch" button on the merged PR runs the same action; `git fetch --prune` will reveal whether the remote ref is already gone).
+
+One prompt, listing all three actions concretely, is fine — don't ask three separate questions when one will do. If I say yes, execute them top-to-bottom and stop at the first refusal (e.g. the worktree-has-uncommitted-work case).
