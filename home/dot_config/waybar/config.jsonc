@@ -40,7 +40,7 @@
         },
         "workspace-taskbar": {
             "enable": true,
-            "format": "{icon} {title:.20}",
+            "format": "{icon}{title:.12}",
             "icon-size": 20,
             "on-click-window": "hyprctl dispatch focuswindow address:{address}"
         },
@@ -52,7 +52,7 @@
 
     "hyprland/window": {
         "format": "{title}",
-        "max-length": 60,
+        "max-length": 30,
         "separate-outputs": true
     },
 
