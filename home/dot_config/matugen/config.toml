@@ -17,15 +17,25 @@ custom_colors = {}
 # accent push is owned by hyprmural's accent.py hook, which writes per-output
 # colors to $XDG_RUNTIME_DIR/hyprmural/accent-<mon>.rgb and pushes them live
 # via `hyprctl setprop ... bordercolor` per-window.
+# Reload coalescing: a single matugen run touches both `shared-accent-css`
+# and `shared-accent-conf`. The conf hook's `hyprctl reload` triggers
+# exec.conf's `exec = pkill -SIGUSR2 waybar` line, which is the one
+# waybar reload per rotation we want — so neither hook here sends
+# SIGUSR2 directly. The css hook still reloads swaync (no piggyback).
 [templates.shared-accent-css]
 input_path = "~/.config/matugen/templates/shared-accent.css"
 output_path = "~/.config/themes/accent.css"
-post_hook = "pkill -SIGUSR2 waybar 2>/dev/null; swaync-client --reload-css 2>/dev/null; true"
+post_hook = "swaync-client --reload-css 2>/dev/null || true"
 
+# hypr-plugins-on-login is owned by hypr-plugins-on-login.service (one-shot
+# at session start); on every hyprctl reload, hypr-plugins-resource-binds
+# (exec.conf §5) re-sources post-plugin binds. Don't re-call the on-login
+# script here — the `hyprpm reload` inside it fires a second waybar
+# reload, breaking the one-blink invariant.
 [templates.shared-accent-conf]
 input_path = "~/.config/matugen/templates/shared-accent.conf"
 output_path = "~/.config/themes/accent.conf"
-post_hook = "hyprctl reload 2>/dev/null && [ -x ~/.local/bin/hypr-plugins-on-login ] && ~/.local/bin/hypr-plugins-on-login || true"
+post_hook = "hyprctl reload 2>/dev/null || true"
 
 [templates.shared-accent-ini]
 input_path = "~/.config/matugen/templates/shared-accent.ini"

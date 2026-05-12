@@ -124,5 +124,8 @@ else
     matugen --mode "$mode" --source-color-index 0 image "$wallpaper" </dev/null >/dev/null
 fi
 
-# ---- Update bar (theme-toggle icon may not change but custom modules might) ----
-pkill -SIGRTMIN+8 waybar 2>/dev/null || true
+# Bar refresh is covered by the single waybar SIGUSR2 fired from
+# exec.conf's `exec = pkill -SIGUSR2 waybar` line on `hyprctl reload`
+# (which matugen's shared-accent-conf post_hook invokes). That full
+# reload re-runs the custom/theme-toggle module too, so no extra
+# SIGRTMIN+8 is needed.

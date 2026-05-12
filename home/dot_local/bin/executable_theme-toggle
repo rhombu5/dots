@@ -66,7 +66,9 @@ case "$new" in
     light) gsettings set org.gnome.desktop.interface color-scheme prefer-light ;;
 esac
 
-# ---- Signal waybar to re-run custom modules (theme-toggle icon update) ----
-pkill -SIGRTMIN+8 waybar 2>/dev/null || true
+# Bar refresh (theme-toggle icon update) is covered by the single waybar
+# SIGUSR2 fired from exec.conf's `exec = pkill -SIGUSR2 waybar` line on
+# `hyprctl reload` (which matugen's shared-accent-conf post_hook invokes).
+# That full reload re-runs the custom/theme-toggle module.
 
 notify-send -t 2000 "Theme: $new" "$(basename "$wallpaper")" 2>/dev/null || true
