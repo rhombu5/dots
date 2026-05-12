@@ -61,6 +61,6 @@ Specifically, surface these as a single confirm-then-do action, in this order:
 
 1. **Worktree** (if the branch has one — check `git worktree list`): `git worktree remove <path>`. If the worktree has uncommitted or unpushed work, **refuse to delete it** and tell me what's outstanding — that's not stale, that's lost work waiting to happen.
 2. **Local branch**: `git branch -d <branch>` (or `-D` if the local ref isn't fully on the merged target, since the squash/rebase merge style on GitHub will leave the local commits diverged from the merge commit).
-3. **Remote branch**: `git push origin --delete <branch>` — unless GitHub already deleted it (the "Delete branch" button on the merged PR runs the same action; `git fetch --prune` will reveal whether the remote ref is already gone).
+3. **Remote branch**: **always verify with `git ls-remote origin <branch>` after the merge**, regardless of what `gh pr merge --delete-branch` or the web UI's auto-delete claim happened. `gh pr merge --rebase --delete-branch` has been observed silently *not* deleting the remote — the merge succeeds but the branch lingers on GitHub at the pre-rebase SHA. If `ls-remote` still shows the ref, run `git push origin --delete <branch>` and re-verify.
 
 One prompt, listing all three actions concretely, is fine — don't ask three separate questions when one will do. If I say yes, execute them top-to-bottom and stop at the first refusal (e.g. the worktree-has-uncommitted-work case).
