@@ -35,11 +35,12 @@ window#waybar.empty {
     background-color: transparent;
     margin: 4px 6px;
     padding: 0 4px;
+    font-size: 66.6666666666666666666666667%;
 }
 
 #workspaces button {
     color: @primary;
-    padding: 2px 10px;
+    padding: 0 6px;
     background-color: transparent;
     border: 1px solid @outline;
     border-radius: 8px;
