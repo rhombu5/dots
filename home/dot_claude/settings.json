@@ -6,6 +6,22 @@
   "worktree": {
     "baseRef": "fresh"
   },
+  "worktreePaths": {
+    "pathTemplate": "~/src/{repo}@{owner}+{input}",
+    "branchTemplate": "{input}"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/tom/.claude/statusline-command.sh"
+  },
+  "extraKnownMarketplaces": {
+    "fnrhombus-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "fnrhombus/claude-plugins"
+      }
+    }
+  },
   "effortLevel": "xhigh",
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "latest",
@@ -21,8 +37,7 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
-  "statusLine": {
-    "type": "command",
-    "command": "bash /home/tom/.claude/statusline-command.sh"
+  "enabledPlugins": {
+    "claude-code-worktree-paths@fnrhombus-plugins": true
   }
 }
