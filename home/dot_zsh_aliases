@@ -19,6 +19,10 @@ alias cat='bat --paging=never'
 # fnclaude-bin). `fnc` is the ergonomic shortcut — also recognised by the
 # shell-completion scripts shipped with fnclaude.
 alias fnc=fnclaude
+# ffnc runs the *dev* build of fnclaude (from the local working tree) so
+# changes can be exercised without affecting the AUR-installed binary.
+# Build with `mise run build` in ~/src/fnclaude@fnrhombus before invoking.
+alias ffnc="$HOME/src/fnclaude@fnrhombus/bin/fnclaude"
 
 # --- mc: make directory and cd into it ---
 mc() { mkdir -p "$1" && cd "$1"; }
