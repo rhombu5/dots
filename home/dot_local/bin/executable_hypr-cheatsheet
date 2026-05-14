@@ -154,10 +154,21 @@ format_bind() {
     fi
     shopt -u nocasematch
 
-    # Two-column layout: "[Cat] Description" then "MODS+KEY". The
-    # leading category prefix means `sort` puts everything in the same
-    # group together, and within a group sorts by description.
-    printf '[%-20s] %-40s   %s\n' "$category" "$rhs" "$combo"
+    # Normalize vim variants so they collapse into the arrow variant's
+    # row. Two description shapes carry the marker:
+    #   "X (vim)"   → "X"        (e.g. resize submap, focus/move down/up)
+    #   "X vim (Y)" → "X (Y)"    (focus/move left/right carry an edge
+    #                             parenthetical between key and "vim")
+    # `order` controls within-group combo ordering so the arrow version
+    # appears first in the merged "left / h" string.
+    local order=1
+    if   [[ "$rhs" == *" vim ("* ]]; then rhs="${rhs// vim (/ (}"; order=2
+    elif [[ "$rhs" == *" (vim)" ]];  then rhs="${rhs% (vim)}";      order=2
+    fi
+
+    # Emit TSV; the aggregator downstream merges rows that share
+    # (category, description) and joins their combos with " / ".
+    printf '%s\t%s\t%d\t%s\n' "$category" "$rhs" "$order" "$combo"
 }
 
 # First entry is a pinned reminder of where the binds live, so anyone
@@ -172,11 +183,13 @@ format_bind() {
     hyprctl binds -j 2>/dev/null \
       | jq -r '.[] | [.modmask, .key, (.description // ""), .dispatcher, (.arg // "")] | @tsv' \
       | while IFS=$'\t' read -r modmask key description dispatcher arg; do
-            # Hide hjkl vim-movement duplicates — the arrow-key versions
-            # already cover Focus/Move/Resize and the vim variants just
-            # double the row count.
-            case "$key" in h|j|k|l) continue ;; esac
             format_bind "$modmask" "$key" "$description" "$dispatcher" "$arg"
         done \
-      | sort
+      | sort -t$'\t' -k1,1 -k2,2 -k3,3n \
+      | awk -F'\t' '
+          function flush() { if (cat != "") printf "[%-20s] %-40s   %s\n", cat, desc, combos }
+          { if ($1 != cat || $2 != desc) { flush(); cat=$1; desc=$2; combos=$4 }
+            else                         { combos = combos " / " $4 } }
+          END { flush() }
+        '
 } | fuzzel --dmenu --width 100 --lines 20 --prompt "Hyprland binds: " >/dev/null
