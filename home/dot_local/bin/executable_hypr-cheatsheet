@@ -187,19 +187,78 @@ format_bind() {
         done \
       | sort -t$'\t' -k1,1 -k2,2 -k3,3n \
       | awk -F'\t' '
-          # left/right/up/down → ← → ↑ ↓ in both description and combo,
-          # word-bounded so "BrightnessDown" stays intact but the bare
-          # word "Down" turns into a glyph.
-          function arrowize(s) {
-              gsub(/\<left\>/,  "←", s); gsub(/\<Left\>/,  "←", s)
-              gsub(/\<right\>/, "→", s); gsub(/\<Right\>/, "→", s)
-              gsub(/\<up\>/,    "↑", s); gsub(/\<Up\>/,    "↑", s)
-              gsub(/\<down\>/,  "↓", s); gsub(/\<Down\>/,  "↓", s)
+          # Description column: only cardinal arrows. Descriptions are
+          # natural prose ("next workspace", "close current tab", "back
+          # to home"); the wider key-name LUT would mis-rewrite them.
+          function dir_glyph(s) {
+              gsub(/\<[Ll]eft\>/,  "←", s)
+              gsub(/\<[Rr]ight\>/, "→", s)
+              gsub(/\<[Uu]p\>/,    "↑", s)
+              gsub(/\<[Dd]own\>/,  "↓", s)
+              return s
+          }
+          # Combo column: comprehensive xkb keysym → glyph LUT. Safe to
+          # apply broadly because every token between "+" separators is
+          # a modifier label or an xkb keysym, never English prose.
+          # Punctuation names are lowercase-only because xkb emits them
+          # that way; English-word names get [Aa]-style case classes so
+          # whatever capitalisation the user wrote in binds.conf works.
+          function key_glyph(s) {
+              s = dir_glyph(s)
+              # whitespace / editing
+              gsub(/\<[Ss]pace\>/,        "␣", s)
+              gsub(/\<[Rr]eturn\>/,       "↵", s)
+              gsub(/\<[Tt]ab\>/,          "⇥", s)
+              gsub(/\<[Bb]ack[Ss]pace\>/, "⌫", s)
+              gsub(/\<[Ee]scape\>/,       "⎋", s)
+              gsub(/\<[Dd]elete\>/,       "⌦", s)
+              # navigation block
+              gsub(/\<[Pp]age_[Uu]p\>/,   "⇞", s); gsub(/\<[Pp]rior\>/, "⇞", s); gsub(/\<pageup\>/, "⇞", s)
+              gsub(/\<[Pp]age_[Dd]own\>/, "⇟", s); gsub(/\<[Nn]ext\>/, "⇟", s);  gsub(/\<pagedown\>/, "⇟", s)
+              gsub(/\<[Hh]ome\>/, "↖", s)
+              gsub(/\<[Ee]nd\>/,  "↘", s)
+              # locks / system
+              gsub(/\<[Cc]aps_?[Ll]ock\>/, "⇪", s)
+              gsub(/\<[Mm]enu\>/,          "≡", s)
+              gsub(/\<[Pp]rint\>/,         "⎙", s)
+              # punctuation (xkb names are lowercase)
+              gsub(/\<slash\>/,        "/",    s)
+              gsub(/\<backslash\>/,    "\\\\", s)
+              gsub(/\<bracketleft\>/,  "[",    s)
+              gsub(/\<bracketright\>/, "]",    s)
+              gsub(/\<braceleft\>/,    "{",    s)
+              gsub(/\<braceright\>/,   "}",    s)
+              gsub(/\<parenleft\>/,    "(",    s)
+              gsub(/\<parenright\>/,   ")",    s)
+              gsub(/\<comma\>/,        ",",    s)
+              gsub(/\<period\>/,       ".",    s)
+              gsub(/\<semicolon\>/,    ";",    s)
+              gsub(/\<colon\>/,        ":",    s)
+              gsub(/\<apostrophe\>/,   "'\''", s)
+              gsub(/\<quotedbl\>/,     "\"",   s)
+              gsub(/\<grave\>/,        "`",    s)
+              gsub(/\<asciitilde\>/,   "~",    s)
+              gsub(/\<exclam\>/,       "!",    s)
+              gsub(/\<at\>/,           "@",    s)
+              gsub(/\<numbersign\>/,   "#",    s)
+              gsub(/\<dollar\>/,       "$",    s)
+              gsub(/\<percent\>/,      "%",    s)
+              gsub(/\<asciicircum\>/,  "^",    s)
+              gsub(/\<ampersand\>/,    "\\&",  s)
+              gsub(/\<asterisk\>/,     "*",    s)
+              gsub(/\<underscore\>/,   "_",    s)
+              gsub(/\<minus\>/,        "-",    s)
+              gsub(/\<plus\>/,         "+",    s)
+              gsub(/\<equal\>/,        "=",    s)
+              gsub(/\<less\>/,         "<",    s)
+              gsub(/\<greater\>/,      ">",    s)
+              gsub(/\<question\>/,     "?",    s)
+              gsub(/\<bar\>/,          "|",    s)
               return s
           }
           # When joining the vim variant onto the arrow combo, strip the
-          # shared "MODS+" prefix so we render "Super+Ctrl+←/h" instead
-          # of "Super+Ctrl+←/Super+Ctrl+h".
+          # shared "MODS+" prefix so we render "Ctrl+Super+←/h" instead
+          # of "Ctrl+Super+←/Ctrl+Super+h".
           function strip_mod_prefix(target, source,   n) {
               n = length(source)
               while (n > 0 && substr(source, n, 1) != "+") n--
@@ -209,7 +268,7 @@ format_bind() {
           }
           function flush() { if (cat != "") printf "[%-20s] %-40s   %s\n", cat, desc, combos }
           {
-              d = arrowize($2); c = arrowize($4)
+              d = dir_glyph($2); c = key_glyph($4)
               if ($1 != cat || d != desc) { flush(); cat=$1; desc=d; combos=c; first=c }
               else                        { combos = combos "/" strip_mod_prefix(c, first) }
           }
