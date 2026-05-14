@@ -205,6 +205,9 @@ format_bind() {
           # whatever capitalisation the user wrote in binds.conf works.
           function key_glyph(s) {
               s = dir_glyph(s)
+              # modifier glyph (Nerd Font PUA, U+F0636) — combos only,
+              # never descriptions, so prose like "Shift-click" is safe.
+              gsub(/\<Shift\>/, "󰘶", s)
               # whitespace / editing
               gsub(/\<[Ss]pace\>/,        "␣", s)
               gsub(/\<[Rr]eturn\>/,       "↵", s)
