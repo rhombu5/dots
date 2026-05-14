@@ -38,6 +38,17 @@ Use `git@<host>:<user>/<repo>.git` URLs, never `https://`. The SSH agent is Bitw
 
 Same rules as clones (folder name + parent dir). Pick the GitHub owner from the table below *up front* so the folder name reflects ownership from day one.
 
+## Template repos
+
+When starting a new repo that fits a published pattern, clone from a template instead of scaffolding from scratch:
+
+- **`fnrhombus/aur-template`** — binary CLIs that publish to GitHub releases + the Arch User Repository. Language-agnostic publish chain (release-please + auto-merge + AUR push); fill in `build.yml` + `test.yml` for the language.
+- **`fnrhombus/npm-template`** — npm packages. npm publishing CI + funding config wired up.
+
+Trigger: when I propose work that creates a new GitHub repo, check whether one of these fits and use `gh repo create <new-name> --template <owner>/<template> --public` rather than `git init`. If neither fits cleanly, scaffold from scratch — don't bend one into the other.
+
+After cloning a template, walk any `BURN-AFTER-READING.md` (or similarly-named) one-time setup doc and delete the file once done.
+
 ## My GitHub user/orgs
 
 | Owner | Use for | Notes |
