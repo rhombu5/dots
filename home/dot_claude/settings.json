@@ -6,13 +6,12 @@
   "worktree": {
     "baseRef": "fresh"
   },
-  "worktreePaths": {
-    "pathTemplate": "~/src/{repo}@{owner}+{input}",
-    "branchTemplate": "{input}"
-  },
   "statusLine": {
     "type": "command",
     "command": "bash /home/tom/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "claude-code-worktree-paths@fnrhombus-plugins": true
   },
   "extraKnownMarketplaces": {
     "fnrhombus-plugins": {
@@ -32,12 +31,13 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
-  "verbose": true,
+  "verbose": false,
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
-  "enabledPlugins": {
-    "claude-code-worktree-paths@fnrhombus-plugins": true
+  "worktreePaths": {
+    "pathTemplate": "~/src/{repo}@{owner}+{input}",
+    "branchTemplate": "{input}"
   }
 }
