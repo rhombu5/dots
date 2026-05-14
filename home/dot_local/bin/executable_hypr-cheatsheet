@@ -187,9 +187,32 @@ format_bind() {
         done \
       | sort -t$'\t' -k1,1 -k2,2 -k3,3n \
       | awk -F'\t' '
+          # left/right/up/down → ← → ↑ ↓ in both description and combo,
+          # word-bounded so "BrightnessDown" stays intact but the bare
+          # word "Down" turns into a glyph.
+          function arrowize(s) {
+              gsub(/\<left\>/,  "←", s); gsub(/\<Left\>/,  "←", s)
+              gsub(/\<right\>/, "→", s); gsub(/\<Right\>/, "→", s)
+              gsub(/\<up\>/,    "↑", s); gsub(/\<Up\>/,    "↑", s)
+              gsub(/\<down\>/,  "↓", s); gsub(/\<Down\>/,  "↓", s)
+              return s
+          }
+          # When joining the vim variant onto the arrow combo, strip the
+          # shared "MODS+" prefix so we render "Super+Ctrl+←/h" instead
+          # of "Super+Ctrl+←/Super+Ctrl+h".
+          function strip_mod_prefix(target, source,   n) {
+              n = length(source)
+              while (n > 0 && substr(source, n, 1) != "+") n--
+              if (n == 0) return target
+              if (substr(target, 1, n) == substr(source, 1, n)) return substr(target, n + 1)
+              return target
+          }
           function flush() { if (cat != "") printf "[%-20s] %-40s   %s\n", cat, desc, combos }
-          { if ($1 != cat || $2 != desc) { flush(); cat=$1; desc=$2; combos=$4 }
-            else                         { combos = combos " / " $4 } }
+          {
+              d = arrowize($2); c = arrowize($4)
+              if ($1 != cat || d != desc) { flush(); cat=$1; desc=d; combos=c; first=c }
+              else                        { combos = combos "/" strip_mod_prefix(c, first) }
+          }
           END { flush() }
         '
 } | fuzzel --dmenu --width 100 --lines 20 --prompt "Hyprland binds: " >/dev/null
