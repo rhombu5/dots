@@ -289,4 +289,4 @@ format_bind() {
           }
           END { flush() }
         '
-} | fuzzel --dmenu --use-bold --width 100 --lines 20 --prompt "Hyprland binds: " >/dev/null
+} | fuzzel --dmenu --use-bold --text-color=909090ff --width 100 --lines 20 --prompt "Hyprland binds: " >/dev/null
