@@ -42,8 +42,8 @@ mods_to_label() {
         13)  echo "Ctrl+Alt+Shift" ;;
         64)  echo "Super" ;;
         65)  echo "Super+Shift" ;;
-        68)  echo "Super+Ctrl" ;;
-        69)  echo "Super+Ctrl+Shift" ;;
+        68)  echo "Ctrl+Super" ;;
+        69)  echo "Ctrl+Super+Shift" ;;
         72)  echo "Super+Alt" ;;
         73)  echo "Super+Alt+Shift" ;;
         *)   echo "mod${1}" ;;
