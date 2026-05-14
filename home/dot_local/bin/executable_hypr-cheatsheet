@@ -31,26 +31,30 @@ fi
 LAYOUT=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.tiledLayout // ""')
 
 mods_to_label() {
-    # Modifier cluster: Nerd Font glyphs separated by single spaces, no
-    # `+` anywhere. format_bind appends a final space before the key, so
-    # combos read "󰘴 󰘳 W" instead of "Ctrl+Super+W". Order is
-    # Ctrl → Super → Alt → Shift; codepoints F0633 super / F0634 ctrl /
-    # F0635 alt / F0636 shift (Material Design Icons via Nerd Font).
+    # Fixed-width modifier cluster: 4 slots (Ctrl / Super / Alt / Shift)
+    # separated by single spaces, 7 visual cells total. Inactive slots
+    # render as a literal space so the cluster aligns column-by-column
+    # across rows ("󰘴 󰘳    " sits directly above "  󰘳   󰘶"). When the
+    # bind has no modifiers we still emit 7 spaces so the key column
+    # also aligns. Codepoints: F0634 ctrl / F0633 super / F0635 alt /
+    # F0636 shift (Material Design Icons via Nerd Font).
     case "$1" in
-        0)   echo "" ;;
-        1)   echo "󰘶" ;;
-        4)   echo "󰘴" ;;
-        5)   echo "󰘴 󰘶" ;;
-        8)   echo "󰘵" ;;
-        9)   echo "󰘵 󰘶" ;;
-        12)  echo "󰘴 󰘵" ;;
-        13)  echo "󰘴 󰘵 󰘶" ;;
-        64)  echo "󰘳" ;;
-        65)  echo "󰘳 󰘶" ;;
-        68)  echo "󰘴 󰘳" ;;
-        69)  echo "󰘴 󰘳 󰘶" ;;
-        72)  echo "󰘳 󰘵" ;;
-        73)  echo "󰘳 󰘵 󰘶" ;;
+        0)   echo "       " ;;
+        1)   echo "      󰘶" ;;
+        4)   echo "󰘴      " ;;
+        5)   echo "󰘴     󰘶" ;;
+        8)   echo "    󰘵  " ;;
+        9)   echo "    󰘵 󰘶" ;;
+        12)  echo "󰘴   󰘵  " ;;
+        13)  echo "󰘴   󰘵 󰘶" ;;
+        64)  echo "  󰘳    " ;;
+        65)  echo "  󰘳   󰘶" ;;
+        68)  echo "󰘴 󰘳    " ;;
+        69)  echo "󰘴 󰘳   󰘶" ;;
+        72)  echo "  󰘳 󰘵  " ;;
+        73)  echo "  󰘳 󰘵 󰘶" ;;
+        76)  echo "󰘴 󰘳 󰘵  " ;;
+        77)  echo "󰘴 󰘳 󰘵 󰘶" ;;
         *)   echo "mod${1}" ;;
     esac
 }
@@ -127,8 +131,10 @@ format_bind() {
     local modmask="$1" key="$2" description="$3" dispatcher="$4" arg="$5"
     local label combo category rhs
     label=$(mods_to_label "$modmask")
-    if [[ -z "$label" ]]; then combo="$key"
-    else combo="${label} ${key}"; fi
+    # label is always 7 visual cells (or "modN" for unrecognised masks),
+    # so no-modifier binds still get a leading space-cluster — keeps the
+    # key column aligned with multi-modifier rows.
+    combo="${label} ${key}"
 
     if [[ -n "$description" && "$description" != "null" ]]; then
         rhs="$description"
