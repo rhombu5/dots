@@ -31,21 +31,26 @@ fi
 LAYOUT=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.tiledLayout // ""')
 
 mods_to_label() {
+    # Modifier cluster: Nerd Font glyphs concatenated with no separator,
+    # so combos read "󰘴󰘳+W" instead of "Ctrl+Super+W". The `+` between
+    # the cluster and the key is reintroduced by format_bind. Order is
+    # Ctrl → Super → Alt → Shift; codepoints F0633 super / F0634 ctrl /
+    # F0635 alt / F0636 shift (Material Design Icons via Nerd Font).
     case "$1" in
         0)   echo "" ;;
-        1)   echo "Shift" ;;
-        4)   echo "Ctrl" ;;
-        5)   echo "Ctrl+Shift" ;;
-        8)   echo "Alt" ;;
-        9)   echo "Alt+Shift" ;;
-        12)  echo "Ctrl+Alt" ;;
-        13)  echo "Ctrl+Alt+Shift" ;;
-        64)  echo "Super" ;;
-        65)  echo "Super+Shift" ;;
-        68)  echo "Ctrl+Super" ;;
-        69)  echo "Ctrl+Super+Shift" ;;
-        72)  echo "Super+Alt" ;;
-        73)  echo "Super+Alt+Shift" ;;
+        1)   echo "󰘶" ;;
+        4)   echo "󰘴" ;;
+        5)   echo "󰘴󰘶" ;;
+        8)   echo "󰘵" ;;
+        9)   echo "󰘵󰘶" ;;
+        12)  echo "󰘴󰘵" ;;
+        13)  echo "󰘴󰘵󰘶" ;;
+        64)  echo "󰘳" ;;
+        65)  echo "󰘳󰘶" ;;
+        68)  echo "󰘴󰘳" ;;
+        69)  echo "󰘴󰘳󰘶" ;;
+        72)  echo "󰘳󰘵" ;;
+        73)  echo "󰘳󰘵󰘶" ;;
         *)   echo "mod${1}" ;;
     esac
 }
@@ -205,23 +210,29 @@ format_bind() {
           # whatever capitalisation the user wrote in binds.conf works.
           function key_glyph(s) {
               s = dir_glyph(s)
-              # modifier glyph (Nerd Font PUA, U+F0636) — combos only,
-              # never descriptions, so prose like "Shift-click" is safe.
-              gsub(/\<Shift\>/, "󰘶", s)
+              # named keys (Nerd Font / Material Design Icons). Modifiers
+              # are NOT substituted here — mods_to_label emits their
+              # glyphs directly, so "Shift_L" / "Control_L" as key names
+              # (rare, but possible) still display as text.
               # whitespace / editing
-              gsub(/\<[Ss]pace\>/,        "␣", s)
-              gsub(/\<[Rr]eturn\>/,       "↵", s)
-              gsub(/\<[Tt]ab\>/,          "⇥", s)
-              gsub(/\<[Bb]ack[Ss]pace\>/, "⌫", s)
-              gsub(/\<[Ee]scape\>/,       "⎋", s)
+              gsub(/\<[Ss]pace\>/,        "󱁐", s)
+              gsub(/\<[Rr]eturn\>/,       "󰌑", s)
+              gsub(/\<[Tt]ab\>/,          "󰌒", s)
+              gsub(/\<[Bb]ack[Ss]pace\>/, "󰌍", s)
+              gsub(/\<[Ee]scape\>/,       "󱊷", s)
               gsub(/\<[Dd]elete\>/,       "⌦", s)
+              # function keys F1..F12 (codepoints F12AB..F12B6)
+              gsub(/\<F1\>/,  "󱊫", s); gsub(/\<F2\>/,  "󱊬", s); gsub(/\<F3\>/,  "󱊭", s)
+              gsub(/\<F4\>/,  "󱊮", s); gsub(/\<F5\>/,  "󱊯", s); gsub(/\<F6\>/,  "󱊰", s)
+              gsub(/\<F7\>/,  "󱊱", s); gsub(/\<F8\>/,  "󱊲", s); gsub(/\<F9\>/,  "󱊳", s)
+              gsub(/\<F10\>/, "󱊴", s); gsub(/\<F11\>/, "󱊵", s); gsub(/\<F12\>/, "󱊶", s)
               # navigation block
               gsub(/\<[Pp]age_[Uu]p\>/,   "⇞", s); gsub(/\<[Pp]rior\>/, "⇞", s); gsub(/\<pageup\>/, "⇞", s)
               gsub(/\<[Pp]age_[Dd]own\>/, "⇟", s); gsub(/\<[Nn]ext\>/, "⇟", s);  gsub(/\<pagedown\>/, "⇟", s)
               gsub(/\<[Hh]ome\>/, "↖", s)
               gsub(/\<[Ee]nd\>/,  "↘", s)
               # locks / system
-              gsub(/\<[Cc]aps_?[Ll]ock\>/, "⇪", s)
+              gsub(/\<[Cc]aps_?[Ll]ock\>/, "󰌎", s)
               gsub(/\<[Mm]enu\>/,          "≡", s)
               gsub(/\<[Pp]rint\>/,         "⎙", s)
               # punctuation (xkb names are lowercase)
