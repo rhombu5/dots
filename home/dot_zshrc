@@ -21,6 +21,19 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
+# --- Early compdef shim for omz plugins sourced by zgenom ---
+# zgenom's saved init.zsh sources plugins BEFORE running compinit at its tail.
+# omz plugins docker/npm/pip/dotnet call `compdef` at source time and expect
+# $ZSH_CACHE_DIR/completions/_docker to be writable; the docker plugin's
+# backgrounded probe also calls `is-at-least` to gate `docker completion zsh`.
+# Without this block, every interactive shell start emits 5× "compdef: command
+# not found", "tee: /completions/_docker: No such file or directory", and
+# "is-at-least: command not found".
+export ZSH_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/oh-my-zsh"
+[[ -d $ZSH_CACHE_DIR/completions ]] || mkdir -p $ZSH_CACHE_DIR/completions
+autoload -Uz compinit && compinit -C
+autoload -Uz is-at-least
+
 # --- Zgenom plugin manager ---
 ZGEN_DIR="${HOME}/.zgenom"
 source "${ZGEN_DIR}/zgenom.zsh"
