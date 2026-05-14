@@ -31,26 +31,26 @@ fi
 LAYOUT=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.tiledLayout // ""')
 
 mods_to_label() {
-    # Modifier cluster: Nerd Font glyphs concatenated with no separator,
-    # so combos read "󰘴󰘳+W" instead of "Ctrl+Super+W". The `+` between
-    # the cluster and the key is reintroduced by format_bind. Order is
+    # Modifier cluster: Nerd Font glyphs separated by single spaces, no
+    # `+` anywhere. format_bind appends a final space before the key, so
+    # combos read "󰘴 󰘳 W" instead of "Ctrl+Super+W". Order is
     # Ctrl → Super → Alt → Shift; codepoints F0633 super / F0634 ctrl /
     # F0635 alt / F0636 shift (Material Design Icons via Nerd Font).
     case "$1" in
         0)   echo "" ;;
         1)   echo "󰘶" ;;
         4)   echo "󰘴" ;;
-        5)   echo "󰘴󰘶" ;;
+        5)   echo "󰘴 󰘶" ;;
         8)   echo "󰘵" ;;
-        9)   echo "󰘵󰘶" ;;
-        12)  echo "󰘴󰘵" ;;
-        13)  echo "󰘴󰘵󰘶" ;;
+        9)   echo "󰘵 󰘶" ;;
+        12)  echo "󰘴 󰘵" ;;
+        13)  echo "󰘴 󰘵 󰘶" ;;
         64)  echo "󰘳" ;;
-        65)  echo "󰘳󰘶" ;;
-        68)  echo "󰘴󰘳" ;;
-        69)  echo "󰘴󰘳󰘶" ;;
-        72)  echo "󰘳󰘵" ;;
-        73)  echo "󰘳󰘵󰘶" ;;
+        65)  echo "󰘳 󰘶" ;;
+        68)  echo "󰘴 󰘳" ;;
+        69)  echo "󰘴 󰘳 󰘶" ;;
+        72)  echo "󰘳 󰘵" ;;
+        73)  echo "󰘳 󰘵 󰘶" ;;
         *)   echo "mod${1}" ;;
     esac
 }
@@ -128,7 +128,7 @@ format_bind() {
     local label combo category rhs
     label=$(mods_to_label "$modmask")
     if [[ -z "$label" ]]; then combo="$key"
-    else combo="${label}+${key}"; fi
+    else combo="${label} ${key}"; fi
 
     if [[ -n "$description" && "$description" != "null" ]]; then
         rhs="$description"
@@ -182,8 +182,8 @@ format_bind() {
 # of truth is the conf file. Selecting it dismisses (we don't auto-
 # launch an editor; the user might prefer code/helix/$EDITOR).
 {
-    printf '[%-13s] %-40s   %s\n' "Source" "~/.config/hypr/binds.conf  (edit to add/remove)" "—"
-    printf '[%-13s] %-40s   %s\n' "Source" "$ chezmoi edit ~/.config/hypr/binds.conf" "—"
+    printf '[%-20s] %-22s  %s\n' "Source" "—" "~/.config/hypr/binds.conf  (edit to add/remove)"
+    printf '[%-20s] %-22s  %s\n' "Source" "—" "$ chezmoi edit ~/.config/hypr/binds.conf"
 
     hyprctl binds -j 2>/dev/null \
       | jq -r '.[] | [.modmask, .key, (.description // ""), .dispatcher, (.arg // "")] | @tsv' \
@@ -271,16 +271,17 @@ format_bind() {
               return s
           }
           # When joining the vim variant onto the arrow combo, strip the
-          # shared "MODS+" prefix so we render "Ctrl+Super+←/h" instead
-          # of "Ctrl+Super+←/Ctrl+Super+h".
+          # shared mod-cluster prefix so we render "󰘴 󰘳 ←/h" instead of
+          # "󰘴 󰘳 ←/󰘴 󰘳 h". The separator between mods and key is a
+          # single space (see format_bind / mods_to_label).
           function strip_mod_prefix(target, source,   n) {
               n = length(source)
-              while (n > 0 && substr(source, n, 1) != "+") n--
+              while (n > 0 && substr(source, n, 1) != " ") n--
               if (n == 0) return target
               if (substr(target, 1, n) == substr(source, 1, n)) return substr(target, n + 1)
               return target
           }
-          function flush() { if (cat != "") printf "[%-20s] %-40s   %s\n", cat, desc, combos }
+          function flush() { if (cat != "") printf "[%-20s] %-22s  %s\n", cat, combos, desc }
           {
               d = dir_glyph($2); c = key_glyph($4)
               if ($1 != cat || d != desc) { flush(); cat=$1; desc=d; combos=c; first=c }
