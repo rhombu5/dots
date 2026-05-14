@@ -226,21 +226,22 @@ format_bind() {
               gsub(/\<[Tt]ab\>/,          "󰌒", s)
               gsub(/\<[Bb]ack[Ss]pace\>/, "󰌍", s)
               gsub(/\<[Ee]scape\>/,       "󱊷", s)
-              gsub(/\<[Dd]elete\>/,       "⌦", s)
+              gsub(/\<[Dd]elete\>/,       "󰹾", s)   # backspace_reverse (filled, pairs with F030D)
               # function keys F1..F12 (codepoints F12AB..F12B6)
               gsub(/\<F1\>/,  "󱊫", s); gsub(/\<F2\>/,  "󱊬", s); gsub(/\<F3\>/,  "󱊭", s)
               gsub(/\<F4\>/,  "󱊮", s); gsub(/\<F5\>/,  "󱊯", s); gsub(/\<F6\>/,  "󱊰", s)
               gsub(/\<F7\>/,  "󱊱", s); gsub(/\<F8\>/,  "󱊲", s); gsub(/\<F9\>/,  "󱊳", s)
               gsub(/\<F10\>/, "󱊴", s); gsub(/\<F11\>/, "󱊵", s); gsub(/\<F12\>/, "󱊶", s)
-              # navigation block
-              gsub(/\<[Pp]age_[Uu]p\>/,   "⇞", s); gsub(/\<[Pp]rior\>/, "⇞", s); gsub(/\<pageup\>/, "⇞", s)
-              gsub(/\<[Pp]age_[Dd]own\>/, "⇟", s); gsub(/\<[Nn]ext\>/, "⇟", s);  gsub(/\<pagedown\>/, "⇟", s)
-              gsub(/\<[Hh]ome\>/, "↖", s)
-              gsub(/\<[Ee]nd\>/,  "↘", s)
+              # navigation block (MDI semantic icons — not key-cap style,
+              # but stay inside the same font as everything else)
+              gsub(/\<[Pp]age_[Uu]p\>/,   "󰄿", s); gsub(/\<[Pp]rior\>/, "󰄿", s); gsub(/\<pageup\>/,   "󰄿", s)
+              gsub(/\<[Pp]age_[Dd]own\>/, "󰄼", s); gsub(/\<[Nn]ext\>/, "󰄼", s); gsub(/\<pagedown\>/, "󰄼", s)
+              gsub(/\<[Hh]ome\>/, "󰩀", s)   # contain_start
+              gsub(/\<[Ee]nd\>/,  "󰨿", s)   # contain_end
               # locks / system
               gsub(/\<[Cc]aps_?[Ll]ock\>/, "󰌎", s)
-              gsub(/\<[Mm]enu\>/,          "≡", s)
-              gsub(/\<[Pp]rint\>/,         "⎙", s)
+              gsub(/\<[Mm]enu\>/,          "󰍜", s)
+              gsub(/\<[Pp]rint\>/,         "󰐪", s)
               # punctuation (xkb names are lowercase)
               gsub(/\<slash\>/,        "/",    s)
               gsub(/\<backslash\>/,    "\\\\", s)
