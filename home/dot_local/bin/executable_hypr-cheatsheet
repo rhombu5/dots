@@ -242,6 +242,25 @@ format_bind() {
               gsub(/\<[Cc]aps_?[Ll]ock\>/, "󰌎", s)
               gsub(/\<[Mm]enu\>/,          "󰍜", s)
               gsub(/\<[Pp]rint\>/,         "󰐪", s)
+              # mouse buttons + scroll (Hyprland mouse:NNN / mouse_dir)
+              gsub(/\<mouse:272\>/, "󰍽", s)   # left  (MDI mouse)
+              gsub(/\<mouse:273\>/, "󰍿", s)   # right (MDI mouse_variant)
+              gsub(/\<mouse_up\>/,   "󱕑", s)
+              gsub(/\<mouse_down\>/, "󱕐", s)
+              # lid switch events (Hyprland switch:on/off:Lid Switch)
+              gsub(/\<switch:on:Lid Switch\>/,  "󰛧", s)   # laptop_off
+              gsub(/\<switch:off:Lid Switch\>/, "󰌢", s)   # laptop
+              # XF86 media / audio
+              gsub(/\<XF86AudioRaiseVolume\>/, "󰝝", s)
+              gsub(/\<XF86AudioLowerVolume\>/, "󰝞", s)
+              gsub(/\<XF86AudioMute\>/,        "󰝟", s)
+              gsub(/\<XF86AudioMicMute\>/,     "󰍭", s)
+              gsub(/\<XF86AudioPlay\>/,        "󰐊", s)
+              gsub(/\<XF86AudioNext\>/,        "󰒭", s)
+              gsub(/\<XF86AudioPrev\>/,        "󰒮", s)
+              # XF86 brightness (MDI uses a 1-7 sun gradient; pair 7↔4)
+              gsub(/\<XF86MonBrightnessUp\>/,   "󰃠", s)   # brightness_7
+              gsub(/\<XF86MonBrightnessDown\>/, "󰃝", s)   # brightness_4
               # punctuation (xkb names are lowercase)
               gsub(/\<slash\>/,        "/",    s)
               gsub(/\<backslash\>/,    "\\\\", s)
