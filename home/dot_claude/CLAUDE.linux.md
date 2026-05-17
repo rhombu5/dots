@@ -36,6 +36,39 @@ sudonf '<short hint of what is about to run>' <sudo args>
 - After the batch is done, say "no more sudo for the rest of this batch" so the user can stop watching the sensor.
 - **Don't** fall back to raw `notify-send + sudo` (leftover Critical notifications replay their sound next session). **Don't** use `printf '\a'` (silent here). **Don't** call `paplay` directly (the wrapper handles it).
 
+## Bitwarden — you can unlock it yourself, and read items without leaking values
+
+The vault has a wrapper-and-cache pattern set up so Claude can interact with it without round-tripping through the user. Use it instead of asking the user to paste secrets into chat (paste = leak).
+
+**Unlocking.** The `bwu` shell function caches the master password in libsecret on first use; subsequent calls are silent. After `bwu` succeeds, a session token is also cached in libsecret under `service=bitwarden type=session` and exported as `BW_SESSION`.
+
+From within a fresh Bash tool call (where env vars don't persist), fetch the cached session inline:
+
+```bash
+SESSION=$(secret-tool lookup service bitwarden type session)
+BW_SESSION=$SESSION bw status   # verify still unlocked
+```
+
+If the cached session is stale, `bw status` reports `"status":"locked"` — run `bwu` to refresh it, then re-fetch from secret-tool.
+
+**Reading items without leaking values.** Two anti-leak rules:
+
+1. **Inspect structure, not values.** When finding the right item / field, use `jq` projections that show only `id`, `name`, and field *names* — never `.value` or `.login.password` — until you know exactly which field you want.
+2. **Pipe values straight into the consuming tool.** Once you've identified the field, fetch and pipe in one shell expression so the secret never appears in tool output:
+
+   ```bash
+   SESSION=$(secret-tool lookup service bitwarden type session)
+   BW_SESSION=$SESSION bw get item <ITEM_ID> \
+     | jq -r '.fields[] | select(.name=="<FIELD>") | .value' \
+     | gh secret set <NAME> -R <owner>/<repo>     # gh reads from stdin
+   ```
+
+   Don't echo, print, store in a variable that gets logged, or pass it as a `--body=` flag (logged in command line).
+
+**Sync before searching.** `bw list` / `bw get` use the local cache. If the user just added or changed a record, run `bw sync` first or you'll miss the update.
+
+**When to fall back to the user.** Only when libsecret itself is locked (greeter / fresh boot before login) — `secret-tool lookup` returns empty *and* `bwu` would need fresh password entry that no tty in the tool call supports. In that case ask the user to run `bwu` via `!`. Otherwise: just do it.
+
 ## System changes go to both the live system AND the dotfiles repo
 
 When instructed to make any system preference, configuration, or other persistent change: apply it to the actual running system AND mirror it into the appropriate repo — usually the chezmoi dotfiles repo at `~/src/dots@rhombu5/` (`git@github.com:rhombu5/dots.git`, source state under `home/`), or the arch-setup repo for bootstrap-level changes.
