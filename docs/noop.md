@@ -1,6 +1,6 @@
 # noop landing zone
 
-A deliberate "general questions only" directory for Claude Code sessions. `cclaude` with no positional path defaults into `~/.claude/noop/`, where an auto-loaded `CLAUDE.md` puts claude in **strict redirect mode**: it classifies each user prompt and either answers (general / read-shaped) or writes a handoff file and bounces the user into a project-rooted session (action).
+A deliberate "general questions only" directory for Claude Code sessions. `fnclaude` (alias `fnc`) with no positional path defaults into `$XDG_CONFIG_HOME/fnclaude/noop/` (typically `~/.config/fnclaude/noop/`), where an auto-loaded `CLAUDE.md` puts claude in **strict redirect mode**: it classifies each user prompt and either answers (general / read-shaped) or writes a handoff file and bounces the user into a project-rooted session (action).
 
 ## What it solves
 
@@ -11,23 +11,24 @@ Running bare `claude` from `$HOME` (or anywhere with files around) gives claude 
 
 The noop dir makes the "no project here" signal explicit. The user sees they're in noop; claude reads the noop `CLAUDE.md` and behaves accordingly.
 
-## How `cclaude` wires it
+## How `fnclaude` wires it
 
-The `cclaude` function in [`home/dot_zsh_aliases`](../home/dot_zsh_aliases) — full reference: [`docs/cclaude.md`](cclaude.md) — has this default:
+`fnclaude` resolves the noop dir internally — bare `fnc` becomes `fnc $XDG_CONFIG_HOME/fnclaude/noop` (with `~/.config` as the XDG fallback), then `cd`s in (in a subshell) and exec's claude there. claude's auto-loaded `CLAUDE.md` is the noop one.
 
-```sh
-if (( ${#paths[@]} == 0 )); then
-    paths=("$HOME/.claude/noop")
-fi
-```
+The user's pre-`fnclaude` shell cwd is preserved across the subshell `cd` — when they `Ctrl+C Ctrl+C` out of the noop session their shell returns to wherever they started. That's why the relaunch command must use absolute paths (see "Handoff bridge" below).
 
-So bare `cclaude` becomes `cclaude ~/.claude/noop` internally. cclaude `cd`s into noop (in a subshell) and exec's claude there. claude's auto-loaded `CLAUDE.md` is the noop one.
+### Base vs. overlay — ownership split
 
-The user's pre-`cclaude` shell cwd is preserved across the subshell `cd` — when they `Ctrl+C` out of the noop session their shell returns to wherever they started. That's why the relaunch command must use absolute paths (see "Handoff bridge" below).
+`fnclaude` embeds the base `CLAUDE.md` and `handoff.template.md` into the binary and lazy-seeds them into the noop dir on each launch that uses the fallback (writing only when the on-disk content differs from embedded, by SHA-256). That means:
+
+- **`CLAUDE.md`** and **`handoff.template.md`** are **fnclaude's territory**, refreshed by each binary release. Direct edits self-heal on the next launch — don't bother. Upstream changes happen in the fnclaude repo's [`src/noop_templates/`](https://github.com/fnrhombus/fnclaude/tree/main/src/noop_templates).
+- **`CLAUDE.local.md`** is the **user's territory** — fnclaude never touches it. This is where this dotfile setup keeps personalization (chezmoi-aware user-prefs editing, machine-specific clipboard, mirror conventions). chezmoi-managed at [`home/dot_config/fnclaude/noop/CLAUDE.local.md`](../home/dot_config/fnclaude/noop/CLAUDE.local.md).
+
+Claude Code auto-loads both files when launching in the noop dir; the overlay's rules can extend or override the base's.
 
 ## The classifier
 
-[`home/dot_claude/noop/CLAUDE.md`](../home/dot_claude/noop/CLAUDE.md) defines a three-bucket classifier that runs **before any tool call**:
+The base [`CLAUDE.md`](https://github.com/fnrhombus/fnclaude/blob/main/src/noop_templates/CLAUDE.md) defines a three-bucket classifier that runs **before any tool call**:
 
 | bucket | shape | claude's action |
 |---|---|---|
@@ -39,17 +40,22 @@ A bucket-B thread can shift to bucket C mid-conversation. The rule is to redirec
 
 The classifier also has a "if you can't classify with high confidence at any step, ask" rule, applying the global *WHEN IN DOUBT — DISCUSS* posture.
 
-**One scoped exception to bucket C:** edits to user-prefs files under `~/.claude/` (the core `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, and noop's own files) are allowed from noop. User prefs are cross-cutting — they belong to every session, not any one project — so a general-chat session is the natural scope. The work flows through the chezmoi source at `~/src/dots@rhombu5/home/dot_claude/`, then `chezmoi apply`, then atomic commit + push. Other user-level state (`.zshrc`, hyprland configs, the rest of dotfiles) stays bucket C.
+**Two scoped exceptions to bucket C:**
+
+1. **User-prefs maintenance** — edits to files under `~/.claude/` (user-level `CLAUDE.md`, its `CLAUDE.<context>.md` siblings, `settings.json`, and noop's own `CLAUDE.local.md` overlay and `handoff.template.md`) are allowed from noop. User prefs are cross-cutting — they belong to every session, not any one project — so a general-chat session is the natural scope. The base `CLAUDE.md` in this dir is **not** in scope (it's fnclaude-owned and read-only). The work flows through the chezmoi source at `~/src/dots@rhombu5/home/dot_claude/` (or `home/dot_config/fnclaude/noop/CLAUDE.local.md` for the overlay), then `chezmoi apply`, then atomic commit + push.
+2. **One-off system changes** — installs, system-pref flips, service enables, single-line config snippets are allowed from noop with their mirror commit to `dots`/`arch-setup` done in the same noop session (vs. handing off to a project session). Multi-step refactors of those repos remain bucket C.
+
+Other user-level state (`.zshrc`, hyprland configs, the rest of dotfiles) outside the two exceptions stays bucket C.
 
 ## The handoff bridge
 
-When claude classifies bucket C, it writes `<project-dir>/handoff.md` (template: [`home/dot_claude/noop/handoff.template.md`](../home/dot_claude/noop/handoff.template.md)) capturing the user's request, then gives a copy-pasteable command:
+When claude classifies bucket C, it writes `<project-dir>/handoff.md` (template: fnclaude-embedded [`handoff.template.md`](https://github.com/fnrhombus/fnclaude/blob/main/src/noop_templates/handoff.template.md)) capturing the user's request, then gives a copy-pasteable command:
 
 ```
-cclaude <project-dir-absolute-or-tilde-relative> -i @handoff.md
+fnclaude <project-dir-absolute-or-tilde-relative> --name <topic> @handoff.md
 ```
 
-`-i @handoff.md` makes claude load the handoff as the initial user message in the new session.
+`@handoff.md` makes claude load the handoff as the initial user message in the new session. `--name` MUST come before `@handoff.md` — fnclaude treats leading non-flag args as paths until it hits the first `-`-prefixed token; putting `--name` first flips the parser into flag mode so `@handoff.md` correctly passes through to claude as the prompt.
 
 The handoff's HTML-comment header instructs the receiving claude that its **very first action** must be `rm handoff.md` — burn after reading. Don't `git add`, don't `git commit`, don't `git ignore` (gitignoring archives the problem instead of solving it). The handoff is single-use; the bridge ends with its deletion.
 
@@ -57,15 +63,14 @@ The handoff's HTML-comment header instructs the receiving claude that its **very
 
 The relaunch command has two paths that resolve at different times:
 
-- **`<project-dir>`** is shell-resolved at *paste time*, with the user's pre-`cclaude` shell cwd. That cwd could be anywhere. So `<project-dir>` MUST be absolute or `~`-anchored; never `./foo`, `../foo`, or bare `foo`. The `~` form is portable across Linux/macOS/Windows shells; native absolute paths (`/home/...`, `/Users/...`, `C:\Users\...`) work too if you're certain of the platform.
-- **`@handoff.md`** is claude-resolved *after* `cclaude`'s `cd`, with cwd = `<project-dir>`. So it MUST stay literal `@handoff.md` — making it actually-relative-to-shell-cwd (`@./handoff.md`) only works if the user happens to paste from inside the project, which we can't assume.
+- **`<project-dir>`** is shell-resolved at *paste time*, with the user's pre-`fnclaude` shell cwd. That cwd could be anywhere. So `<project-dir>` MUST be absolute or `~`-anchored; never `./foo`, `../foo`, or bare `foo`. The `~` form is portable across Linux/macOS/Windows shells; native absolute paths (`/home/...`, `/Users/...`, `C:\Users\...`) work too if you're certain of the platform.
+- **`@handoff.md`** is claude-resolved *after* `fnclaude`'s `cd`, with cwd = `<project-dir>`. So it MUST stay literal `@handoff.md` — making it actually-relative-to-shell-cwd (`@./handoff.md`) only works if the user happens to paste from inside the project, which we can't assume.
 
 ## Files in this design
 
-- [`home/dot_claude/noop/CLAUDE.md`](../home/dot_claude/noop/CLAUDE.md) — the classifier and behavior rules; auto-loaded when claude launches in `~/.claude/noop/`.
-- [`home/dot_claude/noop/handoff.template.md`](../home/dot_claude/noop/handoff.template.md) — the mandatory handoff structure with the burn-after-reading header.
-- [`home/dot_zsh_aliases`](../home/dot_zsh_aliases) — `cclaude` function (default-to-noop is in here).
-- [`docs/cclaude.md`](cclaude.md) — full `cclaude` reference, including how `-i/--init` interacts with naked-prompt parsing.
+- [`home/dot_config/fnclaude/noop/CLAUDE.local.md`](../home/dot_config/fnclaude/noop/CLAUDE.local.md) — this user's overlay; machine-specific guidance (chezmoi workflow, clipboard utility, sudo aliases, mirror conventions). chezmoi-managed; carved out of the global `**/*.local.md` ignore via a negation in `home/.chezmoiignore`.
+- fnclaude's [`src/noop_templates/CLAUDE.md`](https://github.com/fnrhombus/fnclaude/blob/main/src/noop_templates/CLAUDE.md) — the read-only base classifier; lives in the fnclaude binary and is lazy-seeded into the noop dir on each launch.
+- fnclaude's [`src/noop_templates/handoff.template.md`](https://github.com/fnrhombus/fnclaude/blob/main/src/noop_templates/handoff.template.md) — the mandatory handoff structure with the burn-after-reading header; also fnclaude-embedded.
 
 ## Why no hook-based enforcement
 

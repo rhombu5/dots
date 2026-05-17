@@ -5,11 +5,13 @@
 **/*.local.md
 
 # Exception: noop's CLAUDE.local.md is the cross-machine user overlay
-# alongside fnclaude's read-only base. It IS sourced from dots so the
-# personalization applies on every machine; the per-machine .local.md
-# convention above doesn't apply because the noop dir is fnclaude's
-# (auto-loaded by Claude Code via the standard CLAUDE.local.md sibling).
-!.claude/noop/CLAUDE.local.md
+# alongside fnclaude's read-only base (which fnclaude embeds and lazy-seeds
+# into the noop dir itself — chezmoi only manages the overlay). The overlay
+# IS sourced from dots so the personalization applies on every machine; the
+# per-machine .local.md convention above doesn't apply because the noop dir
+# is fnclaude's (auto-loaded by Claude Code via the standard CLAUDE.local.md
+# sibling).
+!.config/fnclaude/noop/CLAUDE.local.md
 
 # Hyprland monitor layout — machine-specific (resolution, refresh,
 # scale, position depend on which displays are attached) and gets

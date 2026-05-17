@@ -147,7 +147,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
   - fzf-tab completion
   - Plugins: ohmyzsh (sudo, colored-man-pages, extract, command-not-found, docker, docker-compose, npm, pip, dotnet), fast-syntax-highlighting, zsh-autosuggestions, zsh-history-substring-search, zsh-completions, fzf-tab, fzf-zsh-plugin, powerlevel10k
   - Tool inits: mise, zoxide, direnv
-- **`dot_zsh_aliases`** — navigation (`..`, `...`), `ls`/`ll`/`la`/`lt` via eza, `cat` via bat, `cclaude` Claude Code launcher
+- **`dot_zsh_aliases`** — navigation (`..`, `...`), `ls`/`ll`/`la`/`lt` via eza, `cat` via bat, `fnc` shortcut for `fnclaude`
 - **`dot_zshrc.d/`** — modular drop-in fragments
   - `arch-bootstrap-runner.zsh` — fires `~/.local/share/arch-setup-bootstraps/*.sh` planters on first interactive shell, then self-removes the marker
 - **`dot_p10k.zsh`** — Powerlevel10k rainbow / 2-line prompt
@@ -161,7 +161,10 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 - **`CLAUDE.linux.md`** — Arch / pacman / AUR / systemd / FHS / sudo / polkit / chezmoi guidance
 - **`CLAUDE.git.md`** — clone / push / PR conventions, repo directory layout, GitHub org selection
 - **`settings.json`** — harness config (effort level, push notifications, additional working dirs)
-- **`noop/`** — global handoff harness for queries with no project context (see [`docs/noop.md`](docs/noop.md))
+
+### fnclaude (`~/.config/fnclaude/`)
+
+- **`noop/CLAUDE.local.md`** — user overlay for fnclaude's noop landing zone (the global handoff harness for queries with no project context). The base `CLAUDE.md` and `handoff.template.md` are embedded in the [fnclaude binary](https://github.com/fnrhombus/fnclaude) and lazy-seeded into this dir; only the `.local.md` overlay is dots-managed. See [`docs/noop.md`](docs/noop.md).
 
 ### File layout (`~/.local/share/`)
 
@@ -176,22 +179,15 @@ Symlinks at the home root for the three frequent ones:
 - `~/dl` → `~/.local/share/user-dirs/Downloads`
 - `~/pics` → `~/.local/share/user-dirs/Pictures`
 
-## Shell helpers (per-page docs)
-
-Functions defined in [`home/dot_zsh_aliases`](home/dot_zsh_aliases) that
-have enough surface area to warrant their own page:
-
-- [`cclaude`](docs/cclaude.md) — launch `claude` across multiple project
-  roots, auto-loading each root's `.mcp.json` and `.claude/settings.json`.
-
 ## Layout decisions
 
 - [`xdg-user-dirs.md`](docs/xdg-user-dirs.md) — the freedesktop user-dirs
   (Desktop / Documents / Downloads / …) live under
   `~/.local/share/user-dirs/`, with short symlinks `~/docs`, `~/dl`,
   `~/pics` for the three frequent ones.
-- [`noop.md`](docs/noop.md) — `cclaude` with no path lands in
-  `~/.claude/noop/`, where the auto-loaded `CLAUDE.md` puts claude in
+- [`noop.md`](docs/noop.md) — `fnclaude` with no path lands in
+  `~/.config/fnclaude/noop/`, where the binary-embedded base `CLAUDE.md`
+  (plus this dots repo's `CLAUDE.local.md` overlay) puts claude in
   strict-redirect mode: general questions answered here, project-specific
   work bridged to a project-rooted session via a burn-after-reading
   `handoff.md` file.
