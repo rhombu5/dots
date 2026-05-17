@@ -95,7 +95,8 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 - `hypr-edge-nav` — geometry-aware focus / window-move with workspace escalation
 - `hypr-layout-{floating,tiling,tabbed}` — re-arrange all windows in current workspace
 - `hypr-layout-toggle` — flip active workspace between dwindle and scrolling (per-workspace persistent state)
-- `hypr-panel-toggle` — toggle waybar visibility; recovers from crash
+- `hypr-panel-toggle` — toggle waybar visibility; recovers from crash or detached-surfaces lock/unlock state
+- `waybar-healthcheck` — probe waybar's layer surfaces; used by hypridle's `unlock_cmd` to self-heal post-unlock
 - `hypr-plugins-on-login` — load Hyprland plugins + their post-plugins.d configs (idempotent)
 - `if-tilemode`, `if-scrollmode` — conditional dispatchers (only run if active workspace matches layout)
 - `validate-hypr-binds` — parse `binds.conf` + fragments for duplicates and unknown dispatchers (chezmoi pre-apply hook + CI)

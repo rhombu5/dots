@@ -3,9 +3,30 @@
 # If waybar isn't running, start the unit. With waybar.service's
 # Restart=always, this fallback only fires for intentional stops or
 # after the StartLimitBurst flap-cap has tripped.
+#
+# Stuck-bar recovery: SIGUSR1 is a no-op when waybar is alive but its
+# layer surfaces are detached from outputs (the GTK3 lock/unlock failure
+# mode). Detect that empirically by counting waybar surfaces before and
+# after the signal — if both are zero, SIGUSR1 had nothing to toggle and
+# the process is stuck. Restart the unit to re-attach.
 set -u
 
+count_surfaces() {
+    hyprctl layers -j 2>/dev/null \
+        | jq '[ to_entries[] | .value.levels | to_entries[] | .value[]?
+                | select(.namespace == "waybar") ] | length' 2>/dev/null
+}
+
+before=$(count_surfaces)
+before=${before:-0}
+
 if pkill -SIGUSR1 waybar 2>/dev/null; then
+    sleep 0.3
+    after=$(count_surfaces)
+    after=${after:-0}
+    if [[ "$before" -eq 0 && "$after" -eq 0 ]]; then
+        systemctl --user restart waybar.service
+    fi
     exit 0
 fi
 

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# waybar-healthcheck — probe whether waybar's layer surfaces are actually
+# mapped on every enabled output. Exit 0 = healthy, exit 1 = broken/missing.
+#
+# The failure mode this catches: GTK3-waybar's Gdk::Monitor list goes stale
+# across a lock/unlock cycle. The waybar process stays alive but its bars
+# are detached from outputs — no layer surface visible to the compositor.
+# SIGUSR1 (visibility toggle) is a no-op in that state; only a unit restart
+# recovers it. Used by hypr-panel-toggle and hypridle's unlock_cmd.
+set -u
+
+if ! pgrep -x waybar >/dev/null; then
+    exit 1
+fi
+
+# `hyprctl monitors -j` lists currently-enabled outputs.
+expected=$(hyprctl monitors -j | jq 'length')
+if [[ "${expected:-0}" -lt 1 ]]; then
+    # No outputs to bar on — call it healthy.
+    exit 0
+fi
+
+# Count monitors that have at least one waybar layer surface. Brief poll
+# gives waybar a grace period to (re-)attach after a monitor reconfigure.
+for _ in 1 2 3 4 5; do
+    with_bar=$(hyprctl layers -j \
+        | jq '[ to_entries[]
+                | select( [ .value.levels | to_entries[] | .value[]? | .namespace ]
+                          | any(. == "waybar") ) ] | length')
+    if [[ "${with_bar:-0}" -ge "$expected" ]]; then
+        exit 0
+    fi
+    sleep 0.2
+done
+
+exit 1
