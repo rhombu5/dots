@@ -18,7 +18,8 @@
       "source": {
         "source": "github",
         "repo": "fnrhombus/claude-plugins"
-      }
+      },
+      "autoUpdate": true
     }
   },
   "effortLevel": "xhigh",
