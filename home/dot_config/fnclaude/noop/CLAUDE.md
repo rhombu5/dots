@@ -1,8 +1,8 @@
 # noop overlay — this machine's personalization
 
-Personal additions and refinements to the base [`CLAUDE.md`](CLAUDE.md). These extend or specialize the rules there for this user's setup. Claude Code auto-loads this file alongside the base; rules here can clarify, scope, or override anything in the base.
+Personal additions and refinements to the noop-router instructions that fnclaude injects as its system prompt. Claude Code auto-loads this file from cwd alongside that system prompt; rules here can clarify, scope, or override anything there.
 
-**Edits go here, not in the base.** If you have any reason to want to add a rule, refine an existing one, or capture a machine-specific quirk, this file is the target — the base `CLAUDE.md` is read-only (it's embedded in the fnclaude binary and lazy-seeded into this dir on each launch; see its top-of-file directive). The chezmoi source for this overlay is `~/src/dots@rhombu5/home/dot_config/fnclaude/noop/CLAUDE.local.md`.
+**Edits go here, not in the base.** If you have any reason to want to add a rule, refine an existing one, or capture a machine-specific quirk, this file is the target — the base noop-router prompt is read-only (it ships in the install dir at `/usr/share/fnclaude/prompts/noop-router.md`, root-owned, regenerated on each fnclaude upgrade). The chezmoi source for this overlay is `~/src/dots@rhombu5/home/dot_config/fnclaude/noop/CLAUDE.md`.
 
 ---
 
