@@ -219,6 +219,22 @@ worktrees_of() {
     '
 }
 
+# If $1 is inside any worktree of a repo (linked or main), return the path of the
+# repo's MAIN worktree - which is always the first entry of `git worktree list`.
+# Falls back to $1 unchanged when it isn't a git repo. Used so col 1 always shows
+# the canonical repo root even after EnterWorktree has shifted cwd / project_dir
+# into a linked worktree.
+main_worktree_of() {
+    local d="$1"
+    [ -z "$d" ] && return
+    [ -d "$d" ] || { printf '%s' "$d"; return; }
+    git --no-optional-locks -C "$d" rev-parse --is-inside-work-tree &>/dev/null \
+        || { printf '%s' "$d"; return; }
+    local first
+    first=$(worktrees_of "$d" | head -n 1 | cut -f1)
+    [ -n "$first" ] && printf '%s' "$first" || printf '%s' "$d"
+}
+
 cache_key() { printf '%s' "$1" | sha256sum | head -c 16; }
 
 # Async refresh of one worktree's PR/CI cache.
@@ -344,8 +360,8 @@ C_SEP='\033[2;37m'         # dim white (column separator pipe)
 
 # ── Column 1
 declare -a col1_path
-col1_path+=("$(repo_root_of "$project_dir")")
-for d in "${added_dirs[@]}"; do col1_path+=("$(repo_root_of "$d")"); done
+col1_path+=("$(main_worktree_of "$project_dir")")
+for d in "${added_dirs[@]}"; do col1_path+=("$(main_worktree_of "$d")"); done
 
 declare -a col1_short
 for p in "${col1_path[@]}"; do col1_short+=("$(abbreviate_if_templated "$(shorten "$p")")"); done
