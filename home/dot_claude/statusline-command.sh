@@ -333,12 +333,12 @@ sgr_hue() {
     fi
 }
 
-# attrs_prefix <italic:0|1> <strike:0|1> <underline:0|1>  ->  SGR prefix or empty.
+# attrs_prefix <italic:0|1> <strike:0|1> <bold:0|1>  ->  SGR prefix or empty.
 # Stacks before a color escape; \033[0m later resets all attributes.
 attrs_prefix() {
     local parts=()
+    (( ${3:-0} )) && parts+=(1)
     (( ${1:-0} )) && parts+=(3)
-    (( ${3:-0} )) && parts+=(4)
     (( ${2:-0} )) && parts+=(9)
     (( ${#parts[@]} == 0 )) && return
     local IFS=';'
@@ -454,16 +454,16 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
     hi=$(hue_idx_for "$i")
-    # Bright + underline travel together and only one item ever has them -
-    # the row containing the literal cwd. Everything else is dim, no underline.
+    # Bright + bold travel together and only one item ever has them -
+    # the row containing the literal cwd. Everything else is dim, not bold.
     if (( i == matching_idx )); then
-        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag="";    ul='\033[4m'
+        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag="";    bold='\033[1m'
     else
-        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"; ul=""
+        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"; bold=""
     fi
 
     dir="${col1_short[$i]}"
-    cell+=$(printf "${ul}${c_dir}%s\033[0m" "$dir")
+    cell+=$(printf "${bold}${c_dir}%s\033[0m" "$dir")
     cell_w=$(( cell_w + ${#dir} ))
 
     # Cyan suffix only on the matching row, when cwd is a subdir of it.
@@ -471,7 +471,7 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         krp=$(realpath_safe "${col1_path[$i]}")
         if [ "$cwd_real" != "$krp" ] && [[ "$cwd_real" == "$krp"/* ]]; then
             suffix="/${cwd_real#$krp/}"
-            cell+=$(printf "${ul}${C_CURRENT}%s\033[0m" "$suffix")
+            cell+=$(printf "${bold}${C_CURRENT}%s\033[0m" "$suffix")
             cell_w=$(( cell_w + ${#suffix} ))
         fi
     fi
@@ -479,8 +479,8 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     vt="${col1_vcs[$i]}"
     if [ -n "$vt" ]; then
         # vcs_text_for emits icons\tbranch\tcounts; col 1 paints the whole vcs
-        # cell in the status color and leaves it un-underlined - it's status
-        # info, not row identity. Only the path/cwd-suffix carry the underline.
+        # cell in the status color and leaves it unstyled - it's status info,
+        # not row identity. Only the path/cwd-suffix carry the bold.
         IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"$vt"
         vt_full="${vt_icons}${vt_branch}${vt_counts}"
         cell+=$(printf "  ${c_vcs}%s\033[0m" "$vt_full")
@@ -491,7 +491,7 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     if [ -n "$pr" ]; then
         read -r pr_state ci_state pr_num <<<"$pr"
         pc=$(color_for_pr "$pr_state" "$dimflag")
-        # PR info is part of the status suffix - no underline.
+        # PR info is part of the status suffix - no bold.
         cell+=$(printf "  ${pc}%s\033[0m" "$pr_num")
         cell_w=$(( cell_w + 2 + ${#pr_num} ))
         if [ "$pr_state" = "open" ]; then
@@ -578,13 +578,13 @@ for ((i=0; i<n; i++)); do
         else
             wt_head_c=$(sgr_hue "$parent_hi" 1); wt_rhs_c=$C_BRANCH_DIM; wt_dim="dim"
         fi
-        italic_flag=0;    (( has_subagent ))          && italic_flag=1
-        strike_flag=0;    [ "$pr_state" = "merged" ] && strike_flag=1
-        underline_flag=0; (( has_main ))              && underline_flag=1
-        # All text decorations (italic for subagent, strike for merged, underline
+        italic_flag=0; (( has_subagent ))          && italic_flag=1
+        strike_flag=0; [ "$pr_state" = "merged" ] && strike_flag=1
+        bold_flag=0;   (( has_main ))              && bold_flag=1
+        # All text decorations (italic for subagent, strike for merged, bold
         # for bright) attach to the branch name only - icons left of it and the
         # status suffix right of it stay undecorated, just colored.
-        ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$underline_flag")
+        ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$bold_flag")
 
         if [ -n "${col2_vcs[$i]}" ]; then
             # icons + branch name in inherited hue; counts in light gray
