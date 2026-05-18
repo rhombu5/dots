@@ -433,18 +433,6 @@ for ((k=0; k<${#col1_path[@]}; k++)); do
     fi
 done
 
-# If cwd lives inside one of the col-2 worktrees, the col-1 entry that *owns*
-# that worktree (its main repo) stays bright too — the "dupe" exception so col 1
-# keeps a visual anchor when work has moved into a worktree.
-active_wt_origin_idx=-1
-for ((j=0; j<${#col2_path[@]}; j++)); do
-    wt_real=$(realpath_safe "${col2_path[$j]}")
-    if [ "$cwd_real" = "$wt_real" ] || [[ "$cwd_real" == "$wt_real"/* ]]; then
-        active_wt_origin_idx=${col2_origin_idx[$j]}
-        break
-    fi
-done
-
 col2_w=0
 for s in "${col2_short[@]}"; do (( ${#s} > col2_w )) && col2_w=${#s}; done
 
@@ -466,17 +454,13 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
     hi=$(hue_idx_for "$i")
-    # Saturation: bright when cwd is here OR via the dupe exception
-    # (the col-1 entry that owns the worktree cwd is currently in).
-    # Underline: only when cwd is *literally* in this col-1 path. The dupe
-    # entry keeps its brightness but loses the underline - underline is
-    # reserved for the row containing the actual cwd.
-    if (( i == matching_idx || i == active_wt_origin_idx )); then
-        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag=""
+    # Bright + underline travel together and only one item ever has them -
+    # the row containing the literal cwd. Everything else is dim, no underline.
+    if (( i == matching_idx )); then
+        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag="";    ul='\033[4m'
     else
-        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"
+        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"; ul=""
     fi
-    if (( i == matching_idx )); then ul='\033[4m'; else ul=""; fi
 
     dir="${col1_short[$i]}"
     cell+=$(printf "${ul}${c_dir}%s\033[0m" "$dir")
