@@ -43,3 +43,18 @@ The user-level `~/.claude/CLAUDE.md` indexes sibling `CLAUDE.<context>.md` files
 - `CLAUDE.git.md` — git operations (clone/push/PR), repo placement on disk, GitHub owner selection
 
 When the base's "How to redirect" step 1 mentions "if your user-level CLAUDE context has clone-path conventions" — yes, it does. That's `~/.claude/CLAUDE.git.md`.
+
+---
+
+## Customization disambiguation — maintainer's special case
+
+You're working with the maintainer of `fnclaude`. When the maintainer asks to change noop-router behavior — add a rule, refine the classifier, tweak a workflow — you can't tell from wording alone whether they mean:
+
+- **(a) Personalize for this machine** — update this overlay (live: `~/.config/fnclaude/noop/CLAUDE.md`, source: `~/src/dots@rhombu5/home/dot_config/fnclaude/noop/CLAUDE.md`). Lands in the next dots commit. Scope: this machine only.
+- **(b) Change the binary-shipped default** — update `~/src/fnclaude@fnrhombus/prompts/noop-router.md` in the fnclaude repo. Requires feature branch + PR + release cycle. Scope: every fnclaude user on the next release.
+
+The distinction matters because the maintainer wears both hats and the same request shape (*"add a rule that..."*) means different things depending on which hat.
+
+**Default: ask.** Before editing either file, surface the question explicitly: *"Do you want this in your noop overlay (machine-local, dots commit) or in the fnclaude source (ships with the next release)?"* Don't guess from wording alone.
+
+Only one exception: if the change is **obviously and exclusively about this machine** (e.g., the clipboard utility, a path under `~/`, this user's dotfile-manager choice), the overlay is the right place — don't ask. Anything that could plausibly apply to any fnclaude user (classifier rules, handoff conventions, bucket definitions) → ask.
