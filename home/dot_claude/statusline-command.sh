@@ -268,16 +268,42 @@ glyph_for_ci() {
     esac
 }
 
-# Path-cell colors
-C_DIR='\033[33m'          # yellow (matching-cwd dir)
-C_DIR_DIM='\033[2;33m'    # dim yellow (idle dir)
-C_CURRENT='\033[36m'      # cyan (cwd subdir suffix)
-C_CURRENT_DIM='\033[2;36m' # dim cyan (suffix on a dim cell)
-C_GREEN='\033[32m'        # green (subagent active + main cwd also in it)
-C_GREEN_DIM='\033[2;32m'  # dim green (subagent active, main cwd elsewhere)
-C_BRANCH='\033[35m'       # magenta (vcs cell)
-C_BRANCH_DIM='\033[2;35m' # dim magenta
-C_SEP='\033[2;37m'        # dim white (column separator pipe)
+# Hue palette: project_dir is always index 0 (yellow); added_dirs cycle through
+# indices 1..N. Worktrees in col 2 inherit their parent col-1 entry's hue, so
+# you can visually trace a worktree back to the added-dir it belongs to.
+HUE_CODES=(33 36 32 34 37)   # yellow, cyan, green, blue, white
+
+# sgr_hue <hue-idx> <dim:0|1>  →  \033[<...>m
+sgr_hue() {
+    local code="${HUE_CODES[$1]:-${HUE_CODES[0]}}"
+    if (( $2 )); then printf '\033[2;%sm' "$code"
+    else              printf '\033[%sm'   "$code"
+    fi
+}
+
+# attrs_prefix <italic:0|1> <strike:0|1>  →  \033[3;9m-style prefix (or empty)
+# Stacks before a color escape; \033[0m later resets all attributes.
+attrs_prefix() {
+    local parts=()
+    (( $1 )) && parts+=(3)
+    (( $2 )) && parts+=(9)
+    (( ${#parts[@]} == 0 )) && return
+    local IFS=';'
+    printf '\033[%sm' "${parts[*]}"
+}
+
+# Map col-1 index → hue index: project_dir stays at 0, added_dirs cycle 1..N-1.
+hue_idx_for() {
+    local i=$1 size=${#HUE_CODES[@]}
+    (( i == 0 )) && { printf '0'; return; }
+    printf '%d' $(( (i - 1) % (size - 1) + 1 ))
+}
+
+C_CURRENT='\033[36m'       # cyan (cwd subdir suffix on col 1 path)
+C_CURRENT_DIM='\033[2;36m' # dim cyan
+C_BRANCH='\033[35m'        # magenta (col 1 vcs cell)
+C_BRANCH_DIM='\033[2;35m'  # dim magenta
+C_SEP='\033[2;37m'         # dim white (column separator pipe)
 
 # ── Column 1
 declare -a col1_path
@@ -386,10 +412,11 @@ col1_cell_max_w=0
 for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
+    hi=$(hue_idx_for "$i")
     if (( i == matching_idx || i == active_wt_origin_idx )); then
-        c_dir=$C_DIR; c_vcs=$C_BRANCH; dimflag=""
+        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH; dimflag=""
     else
-        c_dir=$C_DIR_DIM; c_vcs=$C_BRANCH_DIM; dimflag="dim"
+        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"
     fi
 
     dir="${col1_short[$i]}"
@@ -425,7 +452,8 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
                 cell+=$(printf " ${cc}%s\033[0m" "$cg")
                 cell_w=$(( cell_w + 2 ))
             fi
-        else
+        elif [ "$pr_state" != "merged" ]; then
+            # "(merged)" is the common terminal state — suppress to save space.
             cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
             cell_w=$(( cell_w + 3 + ${#pr_state} ))
         fi
@@ -460,11 +488,11 @@ for ((i=0; i<n; i++)); do
         append "$i" 3 " ${C_SEP}|\033[0m "
 
         # Col 2: git info only (no path).
-        # Coloring rule — subagent presence picks the hue, top-level cwd picks the saturation:
-        #   subagent + main  → bright green
-        #   subagent only    → dim   green
-        #   main only        → bright yellow
-        #   neither          → dim   yellow
+        # Hue        — inherits from the parent col-1 entry (project_dir or one of
+        #              the added_dirs). Lets you trace a worktree back to its repo.
+        # Saturation — bright when cwd lives in this worktree, dim otherwise.
+        # Italic     — set when an active subagent is in this worktree.
+        # Strike     — set when the PR is merged (the "(merged)" label is then dropped).
         wt_real=$(realpath_safe "${col2_path[$i]}")
 
         # Subagent here? (forked-claude /proc check, then in-process agent-id heuristic.)
@@ -489,28 +517,39 @@ for ((i=0; i<n; i++)); do
             has_main=1
         fi
 
-        if   (( has_subagent && has_main )); then wt_vcs=$C_GREEN;     wt_dim=""
-        elif (( has_subagent ));             then wt_vcs=$C_GREEN_DIM; wt_dim="dim"
-        elif (( has_main ));                 then wt_vcs=$C_DIR;       wt_dim=""
-        else                                      wt_vcs=$C_DIR_DIM;   wt_dim="dim"
+        # PR state pulled up early so strikethrough can wrap the whole col-2 cell.
+        pr_state=""; ci_state=""; pr_num=""
+        if [ -n "${col2_pr[$i]}" ]; then
+            read -r pr_state ci_state pr_num <<<"${col2_pr[$i]}"
         fi
+
+        parent_hi=$(hue_idx_for "${col2_origin_idx[$i]}")
+        if (( has_main )); then
+            wt_vcs=$(sgr_hue "$parent_hi" 0); wt_dim=""
+        else
+            wt_vcs=$(sgr_hue "$parent_hi" 1); wt_dim="dim"
+        fi
+        italic_flag=0; (( has_subagent )) && italic_flag=1
+        strike_flag=0; [ "$pr_state" = "merged" ] && strike_flag=1
+        ap=$(attrs_prefix "$italic_flag" "$strike_flag")
 
         if [ -n "${col2_vcs[$i]}" ]; then
             vt="${col2_vcs[$i]}"
-            append "$i" "${#vt}" "${wt_vcs}%s\033[0m" "$vt"
+            append "$i" "${#vt}" "${ap}${wt_vcs}%s\033[0m" "$vt"
         fi
-        if [ -n "${col2_pr[$i]}" ]; then
-            read -r pr_state ci_state pr_num <<<"${col2_pr[$i]}"
+        if [ -n "$pr_num" ]; then
             pc=$(color_for_pr "$pr_state" "$wt_dim")
-            append "$i" $(( 2 + ${#pr_num} )) "  ${pc}%s\033[0m" "$pr_num"
+            append "$i" $(( 2 + ${#pr_num} )) "  ${ap}${pc}%s\033[0m" "$pr_num"
             if [ "$pr_state" = "open" ]; then
                 cg=$(glyph_for_ci "$ci_state")
                 if [ -n "$cg" ]; then
                     cc=$(color_for_ci "$ci_state" "$wt_dim")
-                    append "$i" 2 " ${cc}%s\033[0m" "$cg"
+                    append "$i" 2 " ${ap}${cc}%s\033[0m" "$cg"
                 fi
-            else
-                append "$i" $(( 3 + ${#pr_state} )) " ${pc}(%s)\033[0m" "$pr_state"
+            elif [ "$pr_state" != "merged" ]; then
+                # "(merged)" is conveyed by the strikethrough — suppress the label
+                # to save space. Draft/closed still need an explicit word.
+                append "$i" $(( 3 + ${#pr_state} )) " ${ap}${pc}(%s)\033[0m" "$pr_state"
             fi
         fi
     fi
