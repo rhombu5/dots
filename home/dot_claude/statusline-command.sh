@@ -310,8 +310,8 @@ hue_idx_for() {
 
 C_CURRENT='\033[36m'       # cyan (cwd subdir suffix on col 1 path)
 C_CURRENT_DIM='\033[2;36m' # dim cyan
-C_BRANCH='\033[35m'        # magenta (col 1 vcs cell)
-C_BRANCH_DIM='\033[2;35m'  # dim magenta
+C_BRANCH='\033[38;5;252m'  # very light gray (col 1 vcs + col 2 status suffix)
+C_BRANCH_DIM='\033[38;5;245m'  # medium gray
 C_SEP='\033[2;37m'         # dim white (column separator pipe)
 
 # ── Column 1
@@ -446,15 +446,13 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 
     vt="${col1_vcs[$i]}"
     if [ -n "$vt" ]; then
-        # vcs_text_for emits head\tcounts; col 1 paints both magenta, but only
-        # the head gets the row's underline — the status suffix stays quiet.
+        # vcs_text_for emits head\tcounts; col 1 paints the whole vcs cell
+        # in the status color and leaves it un-underlined - it's status info,
+        # not row identity. Only the path/cwd-suffix carry the underline.
         IFS=$'\t' read -r vt_head vt_counts <<<"$vt"
-        cell+=$(printf "  ${ul}${c_vcs}%s\033[0m" "$vt_head")
-        cell_w=$(( cell_w + 2 + ${#vt_head} ))
-        if [ -n "$vt_counts" ]; then
-            cell+=$(printf "${c_vcs}%s\033[0m" "$vt_counts")
-            cell_w=$(( cell_w + ${#vt_counts} ))
-        fi
+        vt_full="${vt_head}${vt_counts}"
+        cell+=$(printf "  ${c_vcs}%s\033[0m" "$vt_full")
+        cell_w=$(( cell_w + 2 + ${#vt_full} ))
     fi
 
     pr="${col1_pr[$i]}"
@@ -590,7 +588,7 @@ if [ -n "$model" ]; then
     pad=$(( target_col - row_vw[0] ))
     (( pad < SEP )) && pad=$SEP
     append 0 "$pad" '%*s' "$pad" ""
-    append 0 "${#model}" "\033[37m%s\033[0m" "$model"
+    append 0 "${#model}" "\033[3;37m%s\033[0m" "$model"
 fi
 
 if [ -n "$used" ]; then
