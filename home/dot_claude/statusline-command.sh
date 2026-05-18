@@ -95,6 +95,32 @@ mkdir -p "$CACHE_DIR" 2>/dev/null
 
 shorten() { local p="$1"; printf '%s' "${p/#$HOME/\~}"; }
 
+# Read repoSettings.cloneTemplate's literal prefix (everything before {repo}) so
+# repos parked in the canonical location can be shown as just "name@owner" or
+# "name@owner+input" instead of the full ~/src/... path. The clone and worktree
+# templates share their prefix in normal setups, so we only need to read one.
+TEMPLATE_PREFIX=""
+if [ -r "$HOME/.claude/settings.json" ]; then
+    _tmpl=$(jq -r '.repoSettings.cloneTemplate // empty' "$HOME/.claude/settings.json" 2>/dev/null)
+    [ -n "$_tmpl" ] && TEMPLATE_PREFIX="${_tmpl%%\{*}"
+fi
+[ -z "$TEMPLATE_PREFIX" ] && TEMPLATE_PREFIX="~/src/"
+
+# If a ~-shortened path fits the templated layout, strip the prefix; else return
+# unchanged. Pattern check is structural (<word>@<word>[+<rest>]) - no variable
+# substitution needed.
+abbreviate_if_templated() {
+    local p="$1"
+    if [[ "$p" == "$TEMPLATE_PREFIX"* ]]; then
+        local rest="${p#$TEMPLATE_PREFIX}"
+        if [[ "$rest" =~ ^[^/]+@[^/]+(\+[^/]+)?$ ]]; then
+            printf '%s' "$rest"
+            return
+        fi
+    fi
+    printf '%s' "$p"
+}
+
 realpath_safe() {
     local p="$1"
     if [ -d "$p" ]; then
@@ -322,7 +348,7 @@ col1_path+=("$(repo_root_of "$project_dir")")
 for d in "${added_dirs[@]}"; do col1_path+=("$(repo_root_of "$d")"); done
 
 declare -a col1_short
-for p in "${col1_path[@]}"; do col1_short+=("$(shorten "$p")"); done
+for p in "${col1_path[@]}"; do col1_short+=("$(abbreviate_if_templated "$(shorten "$p")")"); done
 
 declare -A seen
 for p in "${col1_path[@]}"; do seen["$(realpath_safe "$p")"]=1; done
