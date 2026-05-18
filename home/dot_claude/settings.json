@@ -37,8 +37,9 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
-  "worktreePaths": {
-    "pathTemplate": "~/src/{repo}@{owner}+{input}",
+  "repoSettings": {
+    "cloneTemplate": "~/src/{repo}@{owner}",
+    "worktreeTemplate": "~/src/{repo}@{owner}+{input}",
     "branchTemplate": "{input}"
   }
 }
