@@ -1,42 +1,61 @@
 # Git / GitHub context rules
 
-## Repo clone paths and naming
+## Repo paths
 
-**Folder name (hard rule):** `{repo}@{user}+{workspace}` — drop the `+{workspace}` suffix when there is no workspace. The `@user` part is **always** included so forks and upstreams of same-named repos can coexist.
+Where things land on disk comes from `~/.claude/settings.json`'s `repoSettings` block:
 
-**Parent directory** — pick by what the repo *is to me*, not by taste. The axis is: do I edit it, do I build it for myself, or am I just running it?
+- `cloneTemplate` — destination for fresh clones. `fnc <ref>` reads this when resolving a repo reference to a path.
+- `worktreeTemplate` — destination for worktrees. Claude Code's `--worktree` (via the claude-code-worktree-paths plugin) reads this when creating a worktree.
 
-- **`~/src/`** — code I edit or could commit to. Personal projects, forks I'm working on, anything where I'm a contributor. Default for "I'm hacking on this."
-- **`~/.local/src/`** — third-party source I'm cloning to build/install at user scope (analog of `/usr/local/src/` for $HOME). I'm a *user* of it, not an editor. Use when upstream's pattern is "git clone && make install" and the build artifact lands in `~/.local/`. Keeps `~/src/` from filling up with build trees I never touch.
-- **`/opt/`** — third-party application bundles installed system-wide (FHS convention: one self-contained dir per product). Path is just `/opt/{repo}@{user}+{workspace}` — no `<vendor>` layer, since `@user` already gives the provider namespace FHS wants. Rare for raw clones; usually only when upstream ships a tarball you'd otherwise extract there.
-- **`/tmp/`** — throwaway exploration. Use `mktemp -d` so concurrent clones don't collide.
+The schema is documented in the plugin's README. **Don't restate the folder-name pattern** in chat, in commit messages, or in CLAUDE files — point at the templates. The `@owner+workspace` shape is part of the configured templates; if you find yourself spelling it out somewhere else, you're duplicating.
 
-If you can't tell which category the repo falls into → **ask me** before cloning.
+**Per-category placement** (what `cloneTemplate` can't express — it's one default for all clones):
 
-## Resolving repo short-names to local paths
+- **`~/src/`** — code I edit or could commit to. Personal projects, forks. The default `cloneTemplate` captures this case.
+- **`~/.local/src/`** — third-party source I'm building from upstream's "git clone && make install" flow. I'm a *user* of it, not an editor. Clone manually to this prefix; don't change `cloneTemplate` to handle one-off cases.
+- **`/opt/`** — third-party application bundles installed system-wide (FHS convention). Rare for raw clones.
+- **`/tmp/`** — throwaway exploration. Use `mktemp -d`.
 
-When I say *"put it in arch-setup"*, *"look in dots"*, *"check the planters in dots"* — I mean the **repo**, not a literal directory at `~/src/arch-setup/` or `~/src/dots/`. Those directories don't exist by convention. The local checkout always follows the `{repo}@{user}+{workspace}` rule above, so resolve like:
+If you can't tell which category a repo falls into, ask me before cloning.
 
-- `dots` → `~/src/dots@rhombu5/`
-- `arch-setup` → `~/src/arch-setup@fnrhombus/` (currently; will move to `rhombu5/arch-setup` eventually)
+## Resolving repo short-names
 
-If you're unsure or there could be multiple checkouts (forks, worktrees), confirm with:
+`fnc <name>` is the canonical resolver. It searches my gh-orgs (`gh api /user/orgs`), finds existing clones via `cloneTemplate`, and clones if missing. Prefer that over hand-computing paths.
+
+For ad-hoc inspection without launching claude:
 
 ```sh
 ls -d ~/src/<name>@* ~/.local/src/<name>@* 2>/dev/null
 ```
 
-Multiple hits → ask which one. Zero hits → it's not cloned yet; clone it (or ask) before continuing.
+Multiple hits → ask which one. Zero hits → not cloned yet.
 
-Never assume `~/src/<name>/` (no `@user` suffix) is a valid path — folder names always include the owner.
+## SSH
 
-## Always clone via SSH
+Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden Desktop (socket `~/.bitwarden-ssh-agent.sock`); if a non-interactive shell lacks `SSH_AUTH_SOCK`, prepend `SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock` to git calls.
 
-Use `git@<host>:<user>/<repo>.git` URLs, never `https://`. The SSH agent is Bitwarden Desktop (socket at `~/.bitwarden-ssh-agent.sock`); if a non-interactive shell doesn't have `SSH_AUTH_SOCK` set, prepend `SSH_AUTH_SOCK=$HOME/.bitwarden-ssh-agent.sock` to the git command — don't bypass signing.
+`gh repo clone` (used by fnclaude internally) honors `gh config get git_protocol` — set once to `ssh` and forget.
+
+## Creating worktrees — always via the templated path
+
+**HARD RULE**: when you need to create a worktree, the path comes from `repoSettings.worktreeTemplate`. The claude-code-worktree-paths plugin's `WorktreeCreate` hook computes it — your job is to *invoke the hook*, not to pick the path yourself.
+
+Concretely:
+
+- **`Task` with `isolation: "worktree"`** — fires the hook. Use this for any agent that needs isolation.
+- **`claude --worktree <name>`** — fires the hook.
+- **`fnc <repo>+<workspace>`** — fnclaude resolves the base repo, passes `--worktree <workspace>` to claude, hook fires.
+- **`git worktree add <path>` direct** — does NOT fire the hook. Path is whatever you typed. This is the failure mode.
+
+**Symptoms of doing it wrong**: worktree lands inside the repo at `.claude/worktrees/<name>/` (the plugin's vanilla default) or wherever you typed in `git worktree add`. Both wrong. The user's `worktreeTemplate` defines where worktrees should live — anything that doesn't honor it is a bug.
+
+The hook reports the templated path back in its `hookSpecificOutput.worktreePath`. **Use that returned value** — don't recompute, because the template might reference placeholders (`{host-short}`, `{repo-dir}`, `{clone-path}`) that aren't trivially derivable.
+
+If you find yourself reaching for `git worktree add <path>`, stop and ask: *"Is this a worktree the user expected at the templated location?"* If yes, switch to a hook-firing mechanism. If genuinely no (some specific reason for a one-off path), say so out loud and let the user push back.
 
 ## New projects
 
-Same rules as clones (folder name + parent dir). Pick the GitHub owner from the table below *up front* so the folder name reflects ownership from day one.
+Same template flow as clones — `cloneTemplate` determines the path, the GitHub owner comes from the table below. Pick the owner up-front so the folder shape is right from day one.
 
 ## Template repos
 
