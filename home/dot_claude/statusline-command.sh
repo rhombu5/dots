@@ -446,29 +446,34 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 
     vt="${col1_vcs[$i]}"
     if [ -n "$vt" ]; then
-        # vcs_text_for emits head\tcounts; col 1 paints both in the same magenta.
+        # vcs_text_for emits head\tcounts; col 1 paints both magenta, but only
+        # the head gets the row's underline — the status suffix stays quiet.
         IFS=$'\t' read -r vt_head vt_counts <<<"$vt"
-        vt_full="${vt_head}${vt_counts}"
-        cell+=$(printf "  ${ul}${c_vcs}%s\033[0m" "$vt_full")
-        cell_w=$(( cell_w + 2 + ${#vt_full} ))
+        cell+=$(printf "  ${ul}${c_vcs}%s\033[0m" "$vt_head")
+        cell_w=$(( cell_w + 2 + ${#vt_head} ))
+        if [ -n "$vt_counts" ]; then
+            cell+=$(printf "${c_vcs}%s\033[0m" "$vt_counts")
+            cell_w=$(( cell_w + ${#vt_counts} ))
+        fi
     fi
 
     pr="${col1_pr[$i]}"
     if [ -n "$pr" ]; then
         read -r pr_state ci_state pr_num <<<"$pr"
         pc=$(color_for_pr "$pr_state" "$dimflag")
-        cell+=$(printf "  ${ul}${pc}%s\033[0m" "$pr_num")
+        # PR info is part of the status suffix - no underline.
+        cell+=$(printf "  ${pc}%s\033[0m" "$pr_num")
         cell_w=$(( cell_w + 2 + ${#pr_num} ))
         if [ "$pr_state" = "open" ]; then
             cg=$(glyph_for_ci "$ci_state")
             if [ -n "$cg" ]; then
                 cc=$(color_for_ci "$ci_state" "$dimflag")
-                cell+=$(printf " ${ul}${cc}%s\033[0m" "$cg")
+                cell+=$(printf " ${cc}%s\033[0m" "$cg")
                 cell_w=$(( cell_w + 2 ))
             fi
         elif [ "$pr_state" != "merged" ]; then
-            # "(merged)" suppressed to save space — terminal state, common.
-            cell+=$(printf " ${ul}\033[2m(%s)\033[0m" "$pr_state")
+            # "(merged)" suppressed to save space - terminal state, common.
+            cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
             cell_w=$(( cell_w + 3 + ${#pr_state} ))
         fi
     fi
@@ -543,32 +548,35 @@ for ((i=0; i<n; i++)); do
         else
             wt_head_c=$(sgr_hue "$parent_hi" 1); wt_rhs_c=$C_BRANCH_DIM; wt_dim="dim"
         fi
-        italic_flag=0;    (( has_subagent ))             && italic_flag=1
-        strike_flag=0;    [ "$pr_state" = "merged" ]    && strike_flag=1
-        underline_flag=0; (( has_main ))                 && underline_flag=1
-        ap=$(attrs_prefix "$italic_flag" "$strike_flag" "$underline_flag")
+        italic_flag=0;    (( has_subagent ))          && italic_flag=1
+        strike_flag=0;    [ "$pr_state" = "merged" ] && strike_flag=1
+        underline_flag=0; (( has_main ))              && underline_flag=1
+        # Two attribute sets: head carries underline + strike (whole-branch markers);
+        # the status suffix to its right gets only italic (a row-wide subagent signal).
+        ap_head=$(attrs_prefix "$italic_flag" "$strike_flag" "$underline_flag")
+        ap_rhs=$(attrs_prefix  "$italic_flag" 0              0)
 
         if [ -n "${col2_vcs[$i]}" ]; then
             # head = icons + branch name in inherited hue; counts in magenta
             # (matching col 1's vcs color) so the "git statuses" all read alike.
             IFS=$'\t' read -r vt_head vt_counts <<<"${col2_vcs[$i]}"
-            append "$i" "${#vt_head}" "${ap}${wt_head_c}%s\033[0m" "$vt_head"
+            append "$i" "${#vt_head}" "${ap_head}${wt_head_c}%s\033[0m" "$vt_head"
             if [ -n "$vt_counts" ]; then
-                append "$i" "${#vt_counts}" "${ap}${wt_rhs_c}%s\033[0m" "$vt_counts"
+                append "$i" "${#vt_counts}" "${ap_rhs}${wt_rhs_c}%s\033[0m" "$vt_counts"
             fi
         fi
         if [ -n "$pr_num" ]; then
             # Right of the branch name everything reads as a "git status" in magenta.
-            append "$i" $(( 2 + ${#pr_num} )) "  ${ap}${wt_rhs_c}%s\033[0m" "$pr_num"
+            append "$i" $(( 2 + ${#pr_num} )) "  ${ap_rhs}${wt_rhs_c}%s\033[0m" "$pr_num"
             if [ "$pr_state" = "open" ]; then
                 cg=$(glyph_for_ci "$ci_state")
                 if [ -n "$cg" ]; then
-                    append "$i" 2 " ${ap}${wt_rhs_c}%s\033[0m" "$cg"
+                    append "$i" 2 " ${ap_rhs}${wt_rhs_c}%s\033[0m" "$cg"
                 fi
             elif [ "$pr_state" != "merged" ]; then
-                # "(merged)" is conveyed by the strikethrough — suppress the label
-                # to save space. Draft/closed still need an explicit word.
-                append "$i" $(( 3 + ${#pr_state} )) " ${ap}${wt_rhs_c}(%s)\033[0m" "$pr_state"
+                # "(merged)" is conveyed by the strikethrough on head - suppress
+                # the label to save space. Draft/closed keep their word.
+                append "$i" $(( 3 + ${#pr_state} )) " ${ap_rhs}${wt_rhs_c}(%s)\033[0m" "$pr_state"
             fi
         fi
     fi
