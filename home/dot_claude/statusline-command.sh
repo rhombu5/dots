@@ -466,13 +466,17 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
     hi=$(hue_idx_for "$i")
-    # Bright rows (cwd here, or its worktree's origin via the dupe exception)
-    # get underline + full saturation; dim rows get neither.
+    # Saturation: bright when cwd is here OR via the dupe exception
+    # (the col-1 entry that owns the worktree cwd is currently in).
+    # Underline: only when cwd is *literally* in this col-1 path. The dupe
+    # entry keeps its brightness but loses the underline - underline is
+    # reserved for the row containing the actual cwd.
     if (( i == matching_idx || i == active_wt_origin_idx )); then
-        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag="";    ul='\033[4m'
+        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag=""
     else
-        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"; ul=""
+        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"
     fi
+    if (( i == matching_idx )); then ul='\033[4m'; else ul=""; fi
 
     dir="${col1_short[$i]}"
     cell+=$(printf "${ul}${c_dir}%s\033[0m" "$dir")
