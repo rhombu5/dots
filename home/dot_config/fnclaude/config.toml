@@ -1,3 +1,2 @@
 [auto]
 tmux = "worktree"
-dangerously_skip_permissions = true

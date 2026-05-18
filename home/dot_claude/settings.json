@@ -31,6 +31,9 @@
     "mode": "hold"
   },
   "skipDangerousModePermissionPrompt": true,
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  },
   "theme": "auto",
   "verbose": false,
   "remoteControlAtStartup": true,
