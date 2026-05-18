@@ -36,6 +36,18 @@ Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden De
 
 `gh repo clone` (used by fnclaude internally) honors `gh config get git_protocol` — set once to `ssh` and forget.
 
+## Entering / exiting worktrees — always use the tools
+
+**HARD RULE**: when claude needs to work in a worktree, use the **`EnterWorktree`** tool to switch in and **`ExitWorktree`** to switch back. Don't `cd <worktree>` via Bash, don't run `git worktree add <path>` directly, don't symlink into one. Reasons:
+
+- `EnterWorktree` updates the session's cwd, so subsequent tool calls, the statusbar, and anything else that reads `workspace.current_dir` reflect that claude is now working in the worktree. A bare `git worktree add` creates the directory but leaves cwd unchanged — the statusbar won't light up the worktree, and downstream code keeps targeting the main checkout.
+- `EnterWorktree` creates the worktree at the `repoSettings.worktreeTemplate` path if it doesn't already exist, so the rules from the "Creating worktrees" section below apply automatically — no path math needed at the call site.
+- `ExitWorktree` restores the prior cwd cleanly; no manual `cd -` needed.
+
+**Exit as soon as the work in the worktree is done.** Don't linger after the task that needed the worktree completes — call `ExitWorktree` immediately so the statusbar and any tool reading `workspace.current_dir` snap back to the main checkout. Staying parked in a worktree past the task that justified it is a stale cwd waiting to mislead the next thing you do.
+
+`git worktree remove <path>` is still the right call for **cleanup** (e.g., after a PR merges, per the rule near the bottom of this file). That's about deleting the worktree's directory, separate from claude's cwd context.
+
 ## Creating worktrees — always via the templated path
 
 **HARD RULE**: when you need to create a worktree, the path comes from `repoSettings.worktreeTemplate`. The claude-code-worktree-paths plugin's `WorktreeCreate` hook computes it — your job is to *invoke the hook*, not to pick the path yourself.
