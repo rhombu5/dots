@@ -120,9 +120,14 @@ git_branch_of() {
         || git --no-optional-locks -C "$d" rev-parse --short HEAD 2>/dev/null
 }
 
-# p10k-flavoured VCS cell text: "<host-icon> <branch-icon> <branch>[ ⇣N ⇡N *N +N !N ?N]"
+# p10k-flavoured VCS cell. Emits two parts joined by TAB so callers can color
+# them independently:  <head>\t<counts>
+#   head   = "<host-icon> <branch-icon> <branch>"
+#   counts = " ⇣N ⇡N *N +N !N ?N"  (or empty)
+# $2 = icon_mode: "tree" -> tree glyph for GitHub origins (col 2 worktrees);
+#                  default -> octocat (col 1 repos).
 vcs_text_for() {
-    local d="$1" branch
+    local d="$1" icon_mode="${2:-default}" branch
     [ -z "$d" ] && return
     git --no-optional-locks -C "$d" rev-parse --is-inside-work-tree &>/dev/null || return
     branch=$(git --no-optional-locks -C "$d" symbolic-ref --short HEAD 2>/dev/null) \
@@ -130,15 +135,17 @@ vcs_text_for() {
         || return
 
     local host_icon=$'' url
+    local gh_icon=$'\uF408'    # nf-fa-github_alt (octocat) - col 1 default
+    [ "$icon_mode" = "tree" ] && gh_icon=$'\uF1BB'    # nf-fa-tree - col 2 worktrees
     url=$(git --no-optional-locks -C "$d" remote get-url origin 2>/dev/null)
     case "$url" in
-        *github.com*) host_icon=$'\uF1BB' ;;
+        *github.com*) host_icon="$gh_icon" ;;
         *gitlab*)     host_icon=$'' ;;
         *bitbucket*)  host_icon=$'' ;;
     esac
     local branch_icon=$''
 
-    local out="$host_icon $branch_icon $branch"
+    local head_part="$host_icon $branch_icon $branch"
 
     local staged=0 unstaged=0 untracked=0 line
     while IFS= read -r line; do
@@ -161,14 +168,15 @@ vcs_text_for() {
     local stash
     stash=$(git --no-optional-locks -C "$d" stash list 2>/dev/null | wc -l)
 
-    (( behind > 0 ))    && out+=" ⇣$behind"
-    (( ahead > 0 ))     && out+=" ⇡$ahead"
-    (( stash > 0 ))     && out+=" *$stash"
-    (( staged > 0 ))    && out+=" +$staged"
-    (( unstaged > 0 ))  && out+=" !$unstaged"
-    (( untracked > 0 )) && out+=" ?$untracked"
+    local counts_part=""
+    (( behind > 0 ))    && counts_part+=" ⇣$behind"
+    (( ahead > 0 ))     && counts_part+=" ⇡$ahead"
+    (( stash > 0 ))     && counts_part+=" *$stash"
+    (( staged > 0 ))    && counts_part+=" +$staged"
+    (( unstaged > 0 ))  && counts_part+=" !$unstaged"
+    (( untracked > 0 )) && counts_part+=" ?$untracked"
 
-    printf '%s' "$out"
+    printf '%s\t%s' "$head_part" "$counts_part"
 }
 
 worktrees_of() {
@@ -281,12 +289,13 @@ sgr_hue() {
     fi
 }
 
-# attrs_prefix <italic:0|1> <strike:0|1>  →  \033[3;9m-style prefix (or empty)
+# attrs_prefix <italic:0|1> <strike:0|1> <underline:0|1>  ->  SGR prefix or empty.
 # Stacks before a color escape; \033[0m later resets all attributes.
 attrs_prefix() {
     local parts=()
-    (( $1 )) && parts+=(3)
-    (( $2 )) && parts+=(9)
+    (( ${1:-0} )) && parts+=(3)
+    (( ${3:-0} )) && parts+=(4)
+    (( ${2:-0} )) && parts+=(9)
     (( ${#parts[@]} == 0 )) && return
     local IFS=';'
     printf '\033[%sm' "${parts[*]}"
@@ -358,7 +367,7 @@ for p in "${col2_path[@]}"; do col2_short+=("$(relative_to_repo "$p")"); done
 for ((j=0; j<${#col2_path[@]}; j++)); do
     refresh_pr_async "${col2_path[$j]}"
     col2_pr+=("$(read_pr_annotation "${col2_path[$j]}")")
-    col2_vcs+=("$(vcs_text_for "${col2_path[$j]}")")
+    col2_vcs+=("$(vcs_text_for "${col2_path[$j]}" tree)")
 done
 
 # Pre-fetch vcs + PR for col 1 entries too (added dirs now show git status).
@@ -413,48 +422,53 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
     hi=$(hue_idx_for "$i")
+    # Bright rows (cwd here, or its worktree's origin via the dupe exception)
+    # get underline + full saturation; dim rows get neither.
     if (( i == matching_idx || i == active_wt_origin_idx )); then
-        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH; dimflag=""
+        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag="";    ul='\033[4m'
     else
-        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"
+        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"; ul=""
     fi
 
     dir="${col1_short[$i]}"
-    cell+=$(printf "${c_dir}%s\033[0m" "$dir")
+    cell+=$(printf "${ul}${c_dir}%s\033[0m" "$dir")
     cell_w=$(( cell_w + ${#dir} ))
 
-    # Cyan suffix only on the matching row, when cwd is a subdir of it
+    # Cyan suffix only on the matching row, when cwd is a subdir of it.
     if (( i == matching_idx )); then
         krp=$(realpath_safe "${col1_path[$i]}")
         if [ "$cwd_real" != "$krp" ] && [[ "$cwd_real" == "$krp"/* ]]; then
             suffix="/${cwd_real#$krp/}"
-            cell+=$(printf "${C_CURRENT}%s\033[0m" "$suffix")
+            cell+=$(printf "${ul}${C_CURRENT}%s\033[0m" "$suffix")
             cell_w=$(( cell_w + ${#suffix} ))
         fi
     fi
 
     vt="${col1_vcs[$i]}"
     if [ -n "$vt" ]; then
-        cell+=$(printf "  ${c_vcs}%s\033[0m" "$vt")
-        cell_w=$(( cell_w + 2 + ${#vt} ))
+        # vcs_text_for emits head\tcounts; col 1 paints both in the same magenta.
+        IFS=$'\t' read -r vt_head vt_counts <<<"$vt"
+        vt_full="${vt_head}${vt_counts}"
+        cell+=$(printf "  ${ul}${c_vcs}%s\033[0m" "$vt_full")
+        cell_w=$(( cell_w + 2 + ${#vt_full} ))
     fi
 
     pr="${col1_pr[$i]}"
     if [ -n "$pr" ]; then
         read -r pr_state ci_state pr_num <<<"$pr"
         pc=$(color_for_pr "$pr_state" "$dimflag")
-        cell+=$(printf "  ${pc}%s\033[0m" "$pr_num")
+        cell+=$(printf "  ${ul}${pc}%s\033[0m" "$pr_num")
         cell_w=$(( cell_w + 2 + ${#pr_num} ))
         if [ "$pr_state" = "open" ]; then
             cg=$(glyph_for_ci "$ci_state")
             if [ -n "$cg" ]; then
                 cc=$(color_for_ci "$ci_state" "$dimflag")
-                cell+=$(printf " ${cc}%s\033[0m" "$cg")
+                cell+=$(printf " ${ul}${cc}%s\033[0m" "$cg")
                 cell_w=$(( cell_w + 2 ))
             fi
         elif [ "$pr_state" != "merged" ]; then
-            # "(merged)" is the common terminal state — suppress to save space.
-            cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
+            # "(merged)" suppressed to save space — terminal state, common.
+            cell+=$(printf " ${ul}\033[2m(%s)\033[0m" "$pr_state")
             cell_w=$(( cell_w + 3 + ${#pr_state} ))
         fi
     fi
@@ -525,31 +539,36 @@ for ((i=0; i<n; i++)); do
 
         parent_hi=$(hue_idx_for "${col2_origin_idx[$i]}")
         if (( has_main )); then
-            wt_vcs=$(sgr_hue "$parent_hi" 0); wt_dim=""
+            wt_head_c=$(sgr_hue "$parent_hi" 0); wt_rhs_c=$C_BRANCH;     wt_dim=""
         else
-            wt_vcs=$(sgr_hue "$parent_hi" 1); wt_dim="dim"
+            wt_head_c=$(sgr_hue "$parent_hi" 1); wt_rhs_c=$C_BRANCH_DIM; wt_dim="dim"
         fi
-        italic_flag=0; (( has_subagent )) && italic_flag=1
-        strike_flag=0; [ "$pr_state" = "merged" ] && strike_flag=1
-        ap=$(attrs_prefix "$italic_flag" "$strike_flag")
+        italic_flag=0;    (( has_subagent ))             && italic_flag=1
+        strike_flag=0;    [ "$pr_state" = "merged" ]    && strike_flag=1
+        underline_flag=0; (( has_main ))                 && underline_flag=1
+        ap=$(attrs_prefix "$italic_flag" "$strike_flag" "$underline_flag")
 
         if [ -n "${col2_vcs[$i]}" ]; then
-            vt="${col2_vcs[$i]}"
-            append "$i" "${#vt}" "${ap}${wt_vcs}%s\033[0m" "$vt"
+            # head = icons + branch name in inherited hue; counts in magenta
+            # (matching col 1's vcs color) so the "git statuses" all read alike.
+            IFS=$'\t' read -r vt_head vt_counts <<<"${col2_vcs[$i]}"
+            append "$i" "${#vt_head}" "${ap}${wt_head_c}%s\033[0m" "$vt_head"
+            if [ -n "$vt_counts" ]; then
+                append "$i" "${#vt_counts}" "${ap}${wt_rhs_c}%s\033[0m" "$vt_counts"
+            fi
         fi
         if [ -n "$pr_num" ]; then
-            pc=$(color_for_pr "$pr_state" "$wt_dim")
-            append "$i" $(( 2 + ${#pr_num} )) "  ${ap}${pc}%s\033[0m" "$pr_num"
+            # Right of the branch name everything reads as a "git status" in magenta.
+            append "$i" $(( 2 + ${#pr_num} )) "  ${ap}${wt_rhs_c}%s\033[0m" "$pr_num"
             if [ "$pr_state" = "open" ]; then
                 cg=$(glyph_for_ci "$ci_state")
                 if [ -n "$cg" ]; then
-                    cc=$(color_for_ci "$ci_state" "$wt_dim")
-                    append "$i" 2 " ${ap}${cc}%s\033[0m" "$cg"
+                    append "$i" 2 " ${ap}${wt_rhs_c}%s\033[0m" "$cg"
                 fi
             elif [ "$pr_state" != "merged" ]; then
                 # "(merged)" is conveyed by the strikethrough — suppress the label
                 # to save space. Draft/closed still need an explicit word.
-                append "$i" $(( 3 + ${#pr_state} )) " ${ap}${pc}(%s)\033[0m" "$pr_state"
+                append "$i" $(( 3 + ${#pr_state} )) " ${ap}${wt_rhs_c}(%s)\033[0m" "$pr_state"
             fi
         fi
     fi
