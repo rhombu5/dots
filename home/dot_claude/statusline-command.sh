@@ -120,9 +120,10 @@ git_branch_of() {
         || git --no-optional-locks -C "$d" rev-parse --short HEAD 2>/dev/null
 }
 
-# p10k-flavoured VCS cell. Emits two parts joined by TAB so callers can color
-# them independently:  <head>\t<counts>
-#   head   = "<host-icon> <branch-icon> <branch>"
+# p10k-flavoured VCS cell. Emits three parts joined by TAB so callers can color
+# / decorate them independently:  <icons>\t<branch>\t<counts>
+#   icons  = "<host-icon> <branch-icon> "  (trailing space; concat == original)
+#   branch = "<branch-name>"
 #   counts = " ⇣N ⇡N *N +N !N ?N"  (or empty)
 # $2 = icon_mode: "tree" -> tree glyph for GitHub origins (col 2 worktrees);
 #                  default -> octocat (col 1 repos).
@@ -145,7 +146,8 @@ vcs_text_for() {
     esac
     local branch_icon=$''
 
-    local head_part="$host_icon $branch_icon $branch"
+    local icons_part="$host_icon $branch_icon "    # trailing space so concat == original
+    local branch_part="$branch"
 
     local staged=0 unstaged=0 untracked=0 line
     while IFS= read -r line; do
@@ -176,7 +178,7 @@ vcs_text_for() {
     (( unstaged > 0 ))  && counts_part+=" !$unstaged"
     (( untracked > 0 )) && counts_part+=" ?$untracked"
 
-    printf '%s\t%s' "$head_part" "$counts_part"
+    printf '%s\t%s\t%s' "$icons_part" "$branch_part" "$counts_part"
 }
 
 worktrees_of() {
@@ -446,11 +448,11 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 
     vt="${col1_vcs[$i]}"
     if [ -n "$vt" ]; then
-        # vcs_text_for emits head\tcounts; col 1 paints the whole vcs cell
-        # in the status color and leaves it un-underlined - it's status info,
-        # not row identity. Only the path/cwd-suffix carry the underline.
-        IFS=$'\t' read -r vt_head vt_counts <<<"$vt"
-        vt_full="${vt_head}${vt_counts}"
+        # vcs_text_for emits icons\tbranch\tcounts; col 1 paints the whole vcs
+        # cell in the status color and leaves it un-underlined - it's status
+        # info, not row identity. Only the path/cwd-suffix carry the underline.
+        IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"$vt"
+        vt_full="${vt_icons}${vt_branch}${vt_counts}"
         cell+=$(printf "  ${c_vcs}%s\033[0m" "$vt_full")
         cell_w=$(( cell_w + 2 + ${#vt_full} ))
     fi
@@ -549,32 +551,37 @@ for ((i=0; i<n; i++)); do
         italic_flag=0;    (( has_subagent ))          && italic_flag=1
         strike_flag=0;    [ "$pr_state" = "merged" ] && strike_flag=1
         underline_flag=0; (( has_main ))              && underline_flag=1
-        # Two attribute sets: head carries underline + strike (whole-branch markers);
-        # the status suffix to its right gets only italic (a row-wide subagent signal).
-        ap_head=$(attrs_prefix "$italic_flag" "$strike_flag" "$underline_flag")
-        ap_rhs=$(attrs_prefix  "$italic_flag" 0              0)
+        # All text decorations (italic for subagent, strike for merged, underline
+        # for bright) attach to the branch name only - icons left of it and the
+        # status suffix right of it stay undecorated, just colored.
+        ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$underline_flag")
 
         if [ -n "${col2_vcs[$i]}" ]; then
-            # head = icons + branch name in inherited hue; counts in magenta
-            # (matching col 1's vcs color) so the "git statuses" all read alike.
-            IFS=$'\t' read -r vt_head vt_counts <<<"${col2_vcs[$i]}"
-            append "$i" "${#vt_head}" "${ap_head}${wt_head_c}%s\033[0m" "$vt_head"
+            # icons + branch name in inherited hue; counts in light gray
+            # (matching col 1's status color) so "git statuses" all read alike.
+            IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"${col2_vcs[$i]}"
+            if [ -n "$vt_icons" ]; then
+                append "$i" "${#vt_icons}" "${wt_head_c}%s\033[0m" "$vt_icons"
+            fi
+            if [ -n "$vt_branch" ]; then
+                append "$i" "${#vt_branch}" "${ap_branch}${wt_head_c}%s\033[0m" "$vt_branch"
+            fi
             if [ -n "$vt_counts" ]; then
-                append "$i" "${#vt_counts}" "${ap_rhs}${wt_rhs_c}%s\033[0m" "$vt_counts"
+                append "$i" "${#vt_counts}" "${wt_rhs_c}%s\033[0m" "$vt_counts"
             fi
         fi
         if [ -n "$pr_num" ]; then
-            # Right of the branch name everything reads as a "git status" in magenta.
-            append "$i" $(( 2 + ${#pr_num} )) "  ${ap_rhs}${wt_rhs_c}%s\033[0m" "$pr_num"
+            # Right of the branch name everything reads as status in light gray.
+            append "$i" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
             if [ "$pr_state" = "open" ]; then
                 cg=$(glyph_for_ci "$ci_state")
                 if [ -n "$cg" ]; then
-                    append "$i" 2 " ${ap_rhs}${wt_rhs_c}%s\033[0m" "$cg"
+                    append "$i" 2 " ${wt_rhs_c}%s\033[0m" "$cg"
                 fi
             elif [ "$pr_state" != "merged" ]; then
-                # "(merged)" is conveyed by the strikethrough on head - suppress
+                # "(merged)" is conveyed by the strikethrough on branch - suppress
                 # the label to save space. Draft/closed keep their word.
-                append "$i" $(( 3 + ${#pr_state} )) " ${ap_rhs}${wt_rhs_c}(%s)\033[0m" "$pr_state"
+                append "$i" $(( 3 + ${#pr_state} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_state"
             fi
         fi
     fi
