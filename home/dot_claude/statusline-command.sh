@@ -132,7 +132,7 @@ vcs_text_for() {
     local host_icon=$'' url
     url=$(git --no-optional-locks -C "$d" remote get-url origin 2>/dev/null)
     case "$url" in
-        *github.com*) host_icon=$'' ;;
+        *github.com*) host_icon=$'\uF1BB' ;;
         *gitlab*)     host_icon=$'' ;;
         *bitbucket*)  host_icon=$'' ;;
     esac
@@ -294,15 +294,17 @@ for p in "${col1_path[@]}"; do seen["$(realpath_safe "$p")"]=1; done
 # `seen` already contains col-1 paths (project_dir + added_dirs), which prevents
 # duplicating *main* worktrees here. Cwd is NOT added to `seen` — if cwd happens
 # to be a linked worktree, it should still appear and get its yellow saturation.
-declare -a col2_path col2_vcs
+declare -a col2_path col2_vcs col2_origin_idx
 
-for repo in "${col1_path[@]}"; do
+for ((ridx=0; ridx<${#col1_path[@]}; ridx++)); do
+    repo="${col1_path[$ridx]}"
     while IFS=$'\t' read -r wt_path _; do
         [ -z "$wt_path" ] && continue
         wt_real=$(realpath_safe "$wt_path")
         [ -n "${seen[$wt_real]}" ] && continue
         seen["$wt_real"]=1
         col2_path+=("$wt_path")
+        col2_origin_idx+=("$ridx")
     done < <(worktrees_of "$repo")
 done
 
@@ -352,6 +354,18 @@ for ((k=0; k<${#col1_path[@]}; k++)); do
     fi
 done
 
+# If cwd lives inside one of the col-2 worktrees, the col-1 entry that *owns*
+# that worktree (its main repo) stays bright too — the "dupe" exception so col 1
+# keeps a visual anchor when work has moved into a worktree.
+active_wt_origin_idx=-1
+for ((j=0; j<${#col2_path[@]}; j++)); do
+    wt_real=$(realpath_safe "${col2_path[$j]}")
+    if [ "$cwd_real" = "$wt_real" ] || [[ "$cwd_real" == "$wt_real"/* ]]; then
+        active_wt_origin_idx=${col2_origin_idx[$j]}
+        break
+    fi
+done
+
 col2_w=0
 for s in "${col2_short[@]}"; do (( ${#s} > col2_w )) && col2_w=${#s}; done
 
@@ -372,7 +386,7 @@ col1_cell_max_w=0
 for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
-    if (( i == matching_idx )); then
+    if (( i == matching_idx || i == active_wt_origin_idx )); then
         c_dir=$C_DIR; c_vcs=$C_BRANCH; dimflag=""
     else
         c_dir=$C_DIR_DIM; c_vcs=$C_BRANCH_DIM; dimflag="dim"
@@ -423,77 +437,67 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 done
 
 # ── Pass 2: assemble rows. Col 1 cell padded to col1_cell_max_w, then col 2.
+# Rows with no col-2 content skip both the padding and the divider pipe — the
+# pipe is purely a col-1/col-2 separator, so don't draw it when nothing follows.
 for ((i=0; i<n; i++)); do
+    has_col2=0
+    (( i < ${#col2_path[@]} )) && has_col2=1
+
     if (( i < ${#col1_cell_str[@]} )); then
         row_str[i]+="${col1_cell_str[$i]}"
         row_vw[i]=${col1_cell_vw[$i]}
-        pad=$(( col1_cell_max_w - col1_cell_vw[i] ))
-        (( pad > 0 )) && row_str[i]+=$(printf '%*s' "$pad" "") && row_vw[i]=$col1_cell_max_w
-    else
+        if (( has_col2 )); then
+            pad=$(( col1_cell_max_w - col1_cell_vw[i] ))
+            (( pad > 0 )) && row_str[i]+=$(printf '%*s' "$pad" "") && row_vw[i]=$col1_cell_max_w
+        fi
+    elif (( has_col2 )); then
         row_str[i]+=$(printf '\033[0m%*s' "$col1_cell_max_w" "")
         row_vw[i]=$col1_cell_max_w
     fi
 
-    # Column delimiter: dim pipe with breathing room on either side
-    append "$i" 3 " ${C_SEP}|\033[0m "
+    if (( has_col2 )); then
+        # Column delimiter: dim pipe with breathing room on either side
+        append "$i" 3 " ${C_SEP}|\033[0m "
 
-    # Col 2: worktree path + optional cyan suffix + vcs + PR
-    if (( i < ${#col2_path[@]} )); then
+        # Col 2: git info only (no path).
+        # Coloring rule — subagent presence picks the hue, top-level cwd picks the saturation:
+        #   subagent + main  → bright green
+        #   subagent only    → dim   green
+        #   main only        → bright yellow
+        #   neither          → dim   yellow
         wt_real=$(realpath_safe "${col2_path[$i]}")
 
-        # Independently determine: subagent here? main cwd here?
-        has_subagent=0; sub_cwd=""
-        # /proc-based check (catches forked claude processes, if any)
+        # Subagent here? (forked-claude /proc check, then in-process agent-id heuristic.)
+        has_subagent=0
         for sc in "${SUBAGENT_CWDS[@]}"; do
             sc_real=$(realpath_safe "$sc")
             if [ "$sc_real" = "$wt_real" ] || [[ "$sc_real" == "$wt_real"/* ]]; then
-                has_subagent=1; sub_cwd="$sc_real"; break
+                has_subagent=1; break
             fi
         done
-        # Agent-worktree-name check (catches in-process subagents)
         if (( has_subagent == 0 )); then
             wt_basename=${col2_path[$i]##*/}
             if [[ "$wt_basename" == agent-* ]]; then
                 aid="${wt_basename#agent-}"
-                if [ -n "${ACTIVE_AGENT_IDS[$aid]}" ]; then
-                    has_subagent=1
-                fi
+                [ -n "${ACTIVE_AGENT_IDS[$aid]}" ] && has_subagent=1
             fi
         fi
+
+        # Main cwd here?
         has_main=0
         if [ "$cwd_real" = "$wt_real" ] || [[ "$cwd_real" == "$wt_real"/* ]]; then
             has_main=1
         fi
 
-        # Prefer main's cwd for the cyan suffix when present (it's *your* location);
-        # fall back to subagent's cwd otherwise.
-        wt_suffix=""
-        if (( has_main )) && [ "$cwd_real" != "$wt_real" ]; then
-            wt_suffix="${cwd_real#$wt_real}"
-        elif (( has_subagent )) && [ "$sub_cwd" != "$wt_real" ]; then
-            wt_suffix="${sub_cwd#$wt_real}"
-        fi
-
-        # Saturation: full only when main cwd is in the worktree.
-        # Hue: green if a subagent is also in it; yellow otherwise.
-        if (( has_subagent && has_main )); then
-            wt_color=$C_GREEN;     wt_vcs=$C_BRANCH;     wt_suffix_c=$C_CURRENT;     wt_dim=""
-        elif (( has_subagent )); then
-            wt_color=$C_GREEN_DIM; wt_vcs=$C_BRANCH_DIM; wt_suffix_c=$C_CURRENT_DIM; wt_dim="dim"
-        elif (( has_main )); then
-            wt_color=$C_DIR;       wt_vcs=$C_BRANCH;     wt_suffix_c=$C_CURRENT;     wt_dim=""
-        else
-            wt_color=$C_DIR_DIM;   wt_vcs=$C_BRANCH_DIM; wt_suffix_c=$C_CURRENT_DIM; wt_dim="dim"
-        fi
-
-        append "$i" "${#col2_short[$i]}" "${wt_color}%s\033[0m" "${col2_short[$i]}"
-        if [ -n "$wt_suffix" ]; then
-            append "$i" "${#wt_suffix}" "${wt_suffix_c}%s\033[0m" "$wt_suffix"
+        if   (( has_subagent && has_main )); then wt_vcs=$C_GREEN;     wt_dim=""
+        elif (( has_subagent ));             then wt_vcs=$C_GREEN_DIM; wt_dim="dim"
+        elif (( has_main ));                 then wt_vcs=$C_DIR;       wt_dim=""
+        else                                      wt_vcs=$C_DIR_DIM;   wt_dim="dim"
         fi
 
         if [ -n "${col2_vcs[$i]}" ]; then
             vt="${col2_vcs[$i]}"
-            append "$i" $(( 2 + ${#vt} )) "  ${wt_vcs}%s\033[0m" "$vt"
+            append "$i" "${#vt}" "${wt_vcs}%s\033[0m" "$vt"
         fi
         if [ -n "${col2_pr[$i]}" ]; then
             read -r pr_state ci_state pr_num <<<"${col2_pr[$i]}"
