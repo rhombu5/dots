@@ -69,6 +69,25 @@ Strip Claude attribution by default whenever you're writing something that'll be
 - **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
 - **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
 
+## Every Monitor needs a hard timeout + in-script wedge detection
+
+This applies to *every* Monitor you launch, not just CI/PR watches. Two layers, both required:
+
+1. **Harness `timeout_ms`** — the backstop. Cap the whole watch at something concrete (the tool's max is 60 min). Don't use `persistent: true` unless the watch is genuinely session-length AND you've also added wedge detection inside the script.
+2. **In-script wedge detection** — the diagnostic. Track a `last_change` timestamp; if no state change has been observed for N minutes (10–15 is a reasonable default), emit a `WEDGE` line and exit non-zero. The harness timeout would also eventually fire, but in-script wedge detection trips sooner and gives me a clear "what's stuck" line instead of "watch silently ended."
+
+Silence is not progress. A grep that only matches the happy path looks identical to "still running" when the job has crashloop'd. Cover failure/cancellation/timeout signatures explicitly in the same alternation. See also the `feedback_monitor_wedge_detection` project memory.
+
+## Monitor every CI run and PR you push
+
+When you push a branch, open a PR, or trigger a workflow that gates downstream automation (release-please, AUR publish, deploys), **arm a Monitor in the same turn** — don't open it and walk away.
+
+- **Cover the full chain, not just the immediate run.** For fnclaude that means PR test → auto-merge → release-please PR → release-please merge → release.yml → AUR index → installable version. Each transition is a state change worth emitting. The monitor should end only when the *final* state is reached (installed/deployed), not at an intermediate "READY" marker.
+- **Emit on every terminal state, not just success.** Failure, cancellation, `timed_out` — all should produce events.
+- **PushNotification on outcomes that change what I'd do next** — a failed test on a PR I just opened, a wedge alert, the final installed/deployed signal. Routine in-progress status lines don't need a push.
+
+If you discover mid-task that you should have been monitoring and weren't (e.g. you find a release already shipped while you were doing something else), say so plainly and start the Monitor immediately for whatever stage is still live.
+
 ## "How hard is X?" — frame the answer for *us*, not a solo human
 
 When I ask how hard / how big / how long something would be, account for the fact that I'm doing it *with you*. A bare "X days" in human-typing units mis-prices the work. Always include:
