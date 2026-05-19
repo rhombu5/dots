@@ -65,6 +65,12 @@ The hook reports the templated path back in its `hookSpecificOutput.worktreePath
 
 If you find yourself reaching for `git worktree add <path>`, stop and ask: *"Is this a worktree the user expected at the templated location?"* If yes, switch to a hook-firing mechanism. If genuinely no (some specific reason for a one-off path), say so out loud and let the user push back.
 
+## Worktree work runs in a subagent
+
+**HARD RULE**: when you'd open a worktree, dispatch the work as a `Task` with `isolation: "worktree"` rather than `EnterWorktree` on the parent thread. The worktree trigger already gates on "well-scoped, isolation-worth-it" work — the same shape subagents handle well. Dispatching keeps the parent responsive (so I can still ask follow-ups while the work runs) and parallelizes naturally when multiple worktrees are in flight.
+
+`EnterWorktree` on the parent is the exception, not the default. Reach for it only when the work genuinely can't be briefed to a subagent — heavy mid-task back-and-forth with me expected, or parent context too load-bearing to summarize cleanly. Say so out loud when you do.
+
 ## New projects
 
 Same template flow as clones — `cloneTemplate` determines the path, the GitHub owner comes from the table below. Pick the owner up-front so the folder shape is right from day one.
