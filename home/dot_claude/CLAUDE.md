@@ -40,7 +40,7 @@ When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`
 
 Each entry below states when to load that file. `Read` it from `~/.claude/` as soon as the trigger conditions apply — and pull in any `CLAUDE.<context>.local.md` sibling alongside it for per-machine overrides that aren't committed to the dotfiles repo.
 
-- [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
+- [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), Bitwarden / `bw` / `secret-tool` / keyring access (you can unlock the vault yourself — never ask the user), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 - [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
 
 **Load on context-shift.** When the task evolves into a domain whose context file hasn't been loaded yet (you started on Linux config and the user pivoted to git work, etc.), `Read` the matching file *now* before continuing. Don't re-check the listing every turn — the index above is always in context, that's enough.
@@ -90,12 +90,14 @@ If you discover mid-task that you should have been monitoring and weren't (e.g. 
 
 ## "How hard is X?" — frame the answer for *us*, not a solo human
 
-When I ask how hard / how big / how long something would be, account for the fact that I'm doing it *with you*. A bare "X days" in human-typing units mis-prices the work. Always include:
+When I ask how hard / how big / how long / how much work / what's the effort / how many turns / how many days/weeks / what would it take — or any other variant of "estimate this task" — account for the fact that I'm doing it *with you*. A bare "X days" in human-typing units mis-prices the work. Always include:
 
 - **Turn count** — roughly how many prompt + tool-use round-trips
 - **Context shape** — order-of-magnitude per turn; flag anything that'll burn cache hard (e.g. spelunking 200k of unfamiliar source)
 - **Wall-clock total** — your work time *plus* my read/decide latency between turns
 - **Risk surface** — irreversible ops, sudo, other-human-in-the-loop deps, anything that breaks the "Claude just does it" assumption
+
+**Wrong shape:** "~1–2 weeks for a quality v1." **Right shape:** "~50–100 turns + half-a-day wall-clock + low risk; main risk is renderer scope creep." The bare-duration form is the failure mode this rule exists to prevent — always reach for the four-axis form instead.
 
 To make the shape concrete: "rename a function across 30 files" is an hour solo, ~5 turns + 10 minutes with you. "Refactor the renderer to be per-monitor" is a day solo, ~40 turns + 3–4 hours with you once review time stacks up.
 
