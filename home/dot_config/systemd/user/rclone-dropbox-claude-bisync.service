@@ -1,6 +1,6 @@
 # /home/tom/.config/systemd/user/rclone-dropbox-claude-bisync.service
 [Unit]
-Description=rclone bisync — dropbox:claude <-> ~/.claude (memory + plans only)
+Description=rclone bisync — dropbox:.claude <-> ~/.claude (memory + plans only)
 # Skipped silently until the planter (cloud-storage-auth.sh) has run rclone
 # Dropbox OAuth and seeded the bisync baseline. The marker is also touched
 # manually if the seed is bootstrapped outside the planter.
@@ -13,4 +13,4 @@ Type=oneshot
 # Everything else (transcripts, sessions, cache, shell snapshots, plugins,
 # ~/.claude/settings.json, ~/.claude/CLAUDE*.md) is left machine-local
 # (chezmoi handles the dotfiles, transcripts shouldn't roam).
-ExecStart=/usr/bin/rclone bisync dropbox:claude %h/.claude --filter-from %h/.config/rclone/claude-filters.txt --resilient --max-delete 25 --create-empty-src-dirs
+ExecStart=/usr/bin/rclone bisync dropbox:.claude %h/.claude --filter-from %h/.config/rclone/claude-filters.txt --resilient --max-delete 25 --create-empty-src-dirs
