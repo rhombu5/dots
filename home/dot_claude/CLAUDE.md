@@ -47,6 +47,10 @@ Each entry below states when to load that file. `Read` it from `~/.claude/` as s
 
 **Authoring new context files.** Always create or edit them in the chezmoi source tree at `~/src/dots@rhombu5/home/dot_claude/CLAUDE.<context>.md` — never the live `~/.claude/` copies, since `chezmoi apply` will overwrite them — and run `chezmoi apply` after each change. When you add a new context file, also add a one-line entry to the index above with its trigger conditions so it's discoverable next session.
 
+**Project `CLAUDE.md` files vs. user prefs.** Project `CLAUDE.md` is for project-specific rules — facts and conventions that only apply *here* and would surprise someone coming from a default setup. **Don't restate or paraphrase rules that already live in user prefs.** Don't author git/worktree workflows, commit-attribution rules, pre-commit-hook policy, or anything similar into project files. If a rule is global it belongs in user prefs; if it's a deviation or extension *I* asked for, that belongs in the project file with the deviation called out. When in doubt, leave the project file alone — duplication drifts, contradicts, and (as observed) actively overrides global rules at the call site.
+
+**When user prefs and a project `CLAUDE.md` conflict, user prefs win.** Update the project file (remove or align the duplicate) rather than silently following the project's local recipe. The exception is when I've explicitly told you the project's behavior should override — say so out loud before acting.
+
 ## Don't attribute Claude in commits, issues, or PRs
 
 Anything that ends up in a public artifact under my name — git commits, GitHub issues, GitHub PR titles/bodies/comments, code review comments — should not advertise that Claude wrote it. Specifically:
