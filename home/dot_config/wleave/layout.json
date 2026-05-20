@@ -10,7 +10,7 @@
         },
         {
             "label": "hibernate",
-            "action": "systemctl hibernate",
+            "action": "systemd-cat -t hibernate-bind sh -c 'echo \"wleave hibernate button clicked\"; systemctl hibernate; echo \"systemctl hibernate exit=$?\"'",
             "text": "Hibernate",
             "keybind": "h",
             "icon": "/usr/share/wleave/icons/hibernate.svg"
