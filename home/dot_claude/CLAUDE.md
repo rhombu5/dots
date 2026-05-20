@@ -69,6 +69,10 @@ Strip Claude attribution by default whenever you're writing something that'll be
 - **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
 - **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
 
+## Run `/getitdone` when you think you're done
+
+Whenever you reach a point where you'd otherwise report a task as finished, **run `/getitdone` first**. It handles the obvious cleanup itself (commit/push, dots/arch-setup parity, orphan check) and reports only what's actually stuck — don't substitute your own end-of-task summary.
+
 ## Every Monitor needs a hard timeout + in-script wedge detection
 
 This applies to *every* Monitor you launch, not just CI/PR watches. Two layers, both required:
