@@ -147,6 +147,12 @@ yay -S <pkg>              # forbidden — leaves the compiler globally installed
 
 Equivalent at the makepkg level: `makepkg -src` (`-r` removes build deps).
 
+### Translating "install globally" instructions in a project
+
+When something I'm following inside a project — a README, a tutorial, an agent's output, a build doc — calls for `npm i -g <pkg>` / `pnpm add -g <pkg>` / similar, **rewrite to `mise use npm:<pkg>` run from the project root.** That adds the tool to the project's `mise.toml` (creating one if absent), putting it on PATH only inside this directory — preserves the "make this tool available here" intent without spilling into global state. Works the same for pnpm-installable packages since both pull from the npm registry.
+
+Use `mise use -g npm:<pkg>` only when the tool genuinely belongs across projects, not as the default. The escape hatch below still applies for cases where neither form works.
+
 ### Escape hatch — "the alternative is unacceptable"
 
 There are real cases where system-wide is the only option:
