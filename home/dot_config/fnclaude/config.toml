@@ -1,2 +1,3 @@
 [auto]
 tmux = "worktree"
+handoff = "3"
