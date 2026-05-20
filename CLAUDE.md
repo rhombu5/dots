@@ -38,8 +38,7 @@ package, it goes there — not here.
 ## When `chezmoi verify` fails in pre-commit
 
 The pre-commit hook's `chezmoi verify` check exists to surface
-out-of-sync source. It's nearly always one of two cases, both of which
-the user will resolve later out-of-band:
+out-of-sync source. It's nearly always one of two cases:
 
 1. A parallel Claude session in another worktree has drifted state that
    this session doesn't know about.
@@ -47,17 +46,32 @@ the user will resolve later out-of-band:
 
 **On verify failure:**
 
-1. Read the `chezmoi diff` output the hook already printed.
-2. Retry the commit with `git commit --no-verify`.
-3. **Surface the drifted files in your user-visible response** — a
-   short list of paths, one per line. The user acts on the report
-   asynchronously. Don't bury the report under a generic "commit
-   succeeded" line, and don't try to `chezmoi apply` / `re-add` to
-   "fix" the drift yourself — it isn't yours to fix.
+1. **Always attempt the commit normally first** — let the hook run, see
+   what it says.
+2. **Read the `chezmoi diff` output** the hook already printed and
+   check each drifted path against the files this session edited.
+3. **If any drifted file is yours** (this session touched the source
+   that's now out of sync), it's *yours* to resolve before bypassing:
+   typically `chezmoi apply` if source is ahead of live, or fix the
+   source if you edited it wrong. Then retry the commit normally.
+4. **Only once all drifted files are confirmed not-yours**, retry with
+   `git commit --no-verify` — unconditionally at that point. Don't ask.
+5. **Surface the drifted files** in your user-visible response — a
+   short list of paths, one per line. Don't bury the report under a
+   generic "commit succeeded" line.
+6. **Offer to spawn a sibling session seeded to handle the drift** via
+   `mcp__fnclaude__fnc_spawn_session`. The continuity summary should
+   include the drifted file list and note that drift is one of the two
+   cases above. Don't target a worktree in the spawn destination — the
+   sibling decides for itself whether to step into one. The sibling's
+   job is to re-check `chezmoi diff` fresh, present it to the user,
+   ask which case applies, and act only if confirmed (no unilateral
+   `re-add` / `apply`).
 
 This intentionally inverts the hook's own "use `--no-verify` sparingly!"
 guidance: for chezmoi verify specifically, `--no-verify` is the default
-response and the drift disclosure is what keeps the check useful.
+response. The drift disclosure plus offered handoff is what keeps the
+check useful.
 
 ## Conventions
 
