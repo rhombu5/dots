@@ -35,6 +35,30 @@ package, it goes there — not here.
   any plugin change in arch-setup's `wsl-cli-test.sh` so the WSL shakedown
   catches breakage early.
 
+## When `chezmoi verify` fails in pre-commit
+
+The pre-commit hook's `chezmoi verify` check exists to surface
+out-of-sync source. It's nearly always one of two cases, both of which
+the user will resolve later out-of-band:
+
+1. A parallel Claude session in another worktree has drifted state that
+   this session doesn't know about.
+2. The user made a live config change and hasn't run `chezmoi re-add` yet.
+
+**On verify failure:**
+
+1. Read the `chezmoi diff` output the hook already printed.
+2. Retry the commit with `git commit --no-verify`.
+3. **Surface the drifted files in your user-visible response** — a
+   short list of paths, one per line. The user acts on the report
+   asynchronously. Don't bury the report under a generic "commit
+   succeeded" line, and don't try to `chezmoi apply` / `re-add` to
+   "fix" the drift yourself — it isn't yours to fix.
+
+This intentionally inverts the hook's own "use `--no-verify` sparingly!"
+guidance: for chezmoi verify specifically, `--no-verify` is the default
+response and the drift disclosure is what keeps the check useful.
+
 ## Conventions
 
 - **Keep the README "What's in here" inventory current.** Whenever you add,
