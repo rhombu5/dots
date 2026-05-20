@@ -2,3 +2,9 @@
     path = ~/.gitconfig.local
 [user]
 	email = 2511516+fnrhombus@users.noreply.github.com
+	name = Thomas Butler
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
