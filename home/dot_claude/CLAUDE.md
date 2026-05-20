@@ -82,6 +82,10 @@ Strip Claude attribution by default whenever you're writing something that'll be
 
 Whenever you reach a point where you'd otherwise report a task as finished, **run `/getitdone` first**. It handles the obvious cleanup itself (commit/push, dots/arch-setup parity, orphan check) and reports only what's actually stuck — don't substitute your own end-of-task summary.
 
+**The trigger is *response-terminal finality*** — a closing line like "Done.", "All set.", "Finished.", "Wrapped up.", "All green.", or any concluding phrase that effectively says "nothing more for me to do here." It fires **per task closure, not per session** — even if you already ran `/getitdone` earlier this session, the next wrap-up moment needs another one.
+
+**Not a trigger**: "done" mid-thought ("I'm done reading the file, now I'll edit it"), referring to a sub-step that has more work after it, or future/conditional state ("when CI is done"). The signal is finality at the *end* of the message — the word in isolation doesn't fire it.
+
 ## Every Monitor needs a hard timeout + in-script wedge detection
 
 This applies to *every* Monitor you launch, not just CI/PR watches. Two layers, both required:
