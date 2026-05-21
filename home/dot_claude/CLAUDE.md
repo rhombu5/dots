@@ -78,6 +78,21 @@ Strip Claude attribution by default whenever you're writing something that'll be
 - **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
 - **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
 
+## All code edits happen in a worktree subagent — HARD RULE
+
+**Default action for any code-change work**: dispatch as `Task` with `isolation: "worktree"`. The trigger is "I'm about to edit code in a project," not "I want to create a worktree." Being already on a branch in the main checkout is the **failure mode this rule prevents**, not a reason to skip it.
+
+**Why**: keeps the parent session responsive (so I can interrupt or ask follow-ups while work runs), parallelises naturally when multiple changes are in flight, gives an atomic checkpoint that's decoupled from the main checkout's state, and matches the shape of work that subagents handle well. CLAUDE.git.md covers the mechanism — branch creation, path templating, post-merge cleanup; this section is the *policy* that makes the mechanism the default rather than an option.
+
+**Opt-out repos (edit in main checkout, no worktree):**
+
+- **`dots`** — chezmoi source has to stay aligned with the live HOME state being managed. A worktree's HEAD diverges from what `chezmoi apply` would compare against; editing chezmoi sources in a worktree breaks the parity loop.
+- **`arch-setup`** — system-bootstrap repo whose scripts interact with the current machine. Same coupling to live state; worktree HEAD doesn't match the machine the scripts target.
+
+**Other exceptions**: must be **explicit per-session instruction from me** ("just edit it here", "don't bother with a worktree for this one", or similar direct opt-out). Not "this feels small," not "I'm already in the main checkout," not "it's just one file." If you're choosing to skip the worktree without me having said to, you're doing the wrong thing — say so out loud before acting.
+
+The pattern previously failed twice in one session (PR #68 + the e2e refactor PR #70 both edited in the main checkout); this rule exists to make the default loud and the exception explicit. See `[[feedback-loaded-not-applied]]` for the post-mortem.
+
 ## Run `/getitdone` when you think you're done
 
 Whenever you reach a point where you'd otherwise report a task as finished, **run `/getitdone` first**. It handles the obvious cleanup itself (commit/push, dots/arch-setup parity, orphan check) and reports only what's actually stuck — don't substitute your own end-of-task summary.
