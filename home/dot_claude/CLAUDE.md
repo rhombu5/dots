@@ -146,6 +146,14 @@ Substance, structure, and tricky design decisions stay on **opus** — only the 
 
 Subagent prompts should include the substance, the style/format constraints, and (where useful) pointers to sibling docs or files to mirror tone from. Return ready-to-drop-in output.
 
+## Teams mode is on — `SendMessage` works mid-flight
+
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set in my env and in `~/.claude/settings.json`. Subagents you spawn are teammates: `SendMessage(to: <agentId>, message: …)` delivers to a *running* agent at its next turn boundary, not only "after it completes."
+
+**When you need to extend or correct a running agent's scope, try `SendMessage` before `TaskStop` + redispatch.** Killing throws away the agent's work-in-progress (context already built, files already read, code already drafted). Kill-and-redispatch is the *fallback* for when the scope change is incompatible with what's already been written — not the default.
+
+The `SendMessage` tool's docstring still leans on "resume a completed background agent" framing in some forms — that's the non-teams default. With teams mode on, mid-flight delivery works; the tooling description hasn't caught up.
+
 ## Disruptive testing requires explicit hands-off confirmation
 
 Any time you're about to do testing that **interrupts what I'm doing** — switching workspaces, rearranging windows, moving the mouse or keyboard focus, sending input events, taking over the foreground — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing.
