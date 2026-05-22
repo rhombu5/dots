@@ -91,6 +91,14 @@ Strip Claude attribution by default whenever you're writing something that'll be
 
 The pattern previously failed twice in one session (PR #68 + the e2e refactor PR #70 both edited in the main checkout); this rule exists to make the default loud and the exception explicit. See `[[feedback-loaded-not-applied]]` for the post-mortem.
 
+## Plan for parallelism — always
+
+Whenever you're about to do non-trivial work, decompose into parallel tracks and dispatch them concurrently. Default to maximum parallelism — multiple subagents on independent slices in a single message, parallel research/lookup calls, side-work in this thread alongside dispatched subagents.
+
+The single exception: if running in parallel would make **total wall-clock time slower** — true sequential dependencies, or merge conflicts at integration that'd take longer to resolve than serialising would have. Serialise that pair; parallelise everything else.
+
+The trigger isn't "is this big enough to need parallelism" — it's "is there any independent work I could be doing at the same time?" If yes, do it. Apply this in *planning*, not just at dispatch time: when laying out the next several steps, identify the parallelism shape first — what can run concurrently, what truly has to wait. Then fire the concurrent set in one message.
+
 ## Run `/getitdone` when you think you're done
 
 Whenever you reach a point where you'd otherwise report a task as finished, **run `/getitdone` first**. It handles the obvious cleanup itself (commit/push, dots/arch-setup parity, orphan check) and reports only what's actually stuck — don't substitute your own end-of-task summary.
