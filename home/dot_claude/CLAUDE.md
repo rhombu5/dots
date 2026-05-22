@@ -43,14 +43,14 @@ Each entry below states when to load that file. `Read` it from `~/.claude/` as s
 - [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), Bitwarden / `bw` / `secret-tool` / keyring access (you can unlock the vault yourself — never ask the user), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 - [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
 
-**Load triggers — deterministic, not heuristic.** Run this once at the start of each session, BEFORE your first tool call — and again whenever a new trigger surfaces mid-session (the user pivots, or a tool-shape you haven't used yet comes up). If a trigger matches and the corresponding file hasn't been loaded yet, `Read` it *now*.
+**Load triggers — deterministic, not heuristic.** Each time you're about to make a tool call, check the table below: if the call matches a trigger row and the corresponding file isn't loaded yet, `Read` it *now*, before the call.
 
 | Trigger | Load |
 |---|---|
-| Session env block says `Is a git repository: true`, OR you're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git`/`gh`/`git worktree`/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
+| You're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git`/`gh`/`git worktree`/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
 | You're about to touch `/etc/`, `/usr/`, `sudo`, `pacman`/`yay`, `systemctl`, `chezmoi`, Bitwarden/`bw`/`secret-tool`, or do any of the other Arch/Linux-flavored work named in the index above | [`CLAUDE.linux.md`](CLAUDE.linux.md) |
 
-**The trigger is the upcoming tool call's *shape*, not your framing of the task.** "I'm writing some Go code" feels like one task; the moment your next tool call is going to `Edit` a file inside a git repo, you're about to do code-change work — load `CLAUDE.git.md` BEFORE that edit, not after the PR is open. The session env block being `Is a git repository: true` catches most sessions at startup; the file-edit-in-a-git-repo trigger catches the mid-session pivot (started in a noop dir, then `cd`'d into a project). There's no "I didn't notice the shift" escape: the env block is in context at session start, and the imminent tool call is in context the moment you're about to make it. Scan, then act.
+**The trigger is the upcoming tool call's *shape*, not your framing of the task.** "I'm writing some Go code" feels like one task; the moment your next tool call is going to `Edit` a file inside a git repo, you're about to do code-change work — load `CLAUDE.git.md` BEFORE that edit, not after the PR is open. The imminent tool call is in context the moment you're about to make it. Check the table, then act.
 
 Don't re-check the listing on every turn — once a file is loaded for a session it stays loaded, and the index above is always in context.
 
