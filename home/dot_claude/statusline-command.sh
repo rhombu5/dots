@@ -89,6 +89,10 @@ mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
 model=$(jq -r '.model.display_name // ""' <<<"$input")
 effort=$(jq -r '.effort.level // ""' <<<"$input")
 used=$(jq -r '.context_window.used_percentage // empty' <<<"$input")
+rl5_used=$(jq   -r '.rate_limits.five_hour.used_percentage // empty' <<<"$input")
+rl5_resets=$(jq -r '.rate_limits.five_hour.resets_at       // empty' <<<"$input")
+rl7_used=$(jq   -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
+rl7_resets=$(jq -r '.rate_limits.seven_day.resets_at       // empty' <<<"$input")
 
 CACHE_DIR="$HOME/.cache/claude-statusline"
 CACHE_TTL=60
@@ -440,6 +444,14 @@ for s in "${col2_short[@]}"; do (( ${#s} > col2_w )) && col2_w=${#s}; done
 n=${#col1_short[@]}
 (( ${#col2_path[@]} > n )) && n=${#col2_path[@]}
 
+# Right-side stack needs its own row budget: model (0), ctx (1), rate-limits (2).
+# Inflate n if the left side has fewer rows so the rate-limit row has a slot.
+right_rows=2
+if   [ -n "$rl5_used" ] && [ -n "$rl5_resets" ]; then right_rows=3
+elif [ -n "$rl7_used" ] && [ -n "$rl7_resets" ]; then right_rows=3
+fi
+(( right_rows > n )) && n=$right_rows
+
 declare -a row_str row_vw col1_cell_str col1_cell_vw
 for ((i=0; i<n; i++)); do row_str[i]=""; row_vw[i]=0; done
 
@@ -653,6 +665,87 @@ if [ -n "$used" ]; then
     (( pad < SEP )) && pad=$SEP
     append "$target_row" "$pad" '%*s' "$pad" ""
     append "$target_row" "${#ctx_text}" "${color}%s\033[0m" "$ctx_text"
+fi
+
+# Rate-limit row: show used / elapsed-through-window as a single "burn ratio" with
+# the raw fraction in parens, e.g. "5hr: 200% (50%/25%)" meaning we've burned half
+# the budget but only a quarter of the window — twice the natural pace. Color the
+# ratio against pace: under = green, near (±10%) = yellow, over = red.
+#
+# Segments build their plain (uncolored) text first so the combined width is known
+# for right-alignment, then each one is re-emitted as colored pieces via append.
+SEG_TEXT=""; SEG_LABEL=""; SEG_USED=0; SEG_ELAPSED=0; SEG_RATIO=0; SEG_COLOR=""
+compute_rate_segment() {
+    local label=$1 used=$2 resets_at=$3 window_sec=$4
+    SEG_TEXT=""
+    [ -z "$used" ] && return
+    [ -z "$resets_at" ] && return
+    local now elapsed elapsed_pct used_int divisor ratio_pct color
+    now=$(date +%s)
+    elapsed=$(( now - (resets_at - window_sec) ))
+    (( elapsed < 0 ))          && elapsed=0
+    (( elapsed > window_sec )) && elapsed=$window_sec
+    elapsed_pct=$(( elapsed * 100 / window_sec ))
+    used_int=$(printf '%.0f' "$used")
+    # Floor the divisor to 1 so a freshly-reset window doesn't divide by zero;
+    # the resulting "very large ratio" reading is itself informative.
+    divisor=$(( elapsed_pct > 0 ? elapsed_pct : 1 ))
+    ratio_pct=$(( used_int * 100 / divisor ))
+    if   (( ratio_pct > 110 )); then color="\033[31m"
+    elif (( ratio_pct >=  90 )); then color="\033[33m"
+    else                             color="\033[32m"
+    fi
+    SEG_LABEL=$label
+    SEG_USED=$used_int
+    SEG_ELAPSED=$elapsed_pct
+    SEG_RATIO=$ratio_pct
+    SEG_COLOR=$color
+    SEG_TEXT="${label}: ${ratio_pct}% (${used_int}%/${elapsed_pct}%)"
+}
+
+append_rate_segment() {
+    local row=$1 label=$2 used=$3 elapsed=$4 ratio=$5 color=$6
+    append "$row" "${#label}"   "\033[2;37m%s\033[0m" "$label"
+    append "$row" 2             ": "
+    append "$row" "${#ratio}"   "${color}%s\033[0m"  "$ratio"
+    append "$row" 1             "%%"
+    append "$row" 2             " ("
+    append "$row" "${#used}"    "\033[2;37m%s\033[0m" "$used"
+    append "$row" 1             "%%"
+    append "$row" 1             "/"
+    append "$row" "${#elapsed}" "\033[2;37m%s\033[0m" "$elapsed"
+    append "$row" 1             "%%"
+    append "$row" 1             ")"
+}
+
+if (( n >= 3 )); then
+    compute_rate_segment "5hr" "$rl5_used" "$rl5_resets" 18000
+    s1_text=$SEG_TEXT; s1_label=$SEG_LABEL; s1_used=$SEG_USED
+    s1_elapsed=$SEG_ELAPSED; s1_ratio=$SEG_RATIO; s1_color=$SEG_COLOR
+
+    compute_rate_segment "7day" "$rl7_used" "$rl7_resets" 604800
+    s2_text=$SEG_TEXT; s2_label=$SEG_LABEL; s2_used=$SEG_USED
+    s2_elapsed=$SEG_ELAPSED; s2_ratio=$SEG_RATIO; s2_color=$SEG_COLOR
+
+    sep=""
+    [ -n "$s1_text" ] && [ -n "$s2_text" ] && sep=", "
+    combined="${s1_text}${sep}${s2_text}"
+
+    if [ -n "$combined" ]; then
+        target_col=$(( TERM_WIDTH - ${#combined} ))
+        pad=$(( target_col - row_vw[2] ))
+        (( pad < SEP )) && pad=$SEP
+        append 2 "$pad" '%*s' "$pad" ""
+        if [ -n "$s1_text" ]; then
+            append_rate_segment 2 "$s1_label" "$s1_used" "$s1_elapsed" "$s1_ratio" "$s1_color"
+        fi
+        if [ -n "$sep" ]; then
+            append 2 "${#sep}" '%s' "$sep"
+        fi
+        if [ -n "$s2_text" ]; then
+            append_rate_segment 2 "$s2_label" "$s2_used" "$s2_elapsed" "$s2_ratio" "$s2_color"
+        fi
+    fi
 fi
 
 for ((i=0; i<n; i++)); do
