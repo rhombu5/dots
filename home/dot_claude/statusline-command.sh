@@ -812,18 +812,33 @@ fi
 # included); the data line only extends to the current elapsed-x.
 # ────────────────────────────────────────────────────────────────────────────
 if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
-    BURNDOWN_PLOT_W_CELLS=12     # cells per plot
-    BURNDOWN_PLOT_H_CELLS=3
+    # Per-plot layout (in cells):
+    #   ┌─────────────────────────────────────┐
+    #   │ │ . . . . . . . . . . .             │  row 0   ┐ data rows
+    #   │ │ . . . . . . . . . . .             │  row 1   ┘  (11 data cells × 2 rows)
+    #   │ └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─             │  row 2   ← X axis row
+    #   └─────────────────────────────────────┘
+    #     ^^ Y axis col 0    data cols 1..11
+    #
+    # Data area in dots: 22 wide × 8 tall (cells 1..11 × rows 0..1).
+    BURNDOWN_PLOT_W_CELLS=12     # data + Y axis (1 col)
+    BURNDOWN_PLOT_H_CELLS=3      # data + X axis (1 row)
+    BURNDOWN_DATA_W_CELLS=$(( BURNDOWN_PLOT_W_CELLS - 1 ))   # 11
+    BURNDOWN_DATA_H_CELLS=$(( BURNDOWN_PLOT_H_CELLS - 1 ))   # 2
+    BURNDOWN_W_DOTS=$(( BURNDOWN_DATA_W_CELLS * 2 ))         # 22
+    BURNDOWN_H_DOTS=$(( BURNDOWN_DATA_H_CELLS * 4 ))         # 8
     BURNDOWN_GAP_CELLS=1
     BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25 cells
-    BURNDOWN_W_DOTS=$(( BURNDOWN_PLOT_W_CELLS * 2 ))   # 24
-    BURNDOWN_H_DOTS=$(( BURNDOWN_PLOT_H_CELLS * 4 ))   # 12
+
+    BURNDOWN_AXIS_COLOR="\033[90m"     # bright black → rendered as gray
 
     # Braille bit per (dx,dy). Standard mapping from U+2800 base:
     #   left col bits:  0x01 0x02 0x04 0x40    (dy = 0,1,2,3)
     #   right col bits: 0x08 0x10 0x20 0x80    (dy = 0,1,2,3)
     BURNDOWN_BITS=(1 2 4 64 8 16 32 128)
 
+    # Layer arrays index over data-area cells only (11 wide × 2 tall = 22 cells
+    # per plot). Axes are drawn separately at emit time.
     declare -a br5_data br5_ideal br7_data br7_ideal
 
     burndown_set() {
@@ -833,7 +848,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         (( y < 0 || y >= BURNDOWN_H_DOTS )) && return
         local cx=$(( x / 2 )) cy=$(( y / 4 ))
         local dx=$(( x % 2 )) dy=$(( y % 4 ))
-        local idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
+        local idx=$(( cy * BURNDOWN_DATA_W_CELLS + cx ))
         local bit=${BURNDOWN_BITS[ dx * 4 + dy ]}
         layer[idx]=$(( ${layer[idx]:-0} | bit ))
     }
@@ -885,26 +900,52 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     burndown_plot_log   br5_data "5hr"  "$rl5_resets" 18000
     burndown_plot_log   br7_data "7day" "$rl7_resets" 604800
 
-    # Emit one cell: pick highest-priority non-zero layer (data > ideal) and
-    # render that bitmask in the layer's color. Returns the rendered string
-    # via the named variable.
+    # Emit one data-area cell. Bitmasks from ideal and data layers are OR'd
+    # so the ideal-line dots stay visible *as shapes* under data overlap (a
+    # braille cell has one fg color, so the dots in such a cell will read as
+    # data-colored — but you still see the ideal line's footprint).
     burndown_render_cell() {
         local -n out=$1
-        local data_idx=$2 ideal_idx=$3 data_color=$4
-        local mask=0 color=""
-        if (( ${data_idx} != 0 )); then
-            mask=$data_idx
-            color=$data_color
-        elif (( ${ideal_idx} != 0 )); then
-            mask=$ideal_idx
-            color="\033[37m"
-        fi
-        if (( mask == 0 )); then
+        local data_mask=$2 ideal_mask=$3 data_color=$4
+        local merged=$(( data_mask | ideal_mask ))
+        if (( merged == 0 )); then
             out=' '
+            return
+        fi
+        local color
+        if (( data_mask != 0 )); then color=$data_color
+        else                          color="\033[37m"
+        fi
+        local hex
+        printf -v hex '%04x' $(( 0x2800 + merged ))
+        printf -v out "${color}%b\033[0m" "\\u${hex}"
+    }
+
+    # Emit one plot's row into burndown_str. Y axis in cell 0 of every data
+    # row; bottom row is the X axis with └ corner + ─ chars.
+    burndown_emit_plot_row() {
+        local cy=$1 data_arr_name=$2 ideal_arr_name=$3 data_color=$4
+        local -n data_arr=$data_arr_name
+        local -n ideal_arr=$ideal_arr_name
+        local cx idx cell
+        if (( cy < BURNDOWN_DATA_H_CELLS )); then
+            # Data row: │ Y-axis + data cells
+            printf -v cell "${BURNDOWN_AXIS_COLOR}│\033[0m"
+            burndown_str+=$cell
+            for ((cx=0; cx<BURNDOWN_DATA_W_CELLS; cx++)); do
+                idx=$(( cy * BURNDOWN_DATA_W_CELLS + cx ))
+                burndown_render_cell cell \
+                    "${data_arr[idx]:-0}" "${ideal_arr[idx]:-0}" "$data_color"
+                burndown_str+=$cell
+            done
         else
-            local hex
-            printf -v hex '%04x' $(( 0x2800 + mask ))
-            printf -v out "${color}%b\033[0m" "\\u${hex}"
+            # X-axis row: └ corner + ─ chars
+            printf -v cell "${BURNDOWN_AXIS_COLOR}└\033[0m"
+            burndown_str+=$cell
+            for ((cx=0; cx<BURNDOWN_DATA_W_CELLS; cx++)); do
+                printf -v cell "${BURNDOWN_AXIS_COLOR}─\033[0m"
+                burndown_str+=$cell
+            done
         fi
     }
 
@@ -914,37 +955,20 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         burndown_target_col=$(( TERM_WIDTH - BURNDOWN_TOTAL_W ))
         burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
         (( burndown_pad < SEP )) && burndown_pad=$SEP
-        # Build the row's right-side block locally (avoids many command subs).
         printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
         burndown_vw=$burndown_pad
 
-        # Left plot: 5hr (red data + white ideal).
-        burndown_cx=0
-        while (( burndown_cx < BURNDOWN_PLOT_W_CELLS )); do
-            burndown_idx=$(( burndown_cy * BURNDOWN_PLOT_W_CELLS + burndown_cx ))
-            burndown_render_cell burndown_cell \
-                "${br5_data[burndown_idx]:-0}" "${br5_ideal[burndown_idx]:-0}" \
-                "\033[31m"
-            burndown_str+=$burndown_cell
-            burndown_vw=$(( burndown_vw + 1 ))
-            burndown_cx=$(( burndown_cx + 1 ))
-        done
+        # Left plot: 5hr (red).
+        burndown_emit_plot_row "$burndown_cy" br5_data br5_ideal "\033[31m"
+        burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
 
         # Gap.
         burndown_str+=' '
         burndown_vw=$(( burndown_vw + 1 ))
 
-        # Right plot: 7day (light-blue data + white ideal). Light blue = \033[94m.
-        burndown_cx=0
-        while (( burndown_cx < BURNDOWN_PLOT_W_CELLS )); do
-            burndown_idx=$(( burndown_cy * BURNDOWN_PLOT_W_CELLS + burndown_cx ))
-            burndown_render_cell burndown_cell \
-                "${br7_data[burndown_idx]:-0}" "${br7_ideal[burndown_idx]:-0}" \
-                "\033[94m"
-            burndown_str+=$burndown_cell
-            burndown_vw=$(( burndown_vw + 1 ))
-            burndown_cx=$(( burndown_cx + 1 ))
-        done
+        # Right plot: 7day (light blue \033[94m).
+        burndown_emit_plot_row "$burndown_cy" br7_data br7_ideal "\033[94m"
+        burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
 
         row_str[burndown_row]+=$burndown_str
         row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
