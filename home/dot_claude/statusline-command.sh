@@ -95,6 +95,24 @@ rl5_resets=$(jq -r '.rate_limits.five_hour.resets_at       // empty' <<<"$input"
 rl7_used=$(jq   -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
 rl7_resets=$(jq -r '.rate_limits.seven_day.resets_at       // empty' <<<"$input")
 
+# Set to 0 to revert the right-side rate-limit display from the burndown
+# graph back to the text-based "ratio% (used%/elapsed%) day time" rows.
+USAGE_BURNDOWN_GRAPH=1
+
+# Persist a usage data point per invocation. The reset epoch in the filename
+# means a new window naturally rolls into a new file, and any file whose name's
+# epoch is in the past is stale historical data we can ignore (or archive).
+USAGE_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-statusline"
+log_usage_point() {
+    local scope=$1 used=$2 resets_at=$3
+    [ -z "$used" ] && return
+    [ -z "$resets_at" ] && return
+    mkdir -p "$USAGE_LOG_DIR" 2>/dev/null || return
+    printf '%d %s\n' "$(date +%s)" "$used" >> "$USAGE_LOG_DIR/${scope}-${resets_at}.log"
+}
+log_usage_point "5hr"  "$rl5_used" "$rl5_resets"
+log_usage_point "7day" "$rl7_used" "$rl7_resets"
+
 CACHE_DIR="$HOME/.cache/claude-statusline"
 CACHE_TTL=60
 mkdir -p "$CACHE_DIR" 2>/dev/null
@@ -447,9 +465,18 @@ n=${#col1_short[@]}
 
 # Right-side stack: row 0 packs model+effort+ctx; rate-limit rows fall below.
 # Inflate n if the left side has fewer rows so the rate-limit rows have slots.
+# Graph mode (USAGE_BURNDOWN_GRAPH=1) reserves 3 rows for the braille plot;
+# text mode reserves 1 row per present rate-limit window.
 right_rows=1
-[ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=2
-[ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=3
+if (( USAGE_BURNDOWN_GRAPH )); then
+    if { [ -n "$rl5_used" ] && [ -n "$rl5_resets" ]; } \
+    || { [ -n "$rl7_used" ] && [ -n "$rl7_resets" ]; }; then
+        right_rows=4
+    fi
+else
+    [ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=2
+    [ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=3
+fi
 (( right_rows > n )) && n=$right_rows
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
@@ -723,7 +750,7 @@ add_rate_row() {
 add_rate_row "5hr"  "$rl5_used" "$rl5_resets" 18000
 add_rate_row "7day" "$rl7_used" "$rl7_resets" 604800
 
-if (( ${#RATE_USED[@]} > 0 )); then
+if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
     # Column widths = max across present rows. Numbers render right-justified
     # to their slot so the trailing digits stack column-true. Day is always 3
     # chars so a fixed dw=3 keeps the day column anchored regardless of input.
@@ -767,6 +794,156 @@ if (( ${#RATE_USED[@]} > 0 )); then
             "${RATE_USED[j]}" "${RATE_ELAPSED[j]}" \
             "${RATE_RATIO[j]}" "${RATE_COLOR[j]}" \
             "${RATE_DAY[j]}"   "${RATE_TIME[j]}"
+    done
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# Burndown graph (USAGE_BURNDOWN_GRAPH=1): two side-by-side plots, each 12 cell
+# cols × 3 cell rows (= 24 × 12 dots). 5hr on the left, 7day on the right, with
+# a 1-cell gap between. Total width: 12 + 1 + 12 = 25 cells. Right-aligned.
+#
+# Y axis (both plots) = percent remaining (top = 100%, bottom = 0%); each dot
+# encodes (100 - used%) from the JSON.
+#
+# Per-plot layer priority (highest wins on cell overlap within that plot):
+#   5hr plot:  red    > white-ideal
+#   7day plot: lblue  > white-ideal
+# White is a dotted diagonal across the full plot (the un-elapsed future
+# included); the data line only extends to the current elapsed-x.
+# ────────────────────────────────────────────────────────────────────────────
+if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
+    BURNDOWN_PLOT_W_CELLS=12     # cells per plot
+    BURNDOWN_PLOT_H_CELLS=3
+    BURNDOWN_GAP_CELLS=1
+    BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25 cells
+    BURNDOWN_W_DOTS=$(( BURNDOWN_PLOT_W_CELLS * 2 ))   # 24
+    BURNDOWN_H_DOTS=$(( BURNDOWN_PLOT_H_CELLS * 4 ))   # 12
+
+    # Braille bit per (dx,dy). Standard mapping from U+2800 base:
+    #   left col bits:  0x01 0x02 0x04 0x40    (dy = 0,1,2,3)
+    #   right col bits: 0x08 0x10 0x20 0x80    (dy = 0,1,2,3)
+    BURNDOWN_BITS=(1 2 4 64 8 16 32 128)
+
+    declare -a br5_data br5_ideal br7_data br7_ideal
+
+    burndown_set() {
+        local -n layer=$1
+        local x=$2 y=$3
+        (( x < 0 || x >= BURNDOWN_W_DOTS )) && return
+        (( y < 0 || y >= BURNDOWN_H_DOTS )) && return
+        local cx=$(( x / 2 )) cy=$(( y / 4 ))
+        local dx=$(( x % 2 )) dy=$(( y % 4 ))
+        local idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
+        local bit=${BURNDOWN_BITS[ dx * 4 + dy ]}
+        layer[idx]=$(( ${layer[idx]:-0} | bit ))
+    }
+
+    # Plot a log file's (epoch, used%) samples into the layer. Awk pre-buckets
+    # by x so bash only iterates over ≤W_DOTS unique points.
+    # layer_name passes as plain string so burndown_set's own nameref doesn't
+    # form a circular reference with ours.
+    burndown_plot_log() {
+        local layer_name=$1 scope=$2 resets_at=$3 window_sec=$4
+        [ -z "$resets_at" ] && return
+        local file="$USAGE_LOG_DIR/${scope}-${resets_at}.log"
+        [ -f "$file" ] || return
+        local window_start=$(( resets_at - window_sec ))
+        local x y
+        while IFS=' ' read -r x y; do
+            [ -z "$x" ] && continue
+            burndown_set "$layer_name" "$x" "$y"
+        done < <(awk -v ws="$window_start" -v win="$window_sec" \
+                     -v wd="$BURNDOWN_W_DOTS" -v hd="$BURNDOWN_H_DOTS" '
+            {
+                t = $1 + 0; used = $2 + 0
+                elapsed = t - ws
+                if (elapsed < 0 || elapsed >= win) next
+                x = int(elapsed * (wd - 1) / win)
+                y = int(used * (hd - 1) / 100)
+                seen[x] = y
+            }
+            END { for (k in seen) print k, seen[k] }
+        ' "$file")
+    }
+
+    # Dotted white ideal diagonal (every other x → 12 dots total).
+    burndown_plot_ideal() {
+        local layer_name=$1 x y
+        for ((x=0; x<BURNDOWN_W_DOTS; x+=2)); do
+            y=$(( (BURNDOWN_H_DOTS - 1) * x / (BURNDOWN_W_DOTS - 1) ))
+            burndown_set "$layer_name" "$x" "$y"
+        done
+    }
+
+    burndown_plot_ideal br5_ideal
+    burndown_plot_ideal br7_ideal
+    burndown_plot_log   br5_data "5hr"  "$rl5_resets" 18000
+    burndown_plot_log   br7_data "7day" "$rl7_resets" 604800
+
+    # Emit one cell: pick highest-priority non-zero layer (data > ideal) and
+    # render that bitmask in the layer's color. Returns the rendered string
+    # via the named variable.
+    burndown_render_cell() {
+        local -n out=$1
+        local data_idx=$2 ideal_idx=$3 data_color=$4
+        local mask=0 color=""
+        if (( ${data_idx} != 0 )); then
+            mask=$data_idx
+            color=$data_color
+        elif (( ${ideal_idx} != 0 )); then
+            mask=$ideal_idx
+            color="\033[37m"
+        fi
+        if (( mask == 0 )); then
+            out=' '
+        else
+            local hex
+            printf -v hex '%04x' $(( 0x2800 + mask ))
+            printf -v out "${color}%b\033[0m" "\\u${hex}"
+        fi
+    }
+
+    burndown_cy=0
+    while (( burndown_cy < BURNDOWN_PLOT_H_CELLS )); do
+        burndown_row=$(( 1 + burndown_cy ))
+        burndown_target_col=$(( TERM_WIDTH - BURNDOWN_TOTAL_W ))
+        burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
+        (( burndown_pad < SEP )) && burndown_pad=$SEP
+        # Build the row's right-side block locally (avoids many command subs).
+        printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
+        burndown_vw=$burndown_pad
+
+        # Left plot: 5hr (red data + white ideal).
+        burndown_cx=0
+        while (( burndown_cx < BURNDOWN_PLOT_W_CELLS )); do
+            burndown_idx=$(( burndown_cy * BURNDOWN_PLOT_W_CELLS + burndown_cx ))
+            burndown_render_cell burndown_cell \
+                "${br5_data[burndown_idx]:-0}" "${br5_ideal[burndown_idx]:-0}" \
+                "\033[31m"
+            burndown_str+=$burndown_cell
+            burndown_vw=$(( burndown_vw + 1 ))
+            burndown_cx=$(( burndown_cx + 1 ))
+        done
+
+        # Gap.
+        burndown_str+=' '
+        burndown_vw=$(( burndown_vw + 1 ))
+
+        # Right plot: 7day (light-blue data + white ideal). Light blue = \033[94m.
+        burndown_cx=0
+        while (( burndown_cx < BURNDOWN_PLOT_W_CELLS )); do
+            burndown_idx=$(( burndown_cy * BURNDOWN_PLOT_W_CELLS + burndown_cx ))
+            burndown_render_cell burndown_cell \
+                "${br7_data[burndown_idx]:-0}" "${br7_ideal[burndown_idx]:-0}" \
+                "\033[94m"
+            burndown_str+=$burndown_cell
+            burndown_vw=$(( burndown_vw + 1 ))
+            burndown_cx=$(( burndown_cx + 1 ))
+        done
+
+        row_str[burndown_row]+=$burndown_str
+        row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
+        burndown_cy=$(( burndown_cy + 1 ))
     done
 fi
 
