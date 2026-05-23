@@ -812,18 +812,33 @@ fi
 # included); the data line only extends to the current elapsed-x.
 # ────────────────────────────────────────────────────────────────────────────
 if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
-    # Per-plot layout: 12 cells wide × 3 cells tall = 24 × 12 dots. Axes are
-    # drawn as braille dots (Y = solid left-column of cell col 0; X = solid
-    # bottom-row of cell row H-1; corner cell gets both). This keeps the full
-    # data area at 24 × 12 and lets axis bits OR with data/ideal bits per cell.
+    # Per-plot layout: 12 cells × 3 cells = 24 × 12 dots.
+    #
+    # Axes are reserved at the cell-level (not just dot-level) so they never
+    # share a cell with data — that way they render in gray regardless of how
+    # close data gets, and the "data tint bleeds into the axis" artifact from
+    # the merged-bitmask approach is gone.
+    #
+    #   cell col 0       = Y axis (dot bits 0x47 → ⡇)
+    #   cell row 2       = X axis (dot bits 0xC0 → ⣀)
+    #   cell (0, 2)      = corner (0xC7 → ⣇)
+    #   cells (1..11, 0..1) = data area (22 × 8 dots)
+    #
+    # Data x maps to [2, 23] (offset +2 puts the first dot one cell right of
+    # the Y axis). Data y maps to [0, 7] (stays above the X axis row). 21/7
+    # divides cleanly so the ideal diagonal lands one dot per y row at
+    # perfectly even 3-apart x positions.
     BURNDOWN_PLOT_W_CELLS=12
     BURNDOWN_PLOT_H_CELLS=3
     BURNDOWN_W_DOTS=$(( BURNDOWN_PLOT_W_CELLS * 2 ))   # 24
     BURNDOWN_H_DOTS=$(( BURNDOWN_PLOT_H_CELLS * 4 ))   # 12
+    BURNDOWN_DATA_X_OFFSET=2                            # shift past Y axis cell
+    BURNDOWN_DATA_W_DOTS=$(( BURNDOWN_W_DOTS - BURNDOWN_DATA_X_OFFSET ))    # 22
+    BURNDOWN_DATA_H_DOTS=$(( BURNDOWN_H_DOTS - 4 ))                          # 8  (X axis row eats 4 dot rows)
     BURNDOWN_GAP_CELLS=1
     BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25
 
-    # Axis dot bitmasks (per cell):
+    # Axis dot bitmasks (per axis cell):
     #   left col   = bits 1 + 2 + 4 + 64 = 0x47  (⡇)
     #   bottom row = bits 64 + 128       = 0xC0  (⣀)
     #   corner     = 0x47 | 0xC0         = 0xC7  (⣇)
@@ -852,6 +867,9 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     # by x so bash only iterates over ≤W_DOTS unique points.
     # layer_name passes as plain string so burndown_set's own nameref doesn't
     # form a circular reference with ours.
+    # X is offset by BURNDOWN_DATA_X_OFFSET so data starts one cell right of
+    # the Y axis; Y stays in [0, BURNDOWN_DATA_H_DOTS-1] so it stays above the
+    # X axis row.
     burndown_plot_log() {
         local layer_name=$1 scope=$2 resets_at=$3 window_sec=$4
         [ -z "$resets_at" ] && return
@@ -863,18 +881,19 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
             [ -z "$x" ] && continue
             burndown_set "$layer_name" "$x" "$y"
         done < <(awk -v ws="$window_start" -v win="$window_sec" \
-                     -v wd="$BURNDOWN_W_DOTS" -v hd="$BURNDOWN_H_DOTS" '
-            # Anchor every line at (0, 0) — the window-start corner. By
-            # definition the window has just reset there, so used% is 0; this
-            # is real data, not a fudge, and it prevents the line from looking
-            # detached when logging started mid-window.
-            BEGIN { seen[0] = 0 }
+                     -v dw="$BURNDOWN_DATA_W_DOTS" -v dh="$BURNDOWN_DATA_H_DOTS" \
+                     -v xoff="$BURNDOWN_DATA_X_OFFSET" '
+            # Anchor every line at the data-area top-left dot — the window-
+            # start corner just inside the axes. By definition the window has
+            # just reset there, so used% is 0; this is real data, not a fudge,
+            # and it keeps the line connected even if logging started mid-window.
+            BEGIN { seen[xoff] = 0 }
             {
                 t = $1 + 0; used = $2 + 0
                 elapsed = t - ws
                 if (elapsed < 0 || elapsed >= win) next
-                x = int(elapsed * (wd - 1) / win)
-                y = int(used * (hd - 1) / 100)
+                x = xoff + int(elapsed * (dw - 1) / win)
+                y = int(used * (dh - 1) / 100)
                 seen[x] = y
             }
             END { for (k in seen) print k, seen[k] }
@@ -882,12 +901,14 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     }
 
     # White ideal diagonal — iterate y, compute x. One dot per y row,
-    # evenly spaced. Iterating *x* and computing y would produce uneven
-    # buckets per row (W/H rarely divides cleanly) and visible stair-stepping.
+    # evenly spaced. Iterating x and computing y would land multiple x's
+    # in the same y when the dimensions don't divide cleanly, producing
+    # visible stair-stepping. With data area = 22 × 8 dots, 21/7 = 3 exactly,
+    # so this gives dots at x = xoff, xoff+3, xoff+6, … evenly spaced.
     burndown_plot_ideal() {
         local layer_name=$1 x y
-        for ((y=0; y<BURNDOWN_H_DOTS; y++)); do
-            x=$(( y * (BURNDOWN_W_DOTS - 1) / (BURNDOWN_H_DOTS - 1) ))
+        for ((y=0; y<BURNDOWN_DATA_H_DOTS; y++)); do
+            x=$(( BURNDOWN_DATA_X_OFFSET + y * (BURNDOWN_DATA_W_DOTS - 1) / (BURNDOWN_DATA_H_DOTS - 1) ))
             burndown_set "$layer_name" "$x" "$y"
         done
     }
@@ -897,25 +918,28 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     burndown_plot_log   br5_data "5hr"  "$rl5_resets" 18000
     burndown_plot_log   br7_data "7day" "$rl7_resets" 604800
 
-    # Emit one cell. Data + ideal + axis bitmasks are all OR'd so every dot
-    # set by any layer stays visible. A cell has one fg color, so we pick by
-    # priority: data > ideal > axis. The dots a higher layer drew get colored
-    # too — overlapped axis/ideal dots still appear, just in the data color.
+    # Emit one cell. Each layer renders exclusively — the highest-priority
+    # non-empty layer provides BOTH the dot bitmask and the color, so the
+    # color of dots in a cell unambiguously matches the layer they came from.
+    #
+    # (We tried merging bitmasks so ideal dots stayed visible under data, but
+    # because a braille cell has one fg color, the ideal dots in overlapped
+    # cells took the data color — which read as rogue data samples climbing
+    # away from the actual data line.)
     burndown_render_cell() {
         local -n out=$1
         local data_mask=$2 ideal_mask=$3 axis_mask=$4 data_color=$5
-        local merged=$(( data_mask | ideal_mask | axis_mask ))
-        if (( merged == 0 )); then
+        local mask=0 color=""
+        if   (( data_mask  != 0 )); then mask=$data_mask;  color=$data_color
+        elif (( ideal_mask != 0 )); then mask=$ideal_mask; color="\033[37m"
+        elif (( axis_mask  != 0 )); then mask=$axis_mask;  color=$BURNDOWN_AXIS_COLOR
+        fi
+        if (( mask == 0 )); then
             out=' '
             return
         fi
-        local color
-        if   (( data_mask  != 0 )); then color=$data_color
-        elif (( ideal_mask != 0 )); then color="\033[37m"
-        else                             color=$BURNDOWN_AXIS_COLOR
-        fi
         local hex
-        printf -v hex '%04x' $(( 0x2800 + merged ))
+        printf -v hex '%04x' $(( 0x2800 + mask ))
         printf -v out "${color}%b\033[0m" "\\u${hex}"
     }
 
