@@ -702,8 +702,12 @@ compute_rate_segment() {
 # Collect segments first so we can pad numeric columns to a common width per slot,
 # keeping the least-significant digits vertically aligned across the two rows.
 # No row label — the two rows are distinguished by position (5hr first, 7day second)
-# and by the reset HH:MM trailing each line.
-RATE_USED=(); RATE_ELAPSED=(); RATE_RATIO=(); RATE_COLOR=(); RATE_RESET=()
+# and by the reset day+time trailing each line.
+#
+# Reset stored as day + time *separately* so the day-of-week column stays fixed
+# (always 3 chars: Mon/Tue/...) while the time slot right-justifies its variable
+# 5-7 char content (1:00am .. 12:00pm) so am/pm align.
+RATE_USED=(); RATE_ELAPSED=(); RATE_RATIO=(); RATE_COLOR=(); RATE_DAY=(); RATE_TIME=()
 add_rate_row() {
     local label=$1 used=$2 resets_at=$3 window_sec=$4
     compute_rate_segment "$label" "$used" "$resets_at" "$window_sec"
@@ -712,7 +716,8 @@ add_rate_row() {
     RATE_ELAPSED+=("$SEG_ELAPSED")
     RATE_RATIO+=("$SEG_RATIO")
     RATE_COLOR+=("$SEG_COLOR")
-    RATE_RESET+=("$(date -d "@$resets_at" +%H:%M 2>/dev/null)")
+    RATE_DAY+=("$(date -d "@$resets_at" +"%a" 2>/dev/null)")
+    RATE_TIME+=("$(date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null)")
 }
 
 add_rate_row "5hr"  "$rl5_used" "$rl5_resets" 18000
@@ -720,23 +725,28 @@ add_rate_row "7day" "$rl7_used" "$rl7_resets" 604800
 
 if (( ${#RATE_USED[@]} > 0 )); then
     # Column widths = max across present rows. Numbers render right-justified
-    # to their slot so the trailing digits stack column-true.
-    rw=0; uw=0; ew=0; tw=0
-    for v in "${RATE_RATIO[@]}";   do (( ${#v} > rw )) && rw=${#v}; done
-    for v in "${RATE_USED[@]}";    do (( ${#v} > uw )) && uw=${#v}; done
-    for v in "${RATE_ELAPSED[@]}"; do (( ${#v} > ew )) && ew=${#v}; done
-    for v in "${RATE_RESET[@]}";   do (( ${#v} > tw )) && tw=${#v}; done
+    # to their slot so the trailing digits stack column-true. Day is always 3
+    # chars so a fixed dw=3 keeps the day column anchored regardless of input.
+    rw=0; uw=0; ew=0; tmw=0; dw=3
+    for v in "${RATE_RATIO[@]}";   do (( ${#v} > rw  )) && rw=${#v};  done
+    for v in "${RATE_USED[@]}";    do (( ${#v} > uw  )) && uw=${#v};  done
+    for v in "${RATE_ELAPSED[@]}"; do (( ${#v} > ew  )) && ew=${#v};  done
+    for v in "${RATE_TIME[@]}";    do (( ${#v} > tmw )) && tmw=${#v}; done
 
     emit_rate_row() {
-        local row=$1 used=$2 elapsed=$3 ratio=$4 color=$5 reset=$6
-        # Plain width: ratio + "%" + " (" + used + "%" + "/" + elapsed + "%" + ")" + " " + HH:MM
-        # Fixed delimiters total 8 chars; numeric slots use the padded widths.
-        local text_w=$(( rw + uw + ew + tw + 8 ))
+        local row=$1 used=$2 elapsed=$3 ratio=$4 color=$5 day=$6 time=$7
+        # Plain width: ratio + "%" + " (" + used + "%" + "/" + elapsed + "%" + ")"
+        #            + " " + day(3) + " " + time(tmw)
+        # Counted delimiters: 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 = 9 chars.
+        local text_w=$(( rw + uw + ew + dw + tmw + 9 ))
         local target_col pad
         target_col=$(( TERM_WIDTH - text_w ))
         pad=$(( target_col - row_vw[row] ))
         (( pad < SEP )) && pad=$SEP
-        append "$row" "$pad" '%*s' "$pad" ""
+        # Prefix the pad with a no-op ANSI reset so the TUI doesn't trim the
+        # leading run of whitespace (it preserves whitespace only when something
+        # non-whitespace appears earlier on the line).
+        append "$row" "$pad" '\033[0m%*s' "$pad" ""
         append "$row" "$rw" "${color}%*s\033[0m"   "$rw" "$ratio"
         append "$row" 1 "%%"
         append "$row" 2 " ("
@@ -747,13 +757,16 @@ if (( ${#RATE_USED[@]} > 0 )); then
         append "$row" 1 "%%"
         append "$row" 1 ")"
         append "$row" 1 " "
-        append "$row" "$tw" "\033[2;37m%*s\033[0m" "$tw" "$reset"
+        append "$row" "$dw"  "\033[2;37m%-*s\033[0m" "$dw"  "$day"
+        append "$row" 1 " "
+        append "$row" "$tmw" "\033[2;37m%*s\033[0m" "$tmw" "$time"
     }
 
     for (( j=0; j<${#RATE_USED[@]}; j++ )); do
         emit_rate_row $(( j + 1 )) \
             "${RATE_USED[j]}" "${RATE_ELAPSED[j]}" \
-            "${RATE_RATIO[j]}" "${RATE_COLOR[j]}" "${RATE_RESET[j]}"
+            "${RATE_RATIO[j]}" "${RATE_COLOR[j]}" \
+            "${RATE_DAY[j]}"   "${RATE_TIME[j]}"
     done
 fi
 
