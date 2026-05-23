@@ -50,24 +50,40 @@ Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden De
 
 ## Creating worktrees — always via the templated path
 
-**HARD RULE**: when you need to create a worktree, the path comes from `repoSettings.worktreeTemplate`. The claude-code-worktree-paths plugin's `WorktreeCreate` hook computes it — your job is to *invoke the hook*, not to pick the path yourself.
+**HARD RULE**: when you need a worktree, its path follows `repoSettings.worktreeTemplate` (typically `{clone-path}+{workspace-name}`). Two mechanisms get you a conforming path:
 
-Concretely:
+- **Hook-fired (auto-named workspace).** The claude-code-worktree-paths plugin's `WorktreeCreate` hook computes the path and picks the workspace name itself. Fires from:
+  - `Task` / `Agent` with `isolation: "worktree"` — workspace name becomes `agent-<id>` (auto-generated, ugly).
+  - `claude --worktree <name>` — workspace name is `<name>`.
+  - `fnc <repo>+<workspace>` — fnclaude resolves and passes `--worktree <workspace>` to claude.
+- **Manual creation (chosen workspace name).** When you need a *specific* branch/workspace name (PR-bound work — see "Worktree work runs in a subagent" below), compute the templated path yourself and call `git worktree add` directly:
+  ```sh
+  git worktree add -b <branch> "$(pwd)+<workspace-name>" origin/<base>
+  ```
+  The path still follows `{clone-path}+{workspace-name}` — you're substituting the placeholders manually rather than via the hook. The hook isn't fired, but the rule is satisfied because the resulting path matches the template. Usually `<branch>` and `<workspace-name>` are the same string.
 
-- **`Task` with `isolation: "worktree"`** — fires the hook. Use this for any agent that needs isolation.
-- **`claude --worktree <name>`** — fires the hook.
-- **`fnc <repo>+<workspace>`** — fnclaude resolves the base repo, passes `--worktree <workspace>` to claude, hook fires.
-- **`git worktree add <path>` direct** — does NOT fire the hook. Path is whatever you typed. This is the failure mode.
+**Symptoms of doing it wrong**: worktree lands inside the repo at `.claude/worktrees/<name>/` (the plugin's vanilla default) or anywhere unrelated to `{clone-path}+...`. The user's `worktreeTemplate` defines where worktrees should live — anything that doesn't honor it is a bug.
 
-**Symptoms of doing it wrong**: worktree lands inside the repo at `.claude/worktrees/<name>/` (the plugin's vanilla default) or wherever you typed in `git worktree add`. Both wrong. The user's `worktreeTemplate` defines where worktrees should live — anything that doesn't honor it is a bug.
+When the hook fires, it reports the templated path back in `hookSpecificOutput.worktreePath`. **Use that returned value** — don't recompute, because the template might reference placeholders (`{host-short}`, `{repo-dir}`, `{clone-path}`) that aren't trivially derivable in all environments. For manual creation, `$(pwd)+<name>` works in the common case where the parent session is at the clone path; if `{host-short}` or other placeholders are in play, ask before assuming.
 
-The hook reports the templated path back in its `hookSpecificOutput.worktreePath`. **Use that returned value** — don't recompute, because the template might reference placeholders (`{host-short}`, `{repo-dir}`, `{clone-path}`) that aren't trivially derivable.
-
-If you find yourself reaching for `git worktree add <path>`, stop and ask: *"Is this a worktree the user expected at the templated location?"* If yes, switch to a hook-firing mechanism. If genuinely no (some specific reason for a one-off path), say so out loud and let the user push back.
+If you find yourself reaching for `git worktree add <unrelated-path>`, stop and ask: *"Is this a worktree the user expected at the templated location?"* If yes, switch to a templated path. If genuinely no (some specific reason for a one-off path), say so out loud and let the user push back.
 
 ## Worktree work runs in a subagent
 
-**HARD RULE**: when you'd open a worktree, dispatch the work as a `Task` with `isolation: "worktree"` rather than `EnterWorktree` on the parent thread. The worktree trigger already gates on "well-scoped, isolation-worth-it" work — the same shape subagents handle well. Dispatching keeps the parent responsive (so I can still ask follow-ups while the work runs) and parallelizes naturally when multiple worktrees are in flight.
+**HARD RULE**: when you'd open a worktree, dispatch the work as a subagent rather than `EnterWorktree` on the parent thread. The worktree trigger already gates on "well-scoped, isolation-worth-it" work — the same shape subagents handle well. Dispatching keeps the parent responsive (so I can still ask follow-ups while the work runs) and parallelizes naturally when multiple worktrees are in flight.
+
+**Two dispatch shapes — pick by whether the subagent will open a PR:**
+
+1. **PR-bound subagent — default for code-change work.** Parent creates the worktree first with a chosen branch name, then dispatches the subagent **without** `isolation: "worktree"`, prompting it to `cd` into the worktree as its first action:
+   ```sh
+   git worktree add -b feat-renderer-merge "$(pwd)+feat-renderer-merge" origin/main
+   ```
+   ```
+   Agent(prompt: "Work in /home/tom/src/<repo>+feat-renderer-merge. cd there at the start; don't touch any other directory. ...")
+   ```
+   Branch on origin reads `feat-renderer-merge`, not `agent-deadbeef`. The Agent tool has no parameter to name the worktree (the `name` param is for SendMessage addressing, not the worktree), so manual creation is the only way to get a non-autogenerated remote branch name. Cleanup follows the "After merging a PR" rule below — manual `git worktree remove` + `git push origin --delete`. Branch-name shape matches the conventional-commit prefix the work will use: `feat-<scope>-<noun>`, `fix-<scope>-<noun>`, `chore-<scope>-<noun>`, `docs-<scope>-<noun>`. Keep it short.
+
+2. **Research-only subagent — Explore agents that won't push.** Use `Agent(isolation: "worktree", ...)`. Fires the hook; produces an `agent-<id>` workspace name. That's fine because the work never pushes a branch and the worktree gets cleaned up (auto-removed if the agent makes no changes; manually removed by the parent otherwise).
 
 `EnterWorktree` on the parent is the exception, not the default. Reach for it only when the work genuinely can't be briefed to a subagent — heavy mid-task back-and-forth with me expected, or parent context too load-bearing to summarize cleanly. Say so out loud when you do.
 
