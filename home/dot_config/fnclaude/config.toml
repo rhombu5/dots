@@ -1,3 +1,4 @@
 [auto]
 tmux = "worktree"
 handoff = "3"
+spawn_command = "uwsm app -a ghostty -- ghostty -e {bin} {dest} --name {name} @{summary}"
