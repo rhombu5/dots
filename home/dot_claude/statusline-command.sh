@@ -812,33 +812,28 @@ fi
 # included); the data line only extends to the current elapsed-x.
 # ────────────────────────────────────────────────────────────────────────────
 if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
-    # Per-plot layout (in cells):
-    #   ┌─────────────────────────────────────┐
-    #   │ │ . . . . . . . . . . .             │  row 0   ┐ data rows
-    #   │ │ . . . . . . . . . . .             │  row 1   ┘  (11 data cells × 2 rows)
-    #   │ └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─             │  row 2   ← X axis row
-    #   └─────────────────────────────────────┘
-    #     ^^ Y axis col 0    data cols 1..11
-    #
-    # Data area in dots: 22 wide × 8 tall (cells 1..11 × rows 0..1).
-    BURNDOWN_PLOT_W_CELLS=12     # data + Y axis (1 col)
-    BURNDOWN_PLOT_H_CELLS=3      # data + X axis (1 row)
-    BURNDOWN_DATA_W_CELLS=$(( BURNDOWN_PLOT_W_CELLS - 1 ))   # 11
-    BURNDOWN_DATA_H_CELLS=$(( BURNDOWN_PLOT_H_CELLS - 1 ))   # 2
-    BURNDOWN_W_DOTS=$(( BURNDOWN_DATA_W_CELLS * 2 ))         # 22
-    BURNDOWN_H_DOTS=$(( BURNDOWN_DATA_H_CELLS * 4 ))         # 8
+    # Per-plot layout: 12 cells wide × 3 cells tall = 24 × 12 dots. Axes are
+    # drawn as braille dots (Y = solid left-column of cell col 0; X = solid
+    # bottom-row of cell row H-1; corner cell gets both). This keeps the full
+    # data area at 24 × 12 and lets axis bits OR with data/ideal bits per cell.
+    BURNDOWN_PLOT_W_CELLS=12
+    BURNDOWN_PLOT_H_CELLS=3
+    BURNDOWN_W_DOTS=$(( BURNDOWN_PLOT_W_CELLS * 2 ))   # 24
+    BURNDOWN_H_DOTS=$(( BURNDOWN_PLOT_H_CELLS * 4 ))   # 12
     BURNDOWN_GAP_CELLS=1
-    BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25 cells
+    BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25
 
+    # Axis dot bitmasks (per cell):
+    #   left col   = bits 1 + 2 + 4 + 64 = 0x47  (⡇)
+    #   bottom row = bits 64 + 128       = 0xC0  (⣀)
+    #   corner     = 0x47 | 0xC0         = 0xC7  (⣇)
+    BURNDOWN_AXIS_Y=$(( 0x47 ))
+    BURNDOWN_AXIS_X=$(( 0xC0 ))
     BURNDOWN_AXIS_COLOR="\033[90m"     # bright black → rendered as gray
 
-    # Braille bit per (dx,dy). Standard mapping from U+2800 base:
-    #   left col bits:  0x01 0x02 0x04 0x40    (dy = 0,1,2,3)
-    #   right col bits: 0x08 0x10 0x20 0x80    (dy = 0,1,2,3)
+    # Braille bit per (dx,dy). Standard mapping from U+2800 base.
     BURNDOWN_BITS=(1 2 4 64 8 16 32 128)
 
-    # Layer arrays index over data-area cells only (11 wide × 2 tall = 22 cells
-    # per plot). Axes are drawn separately at emit time.
     declare -a br5_data br5_ideal br7_data br7_ideal
 
     burndown_set() {
@@ -848,7 +843,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         (( y < 0 || y >= BURNDOWN_H_DOTS )) && return
         local cx=$(( x / 2 )) cy=$(( y / 4 ))
         local dx=$(( x % 2 )) dy=$(( y % 4 ))
-        local idx=$(( cy * BURNDOWN_DATA_W_CELLS + cx ))
+        local idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
         local bit=${BURNDOWN_BITS[ dx * 4 + dy ]}
         layer[idx]=$(( ${layer[idx]:-0} | bit ))
     }
@@ -886,11 +881,13 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         ' "$file")
     }
 
-    # Dotted white ideal diagonal (every other x → 12 dots total).
+    # White ideal diagonal — iterate y, compute x. One dot per y row,
+    # evenly spaced. Iterating *x* and computing y would produce uneven
+    # buckets per row (W/H rarely divides cleanly) and visible stair-stepping.
     burndown_plot_ideal() {
         local layer_name=$1 x y
-        for ((x=0; x<BURNDOWN_W_DOTS; x+=2)); do
-            y=$(( (BURNDOWN_H_DOTS - 1) * x / (BURNDOWN_W_DOTS - 1) ))
+        for ((y=0; y<BURNDOWN_H_DOTS; y++)); do
+            x=$(( y * (BURNDOWN_W_DOTS - 1) / (BURNDOWN_H_DOTS - 1) ))
             burndown_set "$layer_name" "$x" "$y"
         done
     }
@@ -900,53 +897,46 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     burndown_plot_log   br5_data "5hr"  "$rl5_resets" 18000
     burndown_plot_log   br7_data "7day" "$rl7_resets" 604800
 
-    # Emit one data-area cell. Bitmasks from ideal and data layers are OR'd
-    # so the ideal-line dots stay visible *as shapes* under data overlap (a
-    # braille cell has one fg color, so the dots in such a cell will read as
-    # data-colored — but you still see the ideal line's footprint).
+    # Emit one cell. Data + ideal + axis bitmasks are all OR'd so every dot
+    # set by any layer stays visible. A cell has one fg color, so we pick by
+    # priority: data > ideal > axis. The dots a higher layer drew get colored
+    # too — overlapped axis/ideal dots still appear, just in the data color.
     burndown_render_cell() {
         local -n out=$1
-        local data_mask=$2 ideal_mask=$3 data_color=$4
-        local merged=$(( data_mask | ideal_mask ))
+        local data_mask=$2 ideal_mask=$3 axis_mask=$4 data_color=$5
+        local merged=$(( data_mask | ideal_mask | axis_mask ))
         if (( merged == 0 )); then
             out=' '
             return
         fi
         local color
-        if (( data_mask != 0 )); then color=$data_color
-        else                          color="\033[37m"
+        if   (( data_mask  != 0 )); then color=$data_color
+        elif (( ideal_mask != 0 )); then color="\033[37m"
+        else                             color=$BURNDOWN_AXIS_COLOR
         fi
         local hex
         printf -v hex '%04x' $(( 0x2800 + merged ))
         printf -v out "${color}%b\033[0m" "\\u${hex}"
     }
 
-    # Emit one plot's row into burndown_str. Y axis in cell 0 of every data
-    # row; bottom row is the X axis with └ corner + ─ chars.
+    # Emit one plot's row of cells. Per-cell axis bits are computed inline:
+    #   cx == 0                          → Y axis bits (solid left col)
+    #   cy == BURNDOWN_PLOT_H_CELLS - 1  → X axis bits (solid bottom row)
+    #   both true (corner)               → OR of the two
     burndown_emit_plot_row() {
         local cy=$1 data_arr_name=$2 ideal_arr_name=$3 data_color=$4
         local -n data_arr=$data_arr_name
         local -n ideal_arr=$ideal_arr_name
-        local cx idx cell
-        if (( cy < BURNDOWN_DATA_H_CELLS )); then
-            # Data row: │ Y-axis + data cells
-            printf -v cell "${BURNDOWN_AXIS_COLOR}│\033[0m"
+        local cx idx axis_mask cell
+        for ((cx=0; cx<BURNDOWN_PLOT_W_CELLS; cx++)); do
+            idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
+            axis_mask=0
+            (( cx == 0 ))                              && axis_mask=$(( axis_mask | BURNDOWN_AXIS_Y ))
+            (( cy == BURNDOWN_PLOT_H_CELLS - 1 ))      && axis_mask=$(( axis_mask | BURNDOWN_AXIS_X ))
+            burndown_render_cell cell \
+                "${data_arr[idx]:-0}" "${ideal_arr[idx]:-0}" "$axis_mask" "$data_color"
             burndown_str+=$cell
-            for ((cx=0; cx<BURNDOWN_DATA_W_CELLS; cx++)); do
-                idx=$(( cy * BURNDOWN_DATA_W_CELLS + cx ))
-                burndown_render_cell cell \
-                    "${data_arr[idx]:-0}" "${ideal_arr[idx]:-0}" "$data_color"
-                burndown_str+=$cell
-            done
-        else
-            # X-axis row: └ corner + ─ chars
-            printf -v cell "${BURNDOWN_AXIS_COLOR}└\033[0m"
-            burndown_str+=$cell
-            for ((cx=0; cx<BURNDOWN_DATA_W_CELLS; cx++)); do
-                printf -v cell "${BURNDOWN_AXIS_COLOR}─\033[0m"
-                burndown_str+=$cell
-            done
-        fi
+        done
     }
 
     burndown_cy=0
