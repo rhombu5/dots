@@ -854,6 +854,11 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
             burndown_set "$layer_name" "$x" "$y"
         done < <(awk -v ws="$window_start" -v win="$window_sec" \
                      -v wd="$BURNDOWN_W_DOTS" -v hd="$BURNDOWN_H_DOTS" '
+            # Anchor every line at (0, 0) — the window-start corner. By
+            # definition the window has just reset there, so used% is 0; this
+            # is real data, not a fudge, and it prevents the line from looking
+            # detached when logging started mid-window.
+            BEGIN { seen[0] = 0 }
             {
                 t = $1 + 0; used = $2 + 0
                 elapsed = t - ws
