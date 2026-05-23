@@ -25,7 +25,6 @@
       "autoUpdate": true
     }
   },
-  "effortLevel": "xhigh",
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
