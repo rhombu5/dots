@@ -444,12 +444,11 @@ for s in "${col2_short[@]}"; do (( ${#s} > col2_w )) && col2_w=${#s}; done
 n=${#col1_short[@]}
 (( ${#col2_path[@]} > n )) && n=${#col2_path[@]}
 
-# Right-side stack needs its own row budget: model (0), ctx (1), rate-limits (2).
-# Inflate n if the left side has fewer rows so the rate-limit row has a slot.
+# Right-side stack needs its own row budget: model (0), ctx (1), 5hr (2), 7day (3).
+# Inflate n if the left side has fewer rows so the rate-limit rows have slots.
 right_rows=2
-if   [ -n "$rl5_used" ] && [ -n "$rl5_resets" ]; then right_rows=3
-elif [ -n "$rl7_used" ] && [ -n "$rl7_resets" ]; then right_rows=3
-fi
+[ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=3
+[ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=4
 (( right_rows > n )) && n=$right_rows
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
@@ -718,35 +717,20 @@ append_rate_segment() {
     append "$row" 1             ")"
 }
 
-if (( n >= 3 )); then
-    compute_rate_segment "5hr" "$rl5_used" "$rl5_resets" 18000
-    s1_text=$SEG_TEXT; s1_label=$SEG_LABEL; s1_used=$SEG_USED
-    s1_elapsed=$SEG_ELAPSED; s1_ratio=$SEG_RATIO; s1_color=$SEG_COLOR
+render_rate_row() {
+    local row=$1 label=$2 used=$3 resets_at=$4 window_sec=$5
+    compute_rate_segment "$label" "$used" "$resets_at" "$window_sec"
+    [ -z "$SEG_TEXT" ] && return
+    local target_col pad
+    target_col=$(( TERM_WIDTH - ${#SEG_TEXT} ))
+    pad=$(( target_col - row_vw[row] ))
+    (( pad < SEP )) && pad=$SEP
+    append "$row" "$pad" '%*s' "$pad" ""
+    append_rate_segment "$row" "$SEG_LABEL" "$SEG_USED" "$SEG_ELAPSED" "$SEG_RATIO" "$SEG_COLOR"
+}
 
-    compute_rate_segment "7day" "$rl7_used" "$rl7_resets" 604800
-    s2_text=$SEG_TEXT; s2_label=$SEG_LABEL; s2_used=$SEG_USED
-    s2_elapsed=$SEG_ELAPSED; s2_ratio=$SEG_RATIO; s2_color=$SEG_COLOR
-
-    sep=""
-    [ -n "$s1_text" ] && [ -n "$s2_text" ] && sep=", "
-    combined="${s1_text}${sep}${s2_text}"
-
-    if [ -n "$combined" ]; then
-        target_col=$(( TERM_WIDTH - ${#combined} ))
-        pad=$(( target_col - row_vw[2] ))
-        (( pad < SEP )) && pad=$SEP
-        append 2 "$pad" '%*s' "$pad" ""
-        if [ -n "$s1_text" ]; then
-            append_rate_segment 2 "$s1_label" "$s1_used" "$s1_elapsed" "$s1_ratio" "$s1_color"
-        fi
-        if [ -n "$sep" ]; then
-            append 2 "${#sep}" '%s' "$sep"
-        fi
-        if [ -n "$s2_text" ]; then
-            append_rate_segment 2 "$s2_label" "$s2_used" "$s2_elapsed" "$s2_ratio" "$s2_color"
-        fi
-    fi
-fi
+(( n >= 3 )) && render_rate_row 2 "5hr"  "$rl5_used" "$rl5_resets" 18000
+(( n >= 4 )) && render_rate_row 3 "7day" "$rl7_used" "$rl7_resets" 604800
 
 for ((i=0; i<n; i++)); do
     (( i > 0 )) && printf "\n"
