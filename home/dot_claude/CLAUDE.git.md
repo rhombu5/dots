@@ -58,13 +58,13 @@ Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden De
   - `fnc <repo>+<workspace>` — fnclaude resolves and passes `--worktree <workspace>` to claude.
 - **Manual creation (chosen workspace name).** When you need a *specific* branch/workspace name (PR-bound work — see "Worktree work runs in a subagent" below), compute the templated path yourself and call `git worktree add` directly:
   ```sh
-  git worktree add -b <branch> "$(pwd)+<workspace-name>" origin/<base>
+  git worktree add -b <branch> "$(git rev-parse --show-toplevel)+<workspace-name>" origin/<base>
   ```
   The path still follows `{clone-path}+{workspace-name}` — you're substituting the placeholders manually rather than via the hook. The hook isn't fired, but the rule is satisfied because the resulting path matches the template. Usually `<branch>` and `<workspace-name>` are the same string.
 
 **Symptoms of doing it wrong**: worktree lands inside the repo at `.claude/worktrees/<name>/` (the plugin's vanilla default) or anywhere unrelated to `{clone-path}+...`. The user's `worktreeTemplate` defines where worktrees should live — anything that doesn't honor it is a bug.
 
-When the hook fires, it reports the templated path back in `hookSpecificOutput.worktreePath`. **Use that returned value** — don't recompute, because the template might reference placeholders (`{host-short}`, `{repo-dir}`, `{clone-path}`) that aren't trivially derivable in all environments. For manual creation, `$(pwd)+<name>` works in the common case where the parent session is at the clone path; if `{host-short}` or other placeholders are in play, ask before assuming.
+When the hook fires, it reports the templated path back in `hookSpecificOutput.worktreePath`. **Use that returned value** — don't recompute, because the template might reference placeholders (`{host-short}`, `{repo-dir}`, `{clone-path}`) that aren't trivially derivable in all environments. For manual creation, **always use `$(git rev-parse --show-toplevel)+<name>`** — never bare `$(pwd)`, because if a previous command in the same Bash chain cd'd into a subdirectory (`packages/foo`), `$(pwd)` evaluates to that subdirectory and the worktree lands *nested inside the workspace* (seen in practice: ended up at `<clone>/packages/renderer+fix-foo`, which then collided with the npm workspace glob). `git rev-parse --show-toplevel` always returns the repo root regardless of cwd. If `{host-short}` or other placeholders are in the template, ask before assuming.
 
 If you find yourself reaching for `git worktree add <unrelated-path>`, stop and ask: *"Is this a worktree the user expected at the templated location?"* If yes, switch to a templated path. If genuinely no (some specific reason for a one-off path), say so out loud and let the user push back.
 
@@ -76,7 +76,7 @@ If you find yourself reaching for `git worktree add <unrelated-path>`, stop and 
 
 1. **PR-bound subagent — default for code-change work.** Parent creates the worktree first with a chosen branch name, then dispatches the subagent **without** `isolation: "worktree"`, prompting it to `cd` into the worktree as its first action:
    ```sh
-   git worktree add -b feat-renderer-merge "$(pwd)+feat-renderer-merge" origin/main
+   git worktree add -b feat-renderer-merge "$(git rev-parse --show-toplevel)+feat-renderer-merge" origin/main
    ```
    ```
    Agent(prompt: "Work in /home/tom/src/<repo>+feat-renderer-merge. cd there at the start; don't touch any other directory. ...")
