@@ -89,6 +89,7 @@ mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
 model=$(jq -r '.model.display_name // ""' <<<"$input")
 effort=$(jq -r '.effort.level // ""' <<<"$input")
 used=$(jq -r '.context_window.used_percentage // empty' <<<"$input")
+exceeds_200k=$(jq -r '.exceeds_200k_tokens // false' <<<"$input")
 rl5_used=$(jq   -r '.rate_limits.five_hour.used_percentage // empty' <<<"$input")
 rl5_resets=$(jq -r '.rate_limits.five_hour.resets_at       // empty' <<<"$input")
 rl7_used=$(jq   -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
@@ -642,9 +643,10 @@ if [ -n "$model" ]; then
     if [ -n "$used" ]; then
         used_int=$(printf '%.0f' "$used")
         ctx_text="${used_int}%"
-        if   (( used_int >= 80 )); then ctx_color="\033[31m"
-        elif (( used_int >= 50 )); then ctx_color="\033[33m"
-        else                            ctx_color="\033[32m"
+        if   [ "$exceeds_200k" = "true" ]; then ctx_color="\033[31m"
+        elif (( used_int >= 80 ));         then ctx_color="\033[31m"
+        elif (( used_int >= 50 ));         then ctx_color="\033[33m"
+        else                                    ctx_color="\033[32m"
         fi
         label_w=$(( label_w + 1 + ${#ctx_text} ))
     fi
