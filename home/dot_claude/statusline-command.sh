@@ -444,11 +444,11 @@ for s in "${col2_short[@]}"; do (( ${#s} > col2_w )) && col2_w=${#s}; done
 n=${#col1_short[@]}
 (( ${#col2_path[@]} > n )) && n=${#col2_path[@]}
 
-# Right-side stack needs its own row budget: model (0), ctx (1), 5hr (2), 7day (3).
+# Right-side stack: row 0 packs model+effort+ctx; rate-limit rows fall below.
 # Inflate n if the left side has fewer rows so the rate-limit rows have slots.
-right_rows=2
-[ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=3
-[ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=4
+right_rows=1
+[ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=2
+[ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=3
 (( right_rows > n )) && n=$right_rows
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
@@ -633,13 +633,20 @@ done
 SEP=2
 
 if [ -n "$model" ]; then
-    # Effort is exposed in the statusline JSON at .effort.level only for models
-    # that support it (currently opus 4.x), reflecting the *current* session
-    # state — not the launch flag — so /effort changes are picked up live.
-    if [ -n "$effort" ]; then
-        label_w=$(( ${#model} + 1 + ${#effort} ))
-    else
-        label_w=${#model}
+    # Row 0 packs model, effort, and ctx% into one right-aligned label.
+    #   - effort comes from .effort.level (opus 4.x only); reflects live /effort state
+    #   - ctx is the raw used% with no label, color-stepped against the same thresholds
+    #     as before (green <50, yellow 50-79, red >=80)
+    label_w=${#model}
+    [ -n "$effort" ] && label_w=$(( label_w + 1 + ${#effort} ))
+    if [ -n "$used" ]; then
+        used_int=$(printf '%.0f' "$used")
+        ctx_text="${used_int}%"
+        if   (( used_int >= 80 )); then ctx_color="\033[31m"
+        elif (( used_int >= 50 )); then ctx_color="\033[33m"
+        else                            ctx_color="\033[32m"
+        fi
+        label_w=$(( label_w + 1 + ${#ctx_text} ))
     fi
     target_col=$(( TERM_WIDTH - label_w ))
     pad=$(( target_col - row_vw[0] ))
@@ -649,21 +656,9 @@ if [ -n "$model" ]; then
     if [ -n "$effort" ]; then
         append 0 $(( 1 + ${#effort} )) " \033[2;3;37m%s\033[0m" "$effort"
     fi
-fi
-
-if [ -n "$used" ]; then
-    used_int=$(printf '%.0f' "$used")
-    ctx_text="ctx:${used_int}%"
-    if   (( used_int >= 80 )); then color="\033[31m"
-    elif (( used_int >= 50 )); then color="\033[33m"
-    else                            color="\033[32m"
+    if [ -n "$used" ]; then
+        append 0 $(( 1 + ${#ctx_text} )) " ${ctx_color}%s\033[0m" "$ctx_text"
     fi
-    target_row=0; (( n >= 2 )) && target_row=1
-    target_col=$(( TERM_WIDTH - ${#ctx_text} ))
-    pad=$(( target_col - row_vw[target_row] ))
-    (( pad < SEP )) && pad=$SEP
-    append "$target_row" "$pad" '%*s' "$pad" ""
-    append "$target_row" "${#ctx_text}" "${color}%s\033[0m" "$ctx_text"
 fi
 
 # Rate-limit row: show used / elapsed-through-window as a single "burn ratio" with
@@ -702,35 +697,63 @@ compute_rate_segment() {
     SEG_TEXT="${label}: ${ratio_pct}% (${used_int}%/${elapsed_pct}%)"
 }
 
-append_rate_segment() {
-    local row=$1 label=$2 used=$3 elapsed=$4 ratio=$5 color=$6
-    append "$row" "${#label}"   "\033[2;37m%s\033[0m" "$label"
-    append "$row" 2             ": "
-    append "$row" "${#ratio}"   "${color}%s\033[0m"  "$ratio"
-    append "$row" 1             "%%"
-    append "$row" 2             " ("
-    append "$row" "${#used}"    "\033[2;37m%s\033[0m" "$used"
-    append "$row" 1             "%%"
-    append "$row" 1             "/"
-    append "$row" "${#elapsed}" "\033[2;37m%s\033[0m" "$elapsed"
-    append "$row" 1             "%%"
-    append "$row" 1             ")"
-}
-
-render_rate_row() {
-    local row=$1 label=$2 used=$3 resets_at=$4 window_sec=$5
+# Collect segments first so we can pad numeric columns to a common width per slot,
+# keeping the least-significant digits vertically aligned across the two rows.
+# No row label — the two rows are distinguished by position (5hr first, 7day second)
+# and by the reset HH:MM trailing each line.
+RATE_USED=(); RATE_ELAPSED=(); RATE_RATIO=(); RATE_COLOR=(); RATE_RESET=()
+add_rate_row() {
+    local label=$1 used=$2 resets_at=$3 window_sec=$4
     compute_rate_segment "$label" "$used" "$resets_at" "$window_sec"
     [ -z "$SEG_TEXT" ] && return
-    local target_col pad
-    target_col=$(( TERM_WIDTH - ${#SEG_TEXT} ))
-    pad=$(( target_col - row_vw[row] ))
-    (( pad < SEP )) && pad=$SEP
-    append "$row" "$pad" '%*s' "$pad" ""
-    append_rate_segment "$row" "$SEG_LABEL" "$SEG_USED" "$SEG_ELAPSED" "$SEG_RATIO" "$SEG_COLOR"
+    RATE_USED+=("$SEG_USED")
+    RATE_ELAPSED+=("$SEG_ELAPSED")
+    RATE_RATIO+=("$SEG_RATIO")
+    RATE_COLOR+=("$SEG_COLOR")
+    RATE_RESET+=("$(date -d "@$resets_at" +%H:%M 2>/dev/null)")
 }
 
-(( n >= 3 )) && render_rate_row 2 "5hr"  "$rl5_used" "$rl5_resets" 18000
-(( n >= 4 )) && render_rate_row 3 "7day" "$rl7_used" "$rl7_resets" 604800
+add_rate_row "5hr"  "$rl5_used" "$rl5_resets" 18000
+add_rate_row "7day" "$rl7_used" "$rl7_resets" 604800
+
+if (( ${#RATE_USED[@]} > 0 )); then
+    # Column widths = max across present rows. Numbers render right-justified
+    # to their slot so the trailing digits stack column-true.
+    rw=0; uw=0; ew=0; tw=0
+    for v in "${RATE_RATIO[@]}";   do (( ${#v} > rw )) && rw=${#v}; done
+    for v in "${RATE_USED[@]}";    do (( ${#v} > uw )) && uw=${#v}; done
+    for v in "${RATE_ELAPSED[@]}"; do (( ${#v} > ew )) && ew=${#v}; done
+    for v in "${RATE_RESET[@]}";   do (( ${#v} > tw )) && tw=${#v}; done
+
+    emit_rate_row() {
+        local row=$1 used=$2 elapsed=$3 ratio=$4 color=$5 reset=$6
+        # Plain width: ratio + "%" + " (" + used + "%" + "/" + elapsed + "%" + ")" + " " + HH:MM
+        # Fixed delimiters total 8 chars; numeric slots use the padded widths.
+        local text_w=$(( rw + uw + ew + tw + 8 ))
+        local target_col pad
+        target_col=$(( TERM_WIDTH - text_w ))
+        pad=$(( target_col - row_vw[row] ))
+        (( pad < SEP )) && pad=$SEP
+        append "$row" "$pad" '%*s' "$pad" ""
+        append "$row" "$rw" "${color}%*s\033[0m"   "$rw" "$ratio"
+        append "$row" 1 "%%"
+        append "$row" 2 " ("
+        append "$row" "$uw" "\033[2;37m%*s\033[0m" "$uw" "$used"
+        append "$row" 1 "%%"
+        append "$row" 1 "/"
+        append "$row" "$ew" "\033[2;37m%*s\033[0m" "$ew" "$elapsed"
+        append "$row" 1 "%%"
+        append "$row" 1 ")"
+        append "$row" 1 " "
+        append "$row" "$tw" "\033[2;37m%*s\033[0m" "$tw" "$reset"
+    }
+
+    for (( j=0; j<${#RATE_USED[@]}; j++ )); do
+        emit_rate_row $(( j + 1 )) \
+            "${RATE_USED[j]}" "${RATE_ELAPSED[j]}" \
+            "${RATE_RATIO[j]}" "${RATE_COLOR[j]}" "${RATE_RESET[j]}"
+    done
+fi
 
 for ((i=0; i<n; i++)); do
     (( i > 0 )) && printf "\n"
