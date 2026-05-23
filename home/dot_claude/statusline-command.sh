@@ -87,6 +87,7 @@ project_dir=$(jq -r '.workspace.project_dir // ""' <<<"$input")
 cwd=$(jq -r '.workspace.current_dir // .cwd // ""' <<<"$input")
 mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
 model=$(jq -r '.model.display_name // ""' <<<"$input")
+effort=$(jq -r '.effort.level // ""' <<<"$input")
 used=$(jq -r '.context_window.used_percentage // empty' <<<"$input")
 
 CACHE_DIR="$HOME/.cache/claude-statusline"
@@ -621,11 +622,22 @@ done
 SEP=2
 
 if [ -n "$model" ]; then
-    target_col=$(( TERM_WIDTH - ${#model} ))
+    # Effort is exposed in the statusline JSON at .effort.level only for models
+    # that support it (currently opus 4.x), reflecting the *current* session
+    # state — not the launch flag — so /effort changes are picked up live.
+    if [ -n "$effort" ]; then
+        label_w=$(( ${#model} + 1 + ${#effort} ))
+    else
+        label_w=${#model}
+    fi
+    target_col=$(( TERM_WIDTH - label_w ))
     pad=$(( target_col - row_vw[0] ))
     (( pad < SEP )) && pad=$SEP
     append 0 "$pad" '%*s' "$pad" ""
     append 0 "${#model}" "\033[3;37m%s\033[0m" "$model"
+    if [ -n "$effort" ]; then
+        append 0 $(( 1 + ${#effort} )) " \033[2;3;37m%s\033[0m" "$effort"
+    fi
 fi
 
 if [ -n "$used" ]; then
