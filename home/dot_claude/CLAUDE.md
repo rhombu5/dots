@@ -97,6 +97,8 @@ Whenever you're about to do non-trivial work, decompose into parallel tracks and
 
 The single exception: if running in parallel would make **total wall-clock time slower** — true sequential dependencies, or merge conflicts at integration that'd take longer to resolve than serialising would have. Serialise that pair; parallelise everything else.
 
+**Wall-clock parity sub-exception (short tasks).** When each task in the set is short enough that serialising N items into one subagent finishes in roughly the same wall-clock as the slowest parallel item would have anyway, serialise. Firing 4 parallel subagents that each pay ~50K of cold-start framing for ~5 minutes of work — when one subagent could process all 4 serially in 6-8 minutes — trades quota for noise that wasn't moving the wall-clock needle. Rule of thumb: if a single subagent's total serial wall-clock is within ~5 minutes of the max-parallel wall-clock, prefer one. If each item is a 20+ minute task, the framing dilutes and parallel wins again.
+
 The trigger isn't "is this big enough to need parallelism" — it's "is there any independent work I could be doing at the same time?" If yes, do it. Apply this in *planning*, not just at dispatch time: when laying out the next several steps, identify the parallelism shape first — what can run concurrently, what truly has to wait. Then fire the concurrent set in one message.
 
 ## Run `/getitdone` when you think you're done
