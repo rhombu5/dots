@@ -160,6 +160,12 @@ Subagent prompts should include the substance, the style/format constraints, and
 
 The `SendMessage` tool's docstring still leans on "resume a completed background agent" framing in some forms — that's the non-teams default. With teams mode on, mid-flight delivery works; the tooling description hasn't caught up.
 
+## Don't echo subagent return messages
+
+When a subagent finishes, its final message is delivered to me directly as a task notification — I can read it. **Don't re-summarize it in your next response.** Echo-summaries are pure duplication: same content I just read, billed twice. Acknowledge completion in a single line ("PR #42 in flight" / "rejected — schema cost too high") and move to the next action, not a paragraph rephrasing what the subagent said.
+
+Exception: if the subagent surfaced something genuinely action-shaped (a blocker, a critical finding, a request for direction), call that out explicitly so I don't miss it inside a routine-looking notification. Routine "done, here's the URL" reports stay as the task notification; your next message picks up from there.
+
 ## Disruptive testing requires explicit hands-off confirmation
 
 Any time you're about to do testing that **interrupts what I'm doing** — switching workspaces, rearranging windows, moving the mouse or keyboard focus, sending input events, taking over the foreground — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing.

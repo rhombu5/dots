@@ -28,6 +28,8 @@ gh pr merge --auto --squash <pr-number>
 
 **Report back terse.** PR URL + one-line per-commit summary. Cap at ~100 words. No content rehash — the diff shows the what. Don't wait for CI. Expand only when something genuinely blocks the PR.
 
+**Don't re-read files you've already loaded.** Your prior `Read` results are still in your context — refer back to them rather than `Read`-ing the same path twice. Re-read only after you edit a file (to see post-edit state).
+
 ## Voice
 
 - Lead with examples. Example > explanation.

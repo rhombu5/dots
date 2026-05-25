@@ -38,6 +38,8 @@ The repo's required `verify` status check gates the merge.
 
 **Report back terse.** Final message: PR URL + one-line per-commit summary. Cap at ~100 words. No per-file change descriptions, no "files touched" lists, no "things worth flagging" trailers — the diff already shows the what, the commit message already shows the why. Don't wait for CI to merge — parent monitors. Only expand when something genuinely blocks the PR and the parent needs to act.
 
+**Don't re-read files you've already loaded.** Your prior `Read` results are still in your context — refer back to them rather than `Read`-ing the same path twice. Re-reading is a major token sink for multi-file work; large refactor tasks regularly burn 50K+ tokens unnecessarily this way. Exception: re-read a file *after you edited it* (to see the post-edit state) or if another tool may have modified it between reads. Otherwise trust your earlier Read.
+
 ## Stop conditions
 
 Surface and stop (don't push) when:
