@@ -688,6 +688,7 @@ if [ -n "$model" ]; then
             easy|low)  effort_color='\033[3;32m' ;;       # green
             medium)    effort_color='\033[3;33m' ;;       # yellow
             hard|high) effort_color='\033[3;38;5;208m' ;; # orange
+            xhigh)     effort_color='\033[3;38;5;202m' ;; # red-orange
             max)       effort_color='\033[3;31m' ;;       # red
             *)         effort_color='\033[2;3;37m' ;;     # fallback: dim
         esac
