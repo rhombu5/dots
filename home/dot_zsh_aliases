@@ -113,3 +113,10 @@ bw() {
 # Trust model: anyone with an unlocked vault can sudo as you.
 # Same surface as the desktop app's "Unlock with system authentication".
 sudoa() { SUDO_ASKPASS="$HOME/.local/bin/claude-askpass" command sudo -A "$@"; }
+
+# --- tfnc: TEMP alias for testing the in-development fnclaude TS port ---
+# Points at the local checkout's CLI bin so `tfnc <args>` exercises whatever
+# is currently on the working tree, without needing `npm install -g`.
+# DELETE THIS BLOCK once the public release is settled and you're using the
+# installed `fnc` from npm.
+alias tfnc='/home/tom/src/fnclaude@fnclaude/packages/cli/bin/fnc.js'
