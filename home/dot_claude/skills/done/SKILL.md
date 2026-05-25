@@ -102,6 +102,19 @@ Verify with:
 - Sudo state, env vars, or shell mutations that'd surprise the user's next session?
 - Open editor windows / dialogs you spawned for testing?
 
+## 13. Open bugs in the repo
+
+**Only if the session touched code in a GitHub repo.** Otherwise ⚠ N/A.
+
+`gh issue list --state open --label bug --limit 10` — any open bug-labeled issues? Two specific cases to flag:
+
+- A bug that this session might have *introduced* (e.g., a refactor whose blast radius matches the bug report). Don't close out a session leaving a fresh bug you caused open.
+- A bug that's been around but is closely adjacent to what this session changed (e.g., you refactored module X and there's an open bug about X's behavior). Worth surfacing as "you were here — want to look?", not silently moving on.
+
+Don't audit every bug in the tracker — that's project health, not session wrap-up. Scope to bugs that touch the area this session worked in.
+
+⚠ when bugs exist that might relate; ✓ when no related bugs (or none open); ⚠ N/A if the repo isn't a GitHub repo or doesn't use the `bug` label.
+
 ---
 
 ## Output shape
@@ -121,6 +134,7 @@ Report as a compact checklist:
 10. Memory hygiene      ✓ saved one project memory; nothing stale
 11. System parity       ✓ live ↔ dots ↔ arch-setup agree
 12. Anything weird      ✓
+13. Open bugs           ⚠ #77 might relate to today's restart work
 ```
 
 Then list the ✗ / ⚠ items as concrete next actions, and ask the user how to proceed. Don't just fix them — the point of this skill is the *checkpoint*, not silent cleanup.
