@@ -684,13 +684,13 @@ if [ -n "$model" ]; then
     append 0 "${#model}" "\033[3;37m%s\033[0m" "$model"
     if [ -n "$effort" ]; then
         case "$effort" in
-            auto)      effort_color='\033[3;36m' ;;       # cyan
-            easy|low)  effort_color='\033[3;32m' ;;       # green
-            medium)    effort_color='\033[3;33m' ;;       # yellow
-            hard|high) effort_color='\033[3;38;5;208m' ;; # orange
-            xhigh)     effort_color='\033[3;38;5;202m' ;; # red-orange
-            max)       effort_color='\033[3;31m' ;;       # red
-            *)         effort_color='\033[2;3;37m' ;;     # fallback: dim
+            auto)   effort_color='\033[3;36m' ;;       # cyan
+            low)    effort_color='\033[3;32m' ;;       # green
+            medium) effort_color='\033[3;38;5;226m' ;; # yellow
+            high)   effort_color='\033[3;38;5;208m' ;; # orange
+            xhigh)  effort_color='\033[3;38;5;202m' ;; # red-orange
+            max)    effort_color='\033[3;31m' ;;       # red
+            *)      effort_color='\033[2;3;37m' ;;     # fallback: dim
         esac
         append 0 $(( 1 + ${#effort} )) " ${effort_color}%s\033[0m" "$effort"
     fi
