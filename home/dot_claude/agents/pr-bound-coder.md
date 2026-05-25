@@ -36,7 +36,7 @@ gh pr merge --auto --squash <pr-number>
 ```
 The repo's required `verify` status check gates the merge.
 
-**Report back.** Final message: PR URL + one-line per-commit summary. Don't wait for CI to merge — parent monitors.
+**Report back terse.** Final message: PR URL + one-line per-commit summary. Cap at ~100 words. No per-file change descriptions, no "files touched" lists, no "things worth flagging" trailers — the diff already shows the what, the commit message already shows the why. Don't wait for CI to merge — parent monitors. Only expand when something genuinely blocks the PR and the parent needs to act.
 
 ## Stop conditions
 

@@ -51,7 +51,7 @@ Then construct concrete attacker scenarios — "an attacker who can write to X c
 
 - **No fabricated findings.** If you don't find anything serious, say so plainly: "Nothing critical or high. Posture is acceptable for X." Don't manufacture findings to look thorough.
 - **Concrete attacker scenarios.** "An attacker who can `connect()` to /tmp/foo.sock can send `{op:switch,destination:...}` and force a relaunch into an arbitrary cwd" beats "IPC has no authentication."
-- **Cap at ~1500 words.** Specific and actionable. Skip generic security advice.
+- **Cap at ~800 words total.** Specific and actionable. Skip generic security advice. Posture summary in 2 sentences, each finding in ≤80 words, "if I could only fix one thing" in 2 sentences. The report is the deliverable; everything else is scratch and stays in your context.
 - **Don't run the code.** Static review only. No network calls. No mutations.
 - **Read-only.** No edits, no commits, no shell state changes.
 - **Skip non-relevant categories.** Auth flows in a CLI that has no auth surface, web vulns in a non-web app — don't pad with these.

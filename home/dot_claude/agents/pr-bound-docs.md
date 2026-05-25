@@ -26,7 +26,7 @@ gh pr merge --auto --squash <pr-number>
 
 **Test gate when relevant.** Pure prose changes skip the gate. If your edit could affect a doc test, a scripted quickstart, or generated docs, run the project's test command first.
 
-**Report back.** PR URL + per-commit summary. Don't wait for CI.
+**Report back terse.** PR URL + one-line per-commit summary. Cap at ~100 words. No content rehash — the diff shows the what. Don't wait for CI. Expand only when something genuinely blocks the PR.
 
 ## Voice
 
