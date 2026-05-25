@@ -168,6 +168,24 @@ When a subagent finishes, its final message is delivered to me directly as a tas
 
 Exception: if the subagent surfaced something genuinely action-shaped (a blocker, a critical finding, a request for direction), call that out explicitly so I don't miss it inside a routine-looking notification. Routine "done, here's the URL" reports stay as the task notification; your next message picks up from there.
 
+## Suggest VS Code + `--ide` when LSP would save real tokens
+
+Some work shapes burn hundreds of grep/read cycles mapping symbols, references, or types — exactly the surface `mcp__ide__getDiagnostics` (and the broader VS Code LSP bridge) is built for. When you're about to start that shape of work, **strongly recommend launching VS Code and restarting with `--ide`** before diving in. The restart pays for itself in tokens within ~10 cross-file lookups.
+
+Triggers — predict BEFORE the work starts, not after:
+
+- Refactor touching a symbol across many files (rename, signature change, sentinel swap)
+- Chasing type errors where you'd otherwise iterate `bun test` / `tsc` / `cargo check` / `mypy` to find them
+- "Where is X used?" investigations across the codebase
+- Any time you can already foresee 20+ grep+read pairs ahead
+
+What to say: *"this work would burn ~N cross-file lookups — the IDE bridge would short-circuit most of them. Want me to launch VS Code and restart with `--ide`?"* On yes:
+
+1. `code <project-root>` to open the window (VS Code must be running BEFORE the restart, or `--ide` has nothing to connect to).
+2. Call `fnc_restart` with the `ide` override — preserves other startup flags, picks up the LSP bridge on relaunch.
+
+Don't suggest for one-off lookups, prose work, or anything where the restart's cold-start cost wouldn't amortize. The bar is "this work *will* burn navigation tokens the LSP could short-circuit", not "the LSP is theoretically available." When in doubt about whether the shape qualifies, name the predicted lookup count out loud — if it's <10, skip the suggestion.
+
 ## Disruptive testing requires explicit hands-off confirmation
 
 Any time you're about to do testing that **interrupts what I'm doing** — switching workspaces, rearranging windows, moving the mouse or keyboard focus, sending input events, taking over the foreground — **tell me what you're going to do and wait for confirmation before beginning.** Don't bury the side effect in a "let me just check this" framing.
