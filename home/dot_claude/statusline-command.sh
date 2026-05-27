@@ -955,10 +955,6 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     br5_now_cell=$(burndown_now_cell "$rl5_resets" 18000)
     br7_now_cell=$(burndown_now_cell "$rl7_resets" 604800)
 
-    # Arbitrary tick locations for visual comparison against the apostrophe.
-    BURNDOWN_PIPE_CX=4
-    BURNDOWN_PERIOD_CX=8
-
     # Emit one cell. Each layer renders exclusively — the highest-priority
     # non-empty layer provides BOTH the dot bitmask and the color, so the
     # color of dots in a cell unambiguously matches the layer they came from.
@@ -996,10 +992,6 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         (( cy == BURNDOWN_PLOT_H_CELLS - 1 )) && is_axis_row=1
         for ((cx=0; cx<BURNDOWN_PLOT_W_CELLS; cx++)); do
             if (( is_axis_row )) && (( cx == now_cell )); then
-                printf -v cell "${BURNDOWN_AXIS_COLOR}'\033[0m"
-            elif (( is_axis_row )) && (( cx == BURNDOWN_PIPE_CX )); then
-                printf -v cell "${BURNDOWN_AXIS_COLOR}|\033[0m"
-            elif (( is_axis_row )) && (( cx == BURNDOWN_PERIOD_CX )); then
                 printf -v cell "${BURNDOWN_AXIS_COLOR}.\033[0m"
             else
                 idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
