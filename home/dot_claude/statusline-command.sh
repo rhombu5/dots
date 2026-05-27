@@ -383,9 +383,17 @@ C_BRANCH_DIM='\033[38;5;245m'  # medium gray
 C_SEP='\033[2;37m'         # dim white (column separator pipe)
 
 # ── Column 1
+# Suppress col 1 entirely when project_dir is the fnclaude noop dir and no
+# added_dirs are attached — noop is the "no project loaded" placeholder, so
+# rendering it as a path is noise. Any added_dir means real work is in flight
+# and the noop entry stays so the hues line up.
+NOOP_DIR_REAL=$(realpath_safe "${XDG_CONFIG_HOME:-$HOME/.config}/fnclaude/noop")
+project_dir_real=$(realpath_safe "$project_dir")
 declare -a col1_path
-col1_path+=("$(main_worktree_of "$project_dir")")
-for d in "${added_dirs[@]}"; do col1_path+=("$(main_worktree_of "$d")"); done
+if ! { [ "$project_dir_real" = "$NOOP_DIR_REAL" ] && (( ${#added_dirs[@]} == 0 )); }; then
+    col1_path+=("$(main_worktree_of "$project_dir")")
+    for d in "${added_dirs[@]}"; do col1_path+=("$(main_worktree_of "$d")"); done
+fi
 
 declare -a col1_short
 for p in "${col1_path[@]}"; do col1_short+=("$(abbreviate_if_templated "$(shorten "$p")")"); done
@@ -680,7 +688,10 @@ if [ -n "$model" ]; then
     target_col=$(( TERM_WIDTH - label_w ))
     pad=$(( target_col - row_vw[0] ))
     (( pad < SEP )) && pad=$SEP
-    append 0 "$pad" '%*s' "$pad" ""
+    # Leading \033[0m so the TUI doesn't trim the pad when row 0 has no col1
+    # content in front of it (e.g. noop suppression). Without it, the model
+    # label collapses to the left edge.
+    append 0 "$pad" '\033[0m%*s' "$pad" ""
     append 0 "${#model}" "\033[3;37m%s\033[0m" "$model"
     if [ -n "$effort" ]; then
         case "$effort" in
@@ -927,6 +938,26 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     burndown_plot_log   br5_data "5hr"  "$rl5_resets" 18000
     burndown_plot_log   br7_data "7day" "$rl7_resets" 604800
 
+    # X-axis tick: cell column matching "now" inside this plot's window.
+    # Same elapsed→dot-x math as the data plotter, then dot→cell.
+    burndown_now_cell() {
+        local resets_at=$1 window_sec=$2
+        [ -z "$resets_at" ] && { printf '%s' -1; return; }
+        local now elapsed dot_x
+        now=$(date +%s)
+        elapsed=$(( now - (resets_at - window_sec) ))
+        if (( elapsed < 0 || elapsed >= window_sec )); then
+            printf '%s' -1; return
+        fi
+        dot_x=$(( BURNDOWN_DATA_X_OFFSET + elapsed * (BURNDOWN_DATA_W_DOTS - 1) / window_sec ))
+        printf '%s' $(( dot_x / 2 ))
+    }
+    br5_now_cell=$(burndown_now_cell "$rl5_resets" 18000)
+    br7_now_cell=$(burndown_now_cell "$rl7_resets" 604800)
+
+    # Arbitrary pipe location for visual comparison against the apostrophe tick.
+    BURNDOWN_PIPE_CX=4
+
     # Emit one cell. Each layer renders exclusively — the highest-priority
     # non-empty layer provides BOTH the dot bitmask and the color, so the
     # color of dots in a cell unambiguously matches the layer they came from.
@@ -957,17 +988,24 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     #   cy == BURNDOWN_PLOT_H_CELLS - 1  → X axis bits (solid bottom row)
     #   both true (corner)               → OR of the two
     burndown_emit_plot_row() {
-        local cy=$1 data_arr_name=$2 ideal_arr_name=$3 data_color=$4
+        local cy=$1 data_arr_name=$2 ideal_arr_name=$3 data_color=$4 now_cell=$5
         local -n data_arr=$data_arr_name
         local -n ideal_arr=$ideal_arr_name
-        local cx idx axis_mask cell
+        local cx idx axis_mask cell is_axis_row=0
+        (( cy == BURNDOWN_PLOT_H_CELLS - 1 )) && is_axis_row=1
         for ((cx=0; cx<BURNDOWN_PLOT_W_CELLS; cx++)); do
-            idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
-            axis_mask=0
-            (( cx == 0 ))                              && axis_mask=$(( axis_mask | BURNDOWN_AXIS_Y ))
-            (( cy == BURNDOWN_PLOT_H_CELLS - 1 ))      && axis_mask=$(( axis_mask | BURNDOWN_AXIS_X ))
-            burndown_render_cell cell \
-                "${data_arr[idx]:-0}" "${ideal_arr[idx]:-0}" "$axis_mask" "$data_color"
+            if (( is_axis_row )) && (( cx == now_cell )); then
+                printf -v cell "${BURNDOWN_AXIS_COLOR}'\033[0m"
+            elif (( is_axis_row )) && (( cx == BURNDOWN_PIPE_CX )); then
+                printf -v cell "${BURNDOWN_AXIS_COLOR}|\033[0m"
+            else
+                idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
+                axis_mask=0
+                (( cx == 0 ))     && axis_mask=$(( axis_mask | BURNDOWN_AXIS_Y ))
+                (( is_axis_row )) && axis_mask=$(( axis_mask | BURNDOWN_AXIS_X ))
+                burndown_render_cell cell \
+                    "${data_arr[idx]:-0}" "${ideal_arr[idx]:-0}" "$axis_mask" "$data_color"
+            fi
             burndown_str+=$cell
         done
     }
@@ -982,7 +1020,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         burndown_vw=$burndown_pad
 
         # Left plot: 5hr (red).
-        burndown_emit_plot_row "$burndown_cy" br5_data br5_ideal "\033[31m"
+        burndown_emit_plot_row "$burndown_cy" br5_data br5_ideal "\033[31m" "$br5_now_cell"
         burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
 
         # Gap.
@@ -990,7 +1028,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         burndown_vw=$(( burndown_vw + 1 ))
 
         # Right plot: 7day (light blue \033[94m).
-        burndown_emit_plot_row "$burndown_cy" br7_data br7_ideal "\033[94m"
+        burndown_emit_plot_row "$burndown_cy" br7_data br7_ideal "\033[94m" "$br7_now_cell"
         burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
 
         row_str[burndown_row]+=$burndown_str
