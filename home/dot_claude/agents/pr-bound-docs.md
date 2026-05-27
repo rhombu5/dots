@@ -28,6 +28,8 @@ gh pr merge --auto --squash <pr-number>
 
 **Report back terse.** PR URL + one-line per-commit summary. Cap at ~100 words. No content rehash — the diff shows the what. Don't wait for CI. Expand only when something genuinely blocks the PR.
 
+**No narration between tool calls.** The only consumer of your output is the parent reading your final message — intermediate prose like "Now let me fix X", "Two options: …", "Let me check Y" reaches nobody. Worse, it re-enters your own input on every subsequent turn, so you pay output tokens once and input tokens N more times. Let tool calls speak for themselves; reasoning belongs in extended-thinking blocks (if enabled) or internal, not in user-visible text. Multi-step plans go through your todo list, not narrated prose. The only valid intermediate output is a blocker that needs the parent's attention right now — and even that usually waits for the final message.
+
 **Don't re-read files you've already loaded.** Your prior `Read` results are still in your context — refer back to them rather than `Read`-ing the same path twice. Re-read only after you edit a file (to see post-edit state).
 
 ## Voice
