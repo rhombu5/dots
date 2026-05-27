@@ -78,9 +78,16 @@ Strip Claude attribution by default whenever you're writing something that'll be
 
 ## All code edits happen in a worktree subagent — HARD RULE
 
-**Default action for any code-change work**: dispatch as `Task` with `isolation: "worktree"`. The trigger is "I'm about to edit code in a project," not "I want to create a worktree." Being already on a branch in the main checkout is the **failure mode this rule prevents**, not a reason to skip it.
+**Default action for any code-change work**: dispatch as a `Task` / `Agent` subagent running in a templated worktree. The trigger is "I'm about to edit code in a project," not "I want to create a worktree." Being already on a branch in the main checkout is the **failure mode this rule prevents**, not a reason to skip it.
 
-**Why**: keeps the parent session responsive (so I can interrupt or ask follow-ups while work runs), parallelises naturally when multiple changes are in flight, gives an atomic checkpoint that's decoupled from the main checkout's state, and matches the shape of work that subagents handle well. CLAUDE.git.md covers the mechanism — branch creation, path templating, post-merge cleanup; this section is the *policy* that makes the mechanism the default rather than an option.
+**HOW you create the worktree matters** — there are two paths, and the right one depends on whether the work will produce a pushed branch:
+
+- **PR-bound code work (default for `pr-bound-coder` and friends).** The **parent creates the worktree first with a chosen branch name**, then dispatches the subagent **WITHOUT** `isolation: "worktree"`, stating the worktree path in the prompt so the agent can `cd` in. This gives `feat-renderer-merge` / `fix-cli-foo` branches on origin instead of `agent-deadbeef`. Mechanism in `CLAUDE.git.md`'s "Worktree work runs in a subagent" section — read it before dispatching.
+- **Research-only or one-shot internal work.** Use `Agent(..., isolation: "worktree")`. The hook fires, you get an `agent-<id>` workspace name, and that's fine because nothing pushes a branch and the worktree gets cleaned up automatically (auto-removed if no changes; manually if there are). Use this only when the work genuinely won't ship a PR.
+
+**Anti-pattern — dispatching `pr-bound-coder` with `isolation: "worktree"`.** This combines the worst of both: an `agent-<id>`-named worktree that becomes the branch name on origin, zero ability for the parent to inject the worktree path into the prompt (because the path doesn't exist yet), and the agent falls back to the *repo* path you gave it — which is the main checkout. Observed 2026-05-27 in fnclaude@fnclaude: 6 parallel `pr-bound-coder`s dispatched this way, multiple leaked into the main checkout (branch switched out from under the parent, stray WIP, cross-worktree contamination reports). See `[[feedback-pr-bound-coder-worktree-path]]` for the post-mortem.
+
+**Why subagent-in-worktree at all**: keeps the parent session responsive (so I can interrupt or ask follow-ups while work runs), parallelises naturally when multiple changes are in flight, gives an atomic checkpoint that's decoupled from the main checkout's state, and matches the shape of work that subagents handle well.
 
 **Opt-out repos (edit in main checkout, no worktree):**
 
