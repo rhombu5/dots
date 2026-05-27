@@ -38,7 +38,7 @@ Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden De
 
 ## Entering / exiting worktrees — always use the tools
 
-**HARD RULE**: when claude needs to work in a worktree, use the **`EnterWorktree`** tool to switch in and **`ExitWorktree`** to switch back. Don't `cd <worktree>` via Bash, don't run `git worktree add <path>` directly, don't symlink into one. Reasons:
+**HARD RULE**: when claude needs to put *itself* into a worktree, use the **`EnterWorktree`** tool to switch in and **`ExitWorktree`** to switch back. Don't `cd <worktree>` via Bash, don't symlink into one. (Direct `git worktree add` to *prepare* a worktree for a subagent to enter is a separate, supported case — see "Creating worktrees" and "Worktree mechanics" below. The prohibition here is on using `git worktree add` as a way to put claude itself into a worktree.) Reasons:
 
 - `EnterWorktree` updates the session's cwd, so subsequent tool calls, the statusbar, and anything else that reads `workspace.current_dir` reflect that claude is now working in the worktree. A bare `git worktree add` creates the directory but leaves cwd unchanged — the statusbar won't light up the worktree, and downstream code keeps targeting the main checkout.
 - `EnterWorktree` creates the worktree at the `repoSettings.worktreeTemplate` path if it doesn't already exist, so the rules from the "Creating worktrees" section below apply automatically — no path math needed at the call site.
