@@ -280,7 +280,12 @@ main_worktree_of() {
 
 cache_key() { printf '%s' "$1" | sha256sum | head -c 16; }
 
-# Async refresh of one worktree's PR/CI cache.
+# Async refresh of one worktree's PR/CI cache. Two gh calls:
+#   - `pr view` for PR meta (number, state, isDraft)
+#   - `pr checks` for per-check status + the event that triggered it
+# The event field is only on `pr checks`, not on view's statusCheckRollup;
+# we need it to split the aggregate into branch-commit (event=push) vs
+# PR-open (event=pull_request) CI states.
 refresh_pr_async() {
     local wt="$1"
     [ -d "$wt" ] || return
@@ -296,8 +301,12 @@ refresh_pr_async() {
 
     (
         flock -n 200 || exit 0
-        if output=$(cd "$wt" && gh pr view --json number,state,isDraft,statusCheckRollup 2>/dev/null); then
-            printf '%s\n' "$output" > "$cache_file"
+        pr_meta=$(cd "$wt" && gh pr view --json number,state,isDraft 2>/dev/null)
+        if [ -n "$pr_meta" ]; then
+            checks=$(cd "$wt" && gh pr checks --json bucket,event 2>/dev/null)
+            [ -z "$checks" ] && checks='[]'
+            jq -n --argjson pr "$pr_meta" --argjson checks "$checks" \
+                '{pr: $pr, checks: $checks}' > "$cache_file"
         else
             printf '{}\n' > "$cache_file"
         fi
@@ -305,8 +314,12 @@ refresh_pr_async() {
     disown 2>/dev/null
 }
 
-# Read cached annotation: outputs "<status> #<num>" or empty.
-# status ∈ pass | fail | pending | open | draft | merged | closed
+# Read cached annotation. Output: "<pr_state> <overall_ci> <branch_ci> <pr_ci> #<num>"
+#   pr_state    ∈ open | draft | merged | closed
+#   overall_ci  ∈ pass | fail | pending | none   (drives branch color)
+#   branch_ci   ∈ pass | fail | pending | none | -   (event=push aggregate; - when no such runs)
+#   pr_ci       ∈ pass | fail | pending | none | -   (event=pull_request aggregate)
+# Skipped runs are filtered out of every aggregate.
 read_pr_annotation() {
     local wt="$1"
     local key
@@ -314,19 +327,28 @@ read_pr_annotation() {
     local cache_file="$CACHE_DIR/wt-$key.json"
     [ -s "$cache_file" ] || return
     jq -r '
-        if .number then
-            (if .isDraft then "draft"
-             elif .state == "MERGED" then "merged"
-             elif .state == "CLOSED" then "closed"
+        def agg(checks):
+            (checks | map(.bucket) | unique - ["skipping"]) as $b |
+            if   ($b | any(. == "fail" or . == "cancel")) then "fail"
+            elif ($b | any(. == "pending"))               then "pending"
+            elif ($b | length == 0)                        then "none"
+            else "pass"
+            end;
+        def event_state(checks; ev):
+            (checks | map(select(.event == ev))) as $sub |
+            if ($sub | length) == 0 then "-" else agg($sub) end;
+        (.pr // {}) as $pr |
+        (.checks // []) as $checks |
+        if $pr.number then
+            (if $pr.isDraft then "draft"
+             elif $pr.state == "MERGED" then "merged"
+             elif $pr.state == "CLOSED" then "closed"
              else "open"
-             end) as $pr |
-            ((.statusCheckRollup // []) | map(.conclusion // .status) | unique) as $s |
-            (if   ($s | any(. == "FAILURE" or . == "TIMED_OUT" or . == "ACTION_REQUIRED")) then "fail"
-             elif ($s | any(. == "PENDING" or . == "IN_PROGRESS" or . == "QUEUED")) then "pending"
-             elif ($s | length == 0) then "none"
-             else "pass"
-             end) as $ci |
-            "\($pr) \($ci) #\(.number)"
+             end) as $pr_state |
+            agg($checks) as $overall |
+            event_state($checks; "push")         as $branch_ci |
+            event_state($checks; "pull_request") as $pr_ci |
+            "\($pr_state) \($overall) \($branch_ci) \($pr_ci) #\($pr.number)"
         else empty end
     ' "$cache_file" 2>/dev/null
 }
@@ -631,7 +653,9 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 
     pr="${col1_pr[$i]}"
     if [ -n "$pr" ]; then
-        read -r pr_state ci_state pr_num <<<"$pr"
+        # col1 only uses overall ci_state; branch/PR per-event states are
+        # for col2's two-glyph cluster.
+        read -r pr_state ci_state _branch_ci _pr_ci pr_num <<<"$pr"
         pc=$(color_for_pr "$pr_state" "$dimflag")
         # PR info is part of the status suffix - no bold.
         cell+=$(printf "  ${pc}%s\033[0m" "$pr_num")
@@ -716,9 +740,11 @@ for ((i=0; i<n; i++)); do
         fi
 
         # PR state pulled up early so strikethrough can wrap the whole col-2 cell.
-        pr_state=""; ci_state=""; pr_num=""
+        pr_state=""; ci_state=""; branch_ci=""; pr_ci=""; pr_num=""
         if [ -n "${col2_pr[$i]}" ]; then
-            read -r pr_state ci_state pr_num <<<"${col2_pr[$i]}"
+            read -r pr_state ci_state branch_ci pr_ci pr_num <<<"${col2_pr[$i]}"
+            [ "$branch_ci" = "-" ] && branch_ci=""
+            [ "$pr_ci"     = "-" ] && pr_ci=""
         fi
 
         parent_hi=$(hue_idx_for "${col2_origin_idx[$i]}")
@@ -735,23 +761,20 @@ for ((i=0; i<n; i++)); do
         # status suffix right of it stay undecorated, just colored.
         ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$bold_flag")
 
-        # Branch color: CI status overrides the inherited repo hue when there's
-        # an open PR with a known CI state - CI is the headline. Repo identity
-        # moves to the leading icons. Saturation honors wt_dim so the existing
-        # bright/dim has_main rule still applies.
+        # Branch color: overall CI state overrides the inherited repo hue when
+        # there's an open PR with a known CI state. Per-event states surface as
+        # the glyph cluster after the branch; the branch itself carries the
+        # aggregate signal. Saturation honors wt_dim so the existing bright/dim
+        # has_main rule still applies.
         wt_branch_c="$wt_head_c"
-        ci_word=""
         if [ "$pr_state" = "open" ]; then
             case "$ci_state" in
-                pass)    ci_word="PASS"    ; wt_branch_c=$(color_for_ci pass    "$wt_dim") ;;
-                fail)    ci_word="FAIL"    ; wt_branch_c=$(color_for_ci fail    "$wt_dim") ;;
-                pending) ci_word="PENDING" ; wt_branch_c=$(color_for_ci pending "$wt_dim") ;;
-                none)    wt_branch_c=$(color_for_ci none "$wt_dim") ;;   # yellow - checks haven't run
+                pass|fail|pending|none) wt_branch_c=$(color_for_ci "$ci_state" "$wt_dim") ;;
             esac
         fi
         if [ -n "${col2_vcs[$i]}" ]; then
-            # Icons in repo hue (identity); branch in CI color (or repo hue
-            # when no CI info); counts in light gray (matches col 1's status).
+            # Icons in repo hue (identity); branch in aggregate CI color (or
+            # repo hue when no CI info); counts in light gray (matches col 1).
             IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"${col2_vcs[$i]}"
             if [ -n "$vt_icons" ]; then
                 append "$i" "${#vt_icons}" "${wt_head_c}%s\033[0m" "$vt_icons"
@@ -764,22 +787,37 @@ for ((i=0; i<n; i++)); do
             fi
         fi
         if [ -n "$pr_num" ]; then
-            # Optional CI word column - render before the PR# when the row has
-            # the headroom for " WORD" plus PR# plus right-side reservation.
-            # Bold when has_main so the word inherits the row's brightness rule
-            # without picking up italic/strike from the branch attrs.
-            if [ -n "$ci_word" ]; then
-                word_w=$(( 1 + ${#ci_word} ))
-                pr_after_w=$(( 2 + ${#pr_num} ))
-                [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ] \
-                    && pr_after_w=$(( pr_after_w + 3 + ${#pr_state} ))
-                if (( row_vw[i] + word_w + pr_after_w + SEP + row_right_reserved[i] <= TERM_WIDTH )); then
-                    word_bold=""; (( bold_flag )) && word_bold='\033[1m'
-                    append "$i" "$word_w" " ${word_bold}${wt_branch_c}%s\033[0m" "$ci_word"
+            # Two-glyph CI cluster: slot 1 = branch-commit CI (event=push),
+            # slot 2 = PR-open CI (event=pull_request). Glyph per state:
+            #   pass → ✓ (green)   pending → ● (cyan)
+            #   fail → ✗ (red)
+            # No glyph (and no padding) when neither slot has a renderable
+            # state. When at least one has a state, both slots are rendered
+            # (the absent slot becomes a space) so position remains meaningful.
+            g1=""; c1=""; g2=""; c2=""
+            case "$branch_ci" in
+                pass)    g1="✓"; c1=$(color_for_ci pass    "$wt_dim") ;;
+                fail)    g1="✗"; c1=$(color_for_ci fail    "$wt_dim") ;;
+                pending) g1="●"; c1=$(color_for_ci pending "$wt_dim") ;;
+            esac
+            case "$pr_ci" in
+                pass)    g2="✓"; c2=$(color_for_ci pass    "$wt_dim") ;;
+                fail)    g2="✗"; c2=$(color_for_ci fail    "$wt_dim") ;;
+                pending) g2="●"; c2=$(color_for_ci pending "$wt_dim") ;;
+            esac
+            if [ -n "$g1" ] || [ -n "$g2" ]; then
+                if [ -n "$g1" ]; then
+                    append "$i" 2 " ${c1}%s\033[0m" "$g1"
+                else
+                    append "$i" 2 "  "
+                fi
+                if [ -n "$g2" ]; then
+                    append "$i" 1 "${c2}%s\033[0m" "$g2"
+                else
+                    append "$i" 1 " "
                 fi
             fi
-            # PR # in light gray (status suffix). No trailing CI glyph - the
-            # branch color carries the CI signal now.
+            # PR # in light gray (status suffix).
             append "$i" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
             if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
                 # "(merged)" suppressed - strikethrough on branch carries it.
