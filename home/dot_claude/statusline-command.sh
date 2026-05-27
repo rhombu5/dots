@@ -94,9 +94,36 @@ for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
     last_json=$(tail -1 "$target" 2>/dev/null)
     [ -z "$last_json" ] && continue
     if (( age >= SUBAGENT_FRESH_WINDOW )); then
-        is_idle=$(jq -r 'if .type == "assistant" and (.message.stop_reason != null) then "idle" else "live" end' <<<"$last_json" 2>/dev/null)
-        [ "$is_idle" = "idle" ] && continue
+        # Idle iff last entry is an assistant message whose stop_reason is a
+        # conversation-end signal. `tool_use` means the agent emitted tool
+        # calls and is waiting for results - that's mid-flight, not idle.
+        # null stop_reason is also live (incomplete assistant message).
+        stop_reason=$(jq -r 'if .type == "assistant" then (.message.stop_reason // "_null") else "_nonassistant" end' <<<"$last_json" 2>/dev/null)
+        case "$stop_reason" in
+            end_turn|stop_sequence|max_tokens) continue ;;
+        esac
     fi
+    # Three potential cwd signals, used in fallback order. They all just feed
+    # SUBAGENT_CWDS; matching against worktrees happens later. Whichever wins
+    # depends on dispatch shape.
+    #   1. meta.json's worktreePath - set by pr-bound-coder convention.
+    #   2. Bash cd-targets - most recent `cd /absolute/path` in any tool_use
+    #      Bash command. This is what catches the standard "parent creates
+    #      worktree, agent cd's in" pattern, where the transcript cwd is
+    #      stuck at the parent's launch dir.
+    #   3. transcript .cwd - set per-entry but doesn't update on cd; the
+    #      harness sets it correctly only for isolation:worktree dispatches.
+    meta="${target%.jsonl}.meta.json"
+    if [ -f "$meta" ]; then
+        wp=$(jq -r '.worktreePath // empty' "$meta" 2>/dev/null)
+        [ -n "$wp" ] && SUBAGENT_CWDS+=("$wp")
+    fi
+    bash_cd=$(tail -200 "$target" 2>/dev/null \
+        | jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use" and .name == "Bash") | .input.command // empty' 2>/dev/null \
+        | grep -oE 'cd[[:space:]]+["'\'']?/[^[:space:]"'\'';|&)]+' \
+        | sed -E 's/^cd[[:space:]]+["'\'']?//' \
+        | tail -1)
+    [ -n "$bash_cd" ] && SUBAGENT_CWDS+=("$bash_cd")
     sub_cwd=$(jq -r '.cwd // empty' <<<"$last_json" 2>/dev/null)
     [ -n "$sub_cwd" ] && SUBAGENT_CWDS+=("$sub_cwd")
 done
