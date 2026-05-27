@@ -2,7 +2,7 @@
 name=Callisto
 group=
 protocol=RDP
-server=rhombus-callisto.duckdns.org
+server=callisto
 username=thomas@butler.software
 domain=MicrosoftAccount
 password=.
