@@ -1025,27 +1025,30 @@ fi
 if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
     # Per-plot layout: 12 cells × 3 cells = 24 × 12 dots.
     #
-    # Axes are reserved at the cell-level (not just dot-level) so they never
-    # share a cell with data — that way they render in gray regardless of how
-    # close data gets, and the "data tint bleeds into the axis" artifact from
-    # the merged-bitmask approach is gone.
+    # Axes occupy specific dot positions, not entire cells: the Y axis is
+    # cell col 0 (dot bits 0x47), the X axis is cy=2's bottom dot row only
+    # (bits 0xC0 → dy=3). Data and ideal can land in cy=2's upper dot rows
+    # (dy=0..2); the renderer merges the axis bits into data/ideal cells so
+    # the data line flows down to the axis instead of stranding 3 dot rows
+    # above it.
     #
     #   cell col 0       = Y axis (dot bits 0x47 → ⡇)
-    #   cell row 2       = X axis (dot bits 0xC0 → ⣀)
+    #   cell row 2       = X axis (dot bits 0xC0 → ⣀, dy=3 only)
     #   cell (0, 2)      = corner (0xC7 → ⣇)
-    #   cells (1..11, 0..1) = data area (22 × 8 dots)
+    #   cells (1..11, 0..2) = data area (22 × 11 dots; cy=2 dy=3 is the axis)
     #
     # Data x maps to [2, 23] (offset +2 puts the first dot one cell right of
-    # the Y axis). Data y maps to [0, 7] (stays above the X axis row). 21/7
-    # divides cleanly so the ideal diagonal lands one dot per y row at
-    # perfectly even 3-apart x positions.
+    # the Y axis). Data y maps to [0, 10] (inclusive of cy=2 dy=0..2; the
+    # axis dot at cy=2 dy=3 is the y=11 row, off-limits to data). 21/10
+    # gives mostly-2-dot ideal-line gaps with one 3-dot jump at the bottom
+    # right — acceptable cosmetic cost for letting data reach the axis.
     BURNDOWN_PLOT_W_CELLS=12
     BURNDOWN_PLOT_H_CELLS=3
     BURNDOWN_W_DOTS=$(( BURNDOWN_PLOT_W_CELLS * 2 ))   # 24
     BURNDOWN_H_DOTS=$(( BURNDOWN_PLOT_H_CELLS * 4 ))   # 12
     BURNDOWN_DATA_X_OFFSET=2                            # shift past Y axis cell
     BURNDOWN_DATA_W_DOTS=$(( BURNDOWN_W_DOTS - BURNDOWN_DATA_X_OFFSET ))    # 22
-    BURNDOWN_DATA_H_DOTS=$(( BURNDOWN_H_DOTS - 4 ))                          # 8  (X axis row eats 4 dot rows)
+    BURNDOWN_DATA_H_DOTS=$(( BURNDOWN_H_DOTS - 1 ))                          # 11  (only the X axis dot row at y=11 is off-limits)
     BURNDOWN_GAP_CELLS=1
     BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25
 
@@ -1079,8 +1082,8 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     # layer_name passes as plain string so burndown_set's own nameref doesn't
     # form a circular reference with ours.
     # X is offset by BURNDOWN_DATA_X_OFFSET so data starts one cell right of
-    # the Y axis; Y stays in [0, BURNDOWN_DATA_H_DOTS-1] so it stays above the
-    # X axis row.
+    # the Y axis; Y stays in [0, BURNDOWN_DATA_H_DOTS-1] so it reaches into
+    # the X axis cell row but stops one dot row above the axis dot itself.
     burndown_plot_log() {
         local layer_name=$1 scope=$2 resets_at=$3 window_sec=$4
         [ -z "$resets_at" ] && return
@@ -1113,9 +1116,10 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
 
     # White ideal diagonal — iterate y, compute x. One dot per y row,
     # evenly spaced. Iterating x and computing y would land multiple x's
-    # in the same y when the dimensions don't divide cleanly, producing
-    # visible stair-stepping. With data area = 22 × 8 dots, 21/7 = 3 exactly,
-    # so this gives dots at x = xoff, xoff+3, xoff+6, … evenly spaced.
+    # in the same y when the dimensions don't divide cleanly. With data area
+    # = 22 × 11 dots, 21/10 = 2.1 so x gaps are mostly 2 with one 3-dot
+    # gap at the very bottom-right; acceptable cosmetic cost for letting
+    # data reach the axis row.
     burndown_plot_ideal() {
         local layer_name=$1 x y
         for ((y=0; y<BURNDOWN_DATA_H_DOTS; y++)); do
@@ -1146,21 +1150,23 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     br5_now_cell=$(burndown_now_cell "$rl5_resets" 18000)
     br7_now_cell=$(burndown_now_cell "$rl7_resets" 604800)
 
-    # Emit one cell. Each layer renders exclusively — the highest-priority
-    # non-empty layer provides BOTH the dot bitmask and the color, so the
-    # color of dots in a cell unambiguously matches the layer they came from.
-    #
-    # (We tried merging bitmasks so ideal dots stayed visible under data, but
-    # because a braille cell has one fg color, the ideal dots in overlapped
-    # cells took the data color — which read as rogue data samples climbing
-    # away from the actual data line.)
+    # Emit one cell. Data and ideal layers stay exclusive of each other (the
+    # ideal-under-data merge was tried and rejected: ideal dots in overlapped
+    # cells took the data color and read as rogue data samples climbing away
+    # from the data line). The AXIS layer, by contrast, IS merged into data
+    # and ideal cells when both fall in the same cell — its bits are anchored
+    # to fixed positions (X axis dy=3, Y axis dx=0) that don't overlap data's
+    # dot positions in the same cell, so unioning them just lets the axis
+    # line stay visually contiguous beneath data flowing into the axis row.
+    # The axis dots in those cells render in the data/ideal color, which
+    # reads correctly as "the line approaches the axis."
     burndown_render_cell() {
         local -n out=$1
         local data_mask=$2 ideal_mask=$3 axis_mask=$4 data_color=$5
         local mask=0 color=""
-        if   (( data_mask  != 0 )); then mask=$data_mask;  color=$data_color
-        elif (( ideal_mask != 0 )); then mask=$ideal_mask; color="\033[37m"
-        elif (( axis_mask  != 0 )); then mask=$axis_mask;  color=$BURNDOWN_AXIS_COLOR
+        if   (( data_mask  != 0 )); then mask=$(( data_mask  | axis_mask )); color=$data_color
+        elif (( ideal_mask != 0 )); then mask=$(( ideal_mask | axis_mask )); color="\033[37m"
+        elif (( axis_mask  != 0 )); then mask=$axis_mask;                    color=$BURNDOWN_AXIS_COLOR
         fi
         if (( mask == 0 )); then
             out=' '
@@ -1182,13 +1188,17 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         local cx idx axis_mask cell is_axis_row=0
         (( cy == BURNDOWN_PLOT_H_CELLS - 1 )) && is_axis_row=1
         for ((cx=0; cx<BURNDOWN_PLOT_W_CELLS; cx++)); do
-            if (( is_axis_row )) && (( cx == now_cell )); then
+            idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
+            axis_mask=0
+            (( cx == 0 ))     && axis_mask=$(( axis_mask | BURNDOWN_AXIS_Y ))
+            (( is_axis_row )) && axis_mask=$(( axis_mask | BURNDOWN_AXIS_X ))
+            # Now-tick: a `.` glyph marking the current time's column on the
+            # X axis. Suppressed when data or ideal also land in this cell,
+            # so the tick never shadows the layers' own renders.
+            if (( is_axis_row )) && (( cx == now_cell )) \
+               && (( ${data_arr[idx]:-0} == 0 )) && (( ${ideal_arr[idx]:-0} == 0 )); then
                 printf -v cell "${BURNDOWN_AXIS_COLOR}.\033[0m"
             else
-                idx=$(( cy * BURNDOWN_PLOT_W_CELLS + cx ))
-                axis_mask=0
-                (( cx == 0 ))     && axis_mask=$(( axis_mask | BURNDOWN_AXIS_Y ))
-                (( is_axis_row )) && axis_mask=$(( axis_mask | BURNDOWN_AXIS_X ))
                 burndown_render_cell cell \
                     "${data_arr[idx]:-0}" "${ideal_arr[idx]:-0}" "$axis_mask" "$data_color"
             fi
