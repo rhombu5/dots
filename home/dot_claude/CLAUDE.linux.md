@@ -78,7 +78,7 @@ For **chezmoi-managed** files (check with `chezmoi managed | grep <path>`):
 - Verify with `chezmoi diff <path>` — empty output means source and live are in sync.
 - Make sure the chezmoi repo's working tree is clean afterwards.
 
-Always make **immediate, atomic commits and push**. One logical change per commit. Don't batch unrelated changes. Don't leave the repo dirty across turns. Match the existing commit-message style in the repo (check `git log` first).
+Commit and push cadence inherits from CLAUDE.md's "Commit discipline" — the point here is that the live change and its mirror travel together.
 
 ## Reinstall reproducibility — three layers
 
