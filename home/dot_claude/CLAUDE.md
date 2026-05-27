@@ -76,18 +76,20 @@ Strip Claude attribution by default whenever you're writing something that'll be
 - **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
 - **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
 
-## All code edits happen in a worktree subagent — HARD RULE
+## All code edits happen in a worktree — HARD RULE
 
-**Default action for any code-change work**: dispatch as a `Task` / `Agent` subagent running in a templated worktree. The trigger is "I'm about to edit code in a project," not "I want to create a worktree." Being already on a branch in the main checkout is the **failure mode this rule prevents**, not a reason to skip it.
+**Default action for any code-change work**: the edit happens in a templated worktree. The trigger is "I'm about to edit code in a project," not "I want to create a worktree." Being already on a branch in the main checkout is the **failure mode this rule prevents**, not a reason to skip it.
 
-**Two dispatch shapes — pick by whether the work will produce a pushed branch:**
+**Two ways to satisfy the rule, picked by change size:**
 
-- **PR-bound code work (default for `pr-bound-coder` and friends).** Parent creates the worktree first with a chosen branch name, dispatches the subagent **WITHOUT** `isolation: "worktree"`. Branch on origin reads `feat-renderer-merge` / `fix-cli-foo` instead of `agent-deadbeef`.
-- **Research-only or one-shot internal work.** `Agent(..., isolation: "worktree")`. Hook fires, workspace name is `agent-<id>`. Fine because nothing pushes a branch and the worktree gets cleaned up automatically.
+- **Trivial (≤~10 LOC — version bump, flag flip, single-key config change):** `EnterWorktree` in the parent session, edit, commit, push, PR, `ExitWorktree`. No subagent — the dispatch framing cost doesn't amortize for a five-second change.
+- **Anything larger:** parent creates the worktree first with a chosen branch name, dispatches a subagent **without** `isolation: "worktree"`, agent `cd`s there as its first action. Branch on origin reads `feat-renderer-merge` / `fix-cli-foo` — never `agent-<id>`.
 
-Concrete commands and branch-naming live in `CLAUDE.git.md`'s "Worktree mechanics" section — read it before dispatching.
+Concrete commands, branch-naming, and the EnterWorktree workflow live in `CLAUDE.git.md`'s "Worktree mechanics" section.
 
-**Anti-pattern — dispatching `pr-bound-coder` with `isolation: "worktree"`.** This combines the worst of both: an `agent-<id>`-named worktree that becomes the branch name on origin, zero ability for the parent to inject the worktree path into the prompt (because the path doesn't exist yet), and the agent falls back to the *repo* path you gave it — which is the main checkout. Observed 2026-05-27 in fnclaude@fnclaude: 6 parallel `pr-bound-coder`s dispatched this way, multiple leaked into the main checkout (branch switched out from under the parent, stray WIP, cross-worktree contamination reports). See `[[feedback-pr-bound-coder-worktree-path]]` for the post-mortem.
+**`isolation: "worktree"` is banned for code-change subagents.** The problems are structural: the hook auto-generates an `agent-<id>` workspace name (which becomes the branch on origin), the parent can't inject the worktree path into the prompt because the path doesn't exist yet, and the agent falls back to the repo path you gave it — which is the main checkout. Observed 2026-05-27 in fnclaude@fnclaude: 6 parallel `pr-bound-coder`s dispatched this way, multiple leaked into the main checkout. See `[[feedback-pr-bound-coder-worktree-path]]` for the post-mortem.
+
+`isolation: "worktree"` *is* still acceptable for genuinely ephemeral, no-write exploration — the auto-cleanup-if-no-changes behavior is actively useful there. But if a "research-only" agent ends up writing, it's code-change work and the rules above apply. Most research-only agents don't need a worktree at all; reach for `isolation: "worktree"` only when the cleanup-if-no-changes behavior is what you're after.
 
 **Why subagent-in-worktree at all**: keeps the parent session responsive (so I can interrupt or ask follow-ups while work runs), parallelises naturally when multiple changes are in flight, gives an atomic checkpoint that's decoupled from the main checkout's state, and matches the shape of work that subagents handle well.
 
