@@ -70,11 +70,18 @@ fi
 # So /proc-based cwd detection misses them. Fallback: each subagent's transcript
 # JSONL records `cwd` on every line, so `tail -1 | jq -r .cwd` is the agent's
 # current cwd. The /tmp/claude-${UID}/*/*/tasks/<id>.output symlinks point at
-# those transcripts; mtime within the activity window means the agent is live.
+# those transcripts; the live/idle check is two-tier:
+#   - Fresh tier (mtime < 60s): always counted as live - file was just appended.
+#   - Mid-turn tier (mtime < 15min, older than fresh): only live if the last
+#     assistant message has stop_reason=null (unfinished tool_use). end_turn /
+#     stop_sequence on the last line means the agent's turn completed - idle.
+# The 15-min ceiling guards against transcripts from sessions that crashed
+# mid-turn (would leave a permanent stop_reason=null otherwise).
 # Reading the cwd works regardless of dispatch shape - PR-bound subagents in
 # `feat-foo` worktrees and Agent(isolation:worktree) ones in `agent-<id>`
 # worktrees both write the worktree path as their cwd.
-SUBAGENT_ACTIVITY_WINDOW=600
+SUBAGENT_FRESH_WINDOW=60
+SUBAGENT_MIDTURN_WINDOW=900
 _now=$(date +%s)
 shopt -s nullglob
 for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
@@ -82,8 +89,15 @@ for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
     target=$(readlink -f "$f" 2>/dev/null)
     [ -z "$target" ] && continue
     mtime=$(stat -c %Y "$target" 2>/dev/null) || continue
-    (( _now - mtime < SUBAGENT_ACTIVITY_WINDOW )) || continue
-    sub_cwd=$(tail -1 "$target" 2>/dev/null | jq -r '.cwd // empty' 2>/dev/null)
+    age=$(( _now - mtime ))
+    (( age < SUBAGENT_MIDTURN_WINDOW )) || continue
+    last_json=$(tail -1 "$target" 2>/dev/null)
+    [ -z "$last_json" ] && continue
+    if (( age >= SUBAGENT_FRESH_WINDOW )); then
+        is_idle=$(jq -r 'if .type == "assistant" and (.message.stop_reason != null) then "idle" else "live" end' <<<"$last_json" 2>/dev/null)
+        [ "$is_idle" = "idle" ] && continue
+    fi
+    sub_cwd=$(jq -r '.cwd // empty' <<<"$last_json" 2>/dev/null)
     [ -n "$sub_cwd" ] && SUBAGENT_CWDS+=("$sub_cwd")
 done
 shopt -u nullglob
@@ -317,6 +331,52 @@ read_pr_annotation() {
     ' "$cache_file" 2>/dev/null
 }
 
+# Async refresh of one repo's most-recent-push-to-main CI state.
+# Separate from refresh_pr_async because it's a different gh call shape and
+# different cache key namespace (repo, not worktree).
+refresh_main_ci_async() {
+    local repo="$1"
+    [ -d "$repo" ] || return
+    local key cache_file lock_file age
+    key=$(cache_key "$repo")
+    cache_file="$CACHE_DIR/mainci-$key.json"
+    lock_file="$cache_file.lock"
+
+    if [ -f "$cache_file" ]; then
+        age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+        (( age < CACHE_TTL )) && return
+    fi
+
+    (
+        flock -n 200 || exit 0
+        if output=$(cd "$repo" && gh run list --branch main --event push --limit 1 --json status,conclusion 2>/dev/null); then
+            printf '%s\n' "$output" > "$cache_file"
+        else
+            printf '[]\n' > "$cache_file"
+        fi
+    ) 200>"$lock_file" >/dev/null 2>&1 &
+    disown 2>/dev/null
+}
+
+# Read cached main-CI state. Outputs pass | fail | pending, or empty when no
+# runs match (no workflow on main, or filter returned nothing).
+read_main_ci_annotation() {
+    local repo="$1"
+    local key
+    key=$(cache_key "$repo")
+    local cache_file="$CACHE_DIR/mainci-$key.json"
+    [ -s "$cache_file" ] || return
+    jq -r '
+        .[0] // null |
+        if . == null then empty
+        elif .conclusion == "success" then "pass"
+        elif .conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" then "fail"
+        elif .status == "in_progress" or .status == "queued" then "pending"
+        else empty
+        end
+    ' "$cache_file" 2>/dev/null
+}
+
 color_for_pr() {
     local pr="$1" dim="$2" d=""
     [ "$dim" = "dim" ] && d="2;"
@@ -453,10 +513,14 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
 done
 
 # Pre-fetch vcs + PR for col 1 entries too (added dirs now show git status).
-declare -a col1_vcs col1_pr
+# Also fetch the latest push-to-main CI state per repo - that's the release
+# pipeline gate Tom watches after a PR merges.
+declare -a col1_vcs col1_pr col1_main_ci
 for ((j=0; j<${#col1_path[@]}; j++)); do
-    refresh_pr_async "${col1_path[$j]}"
-    col1_pr+=("$(read_pr_annotation "${col1_path[$j]}")")
+    refresh_pr_async      "${col1_path[$j]}"
+    refresh_main_ci_async "${col1_path[$j]}"
+    col1_pr+=("$(read_pr_annotation       "${col1_path[$j]}")")
+    col1_main_ci+=("$(read_main_ci_annotation "${col1_path[$j]}")")
     col1_vcs+=("$(vcs_text_for "${col1_path[$j]}")")
 done
 
@@ -583,6 +647,18 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
             # "(merged)" suppressed to save space - terminal state, common.
             cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
             cell_w=$(( cell_w + 3 + ${#pr_state} ))
+        fi
+    fi
+
+    # Main-merge CI marker: `↪` colored by the latest push-to-main CI state.
+    # Same palette as the worktree-CI rule (green/cyan/yellow/red). Skipped
+    # entirely when the repo has no matching runs.
+    main_ci="${col1_main_ci[$i]}"
+    if [ -n "$main_ci" ]; then
+        mc=$(color_for_ci "$main_ci" "$dimflag")
+        if [ -n "$mc" ]; then
+            cell+=$(printf " ${mc}↪\033[0m")
+            cell_w=$(( cell_w + 2 ))
         fi
     fi
 
