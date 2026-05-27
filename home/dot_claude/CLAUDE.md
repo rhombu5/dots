@@ -156,7 +156,7 @@ To make the shape concrete: "rename a function across 30 files" is an hour solo,
 
 Concrete cases:
 
-- **Prose-shaped work** — rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md` itself, comparing wordings → **sonnet**, even when the user asked for it directly. Sonnet's prose is reliably tighter than opus's.
+- **Prose-shaped work** — rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md` itself, comparing wordings → **always dispatch a sonnet subagent**, unless I've explicitly told you otherwise this turn. Sonnet's prose is reliably tighter than opus's. The escape hatch is an instruction like "do this on opus" or "don't delegate this one" — *not* the request being addressed to me, which by itself isn't an instruction about model choice.
 - **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; if quality drops, escalate.
 
 Substance, structure, and tricky design decisions stay on **opus** — only the *execution* gets handed off. Pattern: opus decides *what*, subagent does the *how*.
