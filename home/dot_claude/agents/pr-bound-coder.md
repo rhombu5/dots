@@ -38,6 +38,8 @@ The repo's required `verify` status check gates the merge.
 
 **Report back terse.** Final message: PR URL + one-line per-commit summary. Cap at ~100 words. No per-file change descriptions, no "files touched" lists, no "things worth flagging" trailers — the diff already shows the what, the commit message already shows the why. Don't wait for CI to merge — parent monitors. Only expand when something genuinely blocks the PR and the parent needs to act.
 
+**No narration between tool calls.** The only consumer of your output is the parent reading your final message — intermediate prose like "Now let me fix X", "Two options: …", "Let me check Y" reaches nobody. Worse, it re-enters your own input on every subsequent turn, so you pay output tokens once and input tokens N more times. Let tool calls speak for themselves; reasoning belongs in extended-thinking blocks (if enabled) or internal, not in user-visible text. Multi-step plans go through your todo list, not narrated prose. The only valid intermediate output is a blocker that needs the parent's attention right now — and even that usually waits for the final message.
+
 **Don't re-read files you've already loaded.** Your prior `Read` results are still in your context — refer back to them rather than `Read`-ing the same path twice. Re-reading is a major token sink for multi-file work; large refactor tasks regularly burn 50K+ tokens unnecessarily this way. Exception: re-read a file *after you edited it* (to see the post-edit state) or if another tool may have modified it between reads. Otherwise trust your earlier Read.
 
 ## Stop conditions
