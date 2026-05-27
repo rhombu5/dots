@@ -248,12 +248,3 @@ When you think the escape hatch applies, **say so out loud** before acting: *"X 
 
 Past project experiments leak forward. A system-wide `rust` installed five months ago as a build dep for Edge is still there, frozen at whatever version was current then, silently used by every project that doesn't pin its own. Mise gives per-project pinning that travels with the repo and has a clean uninstall path. System installs do neither.
 
-## Project memory lives in `~/.claude/projects/`
-
-Claude Code's auto-memory files belong at `~/.claude/projects/<encoded-cwd>/memory/` — the path Claude Code computes from the session's CWD. Write there directly; no symlinks, no per-repo bookkeeping.
-
-**Don't put memory in `<project-root>/.claude/memory/`.** Earlier policy was to keep memory in-tree so it travelled with the repo. In practice that fragmented memory across many trees, required a per-machine symlink rebuild after every clone, and still didn't give cross-machine continuity (each machine had its own clone path). Cross-machine durability now comes from Dropbox-syncing `~/.claude/projects/`, not from in-tree storage.
-
-**The project is still the project the work is about, not the CWD.** A session may start in one repo and end up doing work in another. Sort each memory file into the `~/.claude/projects/<encoded-cwd>/memory/` whose CWD matches the project it actually describes — not the launch directory. If a session is doing work on `dots` from a CWD inside `arch-setup`, write that memory under the dots-encoded path.
-
-Stale `<project-root>/.claude/memory/` directories from the old policy should be migrated back to the home-dir path; existing `.gitignore` rules for `/.claude/memory/` can stay (harmless when the directory is absent).
