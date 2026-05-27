@@ -23,6 +23,10 @@ TERM_WIDTH=$(detect_term_width)
 # TUI status line area is narrower than the raw terminal — leave a gutter.
 TERM_WIDTH=$(( TERM_WIDTH - 4 ))
 
+# Minimum gap between col-2 content and right-side content on a row. Used by
+# the col-2 word-column budgeter and by the right-side renderers below.
+SEP=2
+
 # ── Subagent detection: find descendant `claude` processes and their cwds.
 detect_claude_root_pid() {
     local p="$PPID"
@@ -62,12 +66,14 @@ if [ -n "$claude_root" ]; then
     done < <(descendants_of "$claude_root")
 fi
 
-# Subagents don't fork their own `claude` process — they run inside main claude.
-# So /proc-based cwd detection misses them. Fallback heuristic: each Agent(isolation:worktree)
-# creates a `.claude/worktrees/agent-<id>` worktree and a transcript symlink at
-# /tmp/claude-${UID}/*/*/tasks/<id>.output. If the symlink's target was touched
-# in the last 10 minutes, treat the matching worktree as having a live agent.
-declare -A ACTIVE_AGENT_IDS
+# Subagents don't fork their own `claude` process - they run inside main claude.
+# So /proc-based cwd detection misses them. Fallback: each subagent's transcript
+# JSONL records `cwd` on every line, so `tail -1 | jq -r .cwd` is the agent's
+# current cwd. The /tmp/claude-${UID}/*/*/tasks/<id>.output symlinks point at
+# those transcripts; mtime within the activity window means the agent is live.
+# Reading the cwd works regardless of dispatch shape - PR-bound subagents in
+# `feat-foo` worktrees and Agent(isolation:worktree) ones in `agent-<id>`
+# worktrees both write the worktree path as their cwd.
 SUBAGENT_ACTIVITY_WINDOW=600
 _now=$(date +%s)
 shopt -s nullglob
@@ -76,10 +82,9 @@ for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
     target=$(readlink -f "$f" 2>/dev/null)
     [ -z "$target" ] && continue
     mtime=$(stat -c %Y "$target" 2>/dev/null) || continue
-    if (( _now - mtime < SUBAGENT_ACTIVITY_WINDOW )); then
-        base=${f##*/}
-        ACTIVE_AGENT_IDS["${base%.output}"]=1
-    fi
+    (( _now - mtime < SUBAGENT_ACTIVITY_WINDOW )) || continue
+    sub_cwd=$(tail -1 "$target" 2>/dev/null | jq -r '.cwd // empty' 2>/dev/null)
+    [ -n "$sub_cwd" ] && SUBAGENT_CWDS+=("$sub_cwd")
 done
 shopt -u nullglob
 
@@ -328,9 +333,10 @@ color_for_ci() {
     local ci="$1" dim="$2" d=""
     [ "$dim" = "dim" ] && d="2;"
     case "$ci" in
-        pass)    printf '\033[%s32m' "$d" ;;
-        fail)    printf '\033[%s31m' "$d" ;;
-        pending) printf '\033[%s33m' "$d" ;;
+        pass)    printf '\033[%s32m' "$d" ;;   # green
+        fail)    printf '\033[%s31m' "$d" ;;   # red
+        pending) printf '\033[%s36m' "$d" ;;   # cyan - in flight
+        none)    printf '\033[%s33m' "$d" ;;   # yellow - no checks yet
         *)       printf ''                ;;
     esac
 }
@@ -487,6 +493,30 @@ else
 fi
 (( right_rows > n )) && n=$right_rows
 
+# Per-row right-side reservation, used by col 2 to decide whether the optional
+# CI-word column fits. Computed up front so col-2 rendering can budget against
+# it; the actual right-side content is rendered later in the script.
+declare -a row_right_reserved
+for ((i=0; i<n; i++)); do row_right_reserved[i]=0; done
+if [ -n "$model" ]; then
+    rr_label_w=${#model}
+    [ -n "$effort" ] && rr_label_w=$(( rr_label_w + 1 + ${#effort} ))
+    if [ -n "$used" ]; then
+        rr_used_int=$(printf '%.0f' "$used")
+        rr_label_w=$(( rr_label_w + 1 + ${#rr_used_int} + 1 ))   # " " + digits + "%"
+    fi
+    row_right_reserved[0]=$rr_label_w
+fi
+if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
+    # Burndown plot total cell width is hard-coded in the burndown block below;
+    # mirror the constant here so col-2 can budget without depending on order.
+    for rr in 1 2 3; do (( rr < n )) && row_right_reserved[rr]=25; done
+else
+    # Text-mode rate-limit rows. ~30 cells covers the widest "5hr: 200% (100%/100%) Mon 12:00pm".
+    [ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && (( 1 < n )) && row_right_reserved[1]=30
+    [ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && (( 2 < n )) && row_right_reserved[2]=30
+fi
+
 declare -a row_str row_vw col1_cell_str col1_cell_vw
 for ((i=0; i<n; i++)); do row_str[i]=""; row_vw[i]=0; done
 
@@ -592,7 +622,9 @@ for ((i=0; i<n; i++)); do
         # Strike     — set when the PR is merged (the "(merged)" label is then dropped).
         wt_real=$(realpath_safe "${col2_path[$i]}")
 
-        # Subagent here? (forked-claude /proc check, then in-process agent-id heuristic.)
+        # Subagent here? SUBAGENT_CWDS now combines /proc-walked forked claudes
+        # and transcript-cwd-scanned in-process subagents, so one pass covers
+        # both PR-bound (feat-foo) and isolation-spawned (agent-<id>) worktrees.
         has_subagent=0
         for sc in "${SUBAGENT_CWDS[@]}"; do
             sc_real=$(realpath_safe "$sc")
@@ -600,13 +632,6 @@ for ((i=0; i<n; i++)); do
                 has_subagent=1; break
             fi
         done
-        if (( has_subagent == 0 )); then
-            wt_basename=${col2_path[$i]##*/}
-            if [[ "$wt_basename" == agent-* ]]; then
-                aid="${wt_basename#agent-}"
-                [ -n "${ACTIVE_AGENT_IDS[$aid]}" ] && has_subagent=1
-            fi
-        fi
 
         # Main cwd here?
         has_main=0
@@ -634,31 +659,56 @@ for ((i=0; i<n; i++)); do
         # status suffix right of it stay undecorated, just colored.
         ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$bold_flag")
 
+        # Branch color: CI status overrides the inherited repo hue when there's
+        # an open PR with a known CI state - CI is the headline. Repo identity
+        # moves to the leading icons. Saturation honors wt_dim so the existing
+        # bright/dim has_main rule still applies.
+        wt_branch_c="$wt_head_c"
+        ci_word=""
+        if [ "$pr_state" = "open" ]; then
+            case "$ci_state" in
+                pass)    ci_word="PASS"    ; wt_branch_c=$(color_for_ci pass    "$wt_dim") ;;
+                fail)    ci_word="FAIL"    ; wt_branch_c=$(color_for_ci fail    "$wt_dim") ;;
+                pending) ci_word="PENDING" ; wt_branch_c=$(color_for_ci pending "$wt_dim") ;;
+                none)    wt_branch_c=$(color_for_ci none "$wt_dim") ;;   # yellow - checks haven't run
+            esac
+        fi
         if [ -n "${col2_vcs[$i]}" ]; then
-            # icons + branch name in inherited hue; counts in light gray
-            # (matching col 1's status color) so "git statuses" all read alike.
+            # Icons in repo hue (identity); branch in CI color (or repo hue
+            # when no CI info); counts in light gray (matches col 1's status).
             IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"${col2_vcs[$i]}"
             if [ -n "$vt_icons" ]; then
                 append "$i" "${#vt_icons}" "${wt_head_c}%s\033[0m" "$vt_icons"
             fi
             if [ -n "$vt_branch" ]; then
-                append "$i" "${#vt_branch}" "${ap_branch}${wt_head_c}%s\033[0m" "$vt_branch"
+                append "$i" "${#vt_branch}" "${ap_branch}${wt_branch_c}%s\033[0m" "$vt_branch"
             fi
             if [ -n "$vt_counts" ]; then
                 append "$i" "${#vt_counts}" "${wt_rhs_c}%s\033[0m" "$vt_counts"
             fi
         fi
         if [ -n "$pr_num" ]; then
-            # Right of the branch name everything reads as status in light gray.
-            append "$i" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
-            if [ "$pr_state" = "open" ]; then
-                cg=$(glyph_for_ci "$ci_state")
-                if [ -n "$cg" ]; then
-                    append "$i" 2 " ${wt_rhs_c}%s\033[0m" "$cg"
+            # Optional CI word column - render before the PR# when the row has
+            # the headroom for " WORD" plus PR# plus right-side reservation.
+            # Bold when has_main so the word inherits the row's brightness rule
+            # without picking up italic/strike from the branch attrs.
+            if [ -n "$ci_word" ]; then
+                word_w=$(( 1 + ${#ci_word} ))
+                pr_after_w=$(( 2 + ${#pr_num} ))
+                [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ] \
+                    && pr_after_w=$(( pr_after_w + 3 + ${#pr_state} ))
+                if (( row_vw[i] + word_w + pr_after_w + SEP + row_right_reserved[i] <= TERM_WIDTH )); then
+                    word_bold=""; (( bold_flag )) && word_bold='\033[1m'
+                    append "$i" "$word_w" " ${word_bold}${wt_branch_c}%s\033[0m" "$ci_word"
                 fi
-            elif [ "$pr_state" != "merged" ]; then
-                # "(merged)" is conveyed by the strikethrough on branch - suppress
-                # the label to save space. Draft/closed keep their word.
+            fi
+            # PR # in light gray (status suffix). No trailing CI glyph - the
+            # branch color carries the CI signal now.
+            append "$i" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
+            if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
+                # "(merged)" suppressed - strikethrough on branch carries it.
+                # "(open)" suppressed - branch color carries it.
+                # Draft/closed keep their word.
                 append "$i" $(( 3 + ${#pr_state} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_state"
             fi
         fi
@@ -666,7 +716,7 @@ for ((i=0; i<n; i++)); do
 done
 
 # Right-side: model on row 0, ctx% on row 1 — both right-aligned to the terminal edge.
-SEP=2
+# SEP is hoisted to the top of the file so the col-2 budgeter can use it.
 
 if [ -n "$model" ]; then
     # Row 0 packs model, effort, and ctx% into one right-aligned label.
