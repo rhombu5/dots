@@ -80,6 +80,8 @@ Strip Claude attribution by default whenever you're writing something that'll be
 
 **Default action for any code-change work**: the edit happens in a templated worktree. The trigger is "I'm about to edit code in a project," not "I want to create a worktree." Being already on a branch in the main checkout is the **failure mode this rule prevents**, not a reason to skip it.
 
+> **To put *yourself* into a worktree, use the `EnterWorktree` tool — never `cd` into one.** Not `cd <worktree>`, not `cd <worktree> && cmd`. This is a categorical tool rule, not a path-style preference: `cd` into *non-worktree* directories is fine. The tell that you're about to break it is reaching for `cd` against a path that is (or is under) a worktree. `git worktree add` to *prepare* a worktree for a subagent to enter is the supported path — that's creating one, not entering it yourself. Detailed mechanics: `CLAUDE.git.md` §"Entering / exiting worktrees".
+
 **Two ways to satisfy the rule, picked by change size:**
 
 - **Trivial (≤~10 LOC — version bump, flag flip, single-key config change):** `EnterWorktree` in the parent session, edit, commit, push, PR, `ExitWorktree`. No subagent — the dispatch framing cost doesn't amortize for a five-second change.
