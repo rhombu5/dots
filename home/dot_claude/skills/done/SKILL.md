@@ -5,9 +5,9 @@ description: End-of-session wrap-up checklist. Confirms work is finished, commit
 
 # Done?
 
-Walk this checklist before stopping. For each item: **check, then report status** (✓ clear / ✗ outstanding / ⚠ N/A) with a one-line note. Don't fix anything silently — surface every ✗ or ⚠ for the user to decide.
+Walk this checklist before stopping. For each item: **check, then report status** (✓ clear or N/A / ✗ outstanding / ⚠ needs a look) with a one-line note. N/A items get the check icon — they're not a problem, so don't flag them with a warning. Don't fix anything silently — surface every ✗ or ⚠ for the user to decide.
 
-**Scope: only what this session actually touched.** This is a wrap-up, not an audit. If the session didn't write code, correctness gates are ⚠ N/A — don't run the test suite to be thorough. If no behavior changed, docs are ⚠ N/A — don't go reading the README. If you didn't push, CI is ⚠ N/A. Items only get a ✓ or ✗ when they're *in scope for this session*. The default for "we didn't touch that" is ⚠ N/A with one word of justification, not investigation.
+**Scope: only what this session actually touched.** This is a wrap-up, not an audit. If the session didn't write code, correctness gates are ✓ N/A — don't run the test suite to be thorough. If no behavior changed, docs are ✓ N/A — don't go reading the README. If you didn't push, CI is ✓ N/A. Items only get a ✓ or ✗ when they're *in scope for this session*. The default for "we didn't touch that" is ✓ N/A with one word of justification, not investigation.
 
 ## 1. Task complete
 
@@ -17,7 +17,7 @@ Walk this checklist before stopping. For each item: **check, then report status*
 
 ## 2. Correctness gates
 
-**Only if this session changed code.** Otherwise ⚠ N/A.
+**Only if this session changed code.** Otherwise ✓ N/A.
 
 Run only the gates the project already uses, scoped to the diff:
 
@@ -30,7 +30,7 @@ Don't invent gates that don't exist. Don't run a full repo-wide suite when only 
 
 ## 3. Docs in sync
 
-**Only if this session changed observable behavior or established a new convention.** Otherwise ⚠ N/A.
+**Only if this session changed observable behavior or established a new convention.** Otherwise ✓ N/A.
 
 - User-facing docs (README, man pages, `--help` text) still match the new behavior?
 - Inline doc comments / docstrings on the touched code still accurate?
@@ -94,7 +94,7 @@ Verify with:
 - `git status` + `git log @{u}..` in both `dots` and `arch-setup`.
 - For packages: spot-check that anything you `pacman -S`'d this session appears in the arch-setup package list.
 
-⚠ = N/A on non-Linux.
+✓ = N/A on non-Linux.
 
 ## 12. Anything weird
 
@@ -104,7 +104,7 @@ Verify with:
 
 ## 13. Open bugs in the repo
 
-**Only if the session touched code in a GitHub repo.** Otherwise ⚠ N/A.
+**Only if the session touched code in a GitHub repo.** Otherwise ✓ N/A.
 
 `gh issue list --state open --label bug --limit 10` — any open bug-labeled issues? Two specific cases to flag:
 
@@ -113,7 +113,7 @@ Verify with:
 
 Don't audit every bug in the tracker — that's project health, not session wrap-up. Scope to bugs that touch the area this session worked in.
 
-⚠ when bugs exist that might relate; ✓ when no related bugs (or none open); ⚠ N/A if the repo isn't a GitHub repo or doesn't use the `bug` label.
+⚠ when bugs exist that might relate; ✓ when no related bugs (or none open); ✓ N/A if the repo isn't a GitHub repo or doesn't use the `bug` label.
 
 ---
 
@@ -126,7 +126,7 @@ Report as a compact checklist:
  2. Correctness gates   ✓ tsc + eslint + vitest all green
  3. Docs in sync        ⚠ README still shows old flag name
  4. Tasks / workitems   ✓ TaskList empty
- 5. Secrets check       ✓ nothing sensitive in diff
+ 5. Secrets check       ✓ N/A — no diff this session
  6. Committed           ✗ 2 untracked files in dots/
  7. Pushed              ✓ both repos up to date
  8. CI green            ⚠ CI still running on PR #42

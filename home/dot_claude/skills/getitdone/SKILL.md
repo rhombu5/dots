@@ -11,9 +11,9 @@ This is `/done` with the obvious items resolved instead of just listed. Same che
 
 1. **Load the canonical checklist** by reading `~/.claude/skills/done/SKILL.md`. That file is the source of truth — walk every item it defines, in order, with the exact same scope and N/A rules. Do not maintain a parallel checklist here; if `/done` evolves, `/getitdone` automatically inherits the change.
 
-2. **For each item**, evaluate as `/done` would: ✓ clear / ✗ outstanding / ⚠ N/A. Apply `/done`'s scope discipline strictly:
+2. **For each item**, evaluate as `/done` would: ✓ clear or N/A / ✗ outstanding / ⚠ needs a look. N/A items get the check icon, not a warning. Apply `/done`'s scope discipline strictly:
    - Only items the session actually touched are in scope.
-   - "We didn't touch that" → ⚠ N/A with one word of justification, not investigation.
+   - "We didn't touch that" → ✓ N/A with one word of justification, not investigation.
    - Don't run repo-wide test suites, don't audit pre-existing memory, don't read READMEs you didn't change. The wrap-up is for *this session's work*, not the project's overall health.
 
 3. **For each ✗ or surprising ⚠**, decide: is the resolution obvious *and* safe *and* in scope?
