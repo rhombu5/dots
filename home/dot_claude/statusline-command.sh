@@ -800,11 +800,13 @@ for ((i=0; i<n; i++)); do
             esac
         fi
         if [ -n "${col2_vcs[$i]}" ]; then
-            # Icons in repo hue (identity); branch in aggregate CI color (or
-            # repo hue when no CI info); counts in light gray (matches col 1).
+            # Icons + branch share the aggregate CI color when there's an open
+            # PR (else the repo hue); counts in light gray (matches col 1). The
+            # icons track the branch color so the whole name cluster recolors
+            # together on CI state, rather than the glyphs staying repo-hue.
             IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"${col2_vcs[$i]}"
             if [ -n "$vt_icons" ]; then
-                append "$i" "${#vt_icons}" "${wt_head_c}%s\033[0m" "$vt_icons"
+                append "$i" "${#vt_icons}" "${wt_branch_c}%s\033[0m" "$vt_icons"
             fi
             if [ -n "$vt_branch" ]; then
                 append "$i" "${#vt_branch}" "${ap_branch}${wt_branch_c}%s\033[0m" "$vt_branch"
