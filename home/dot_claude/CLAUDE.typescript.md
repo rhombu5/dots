@@ -204,26 +204,21 @@ Return type: annotate as `Generator<T>` or `IterableIterator<T>`. Both are corre
 
 ## Local variables — inline the trivial, name what earns it
 
-Don't bind a local to an expression simple enough to read inline at its use site — a bare property access, a single cheap call, a short literal. Reserve a named local for one that *earns* the name by doing at least one of:
+A single-use local should be inlined unless its initializer earns the name. "Earns it" is about the initializer's **complexity**, not how many times the value is used — a single-use binding is justified when the expression is busy enough that a name aids readability, and pointless when the expression is trivial.
 
-- **Carrying real complexity** — a multi-statement closure, or a long/nested expression that would obscure the surrounding statement if inlined. ("Earns it" is about complexity, not use-count — a justified name needn't be single-use.)
-- **Documenting intent** — the name explains a non-obvious value or predicate.
-- **Meaningful reuse** — repeating the expression inline would cost real work or readability. A trivial alias repeated a few times doesn't qualify; `pkg.json` reads fine wherever it appears.
+Inline when the initializer is a bare call, property access, or short literal that reads fine at the use site. Keep the name when it's a ternary, a multi-step transform, a long/nested expression, or a multi-statement closure — something that would clutter the surrounding statement if inlined, or whose name documents an otherwise-opaque value.
 
 ```ts
-// NO — a trivial destructure-alias for a property access; just write pkg.json
-const { json } = pkg;
-…
-if (json.exports !== undefined) { … }
+// NO — single-use binding of a trivial call; inline it at the use site
+const targets = resolveConditionTargets(target);
+for (const t of targets) { … }
+// → for (const t of resolveConditionTargets(target)) { … }
 
-// YES — a multi-statement closure clearly earns a name (and here it's reused)
-const pushTarget = (subKey: string, target: unknown): void => {
-  const targets = resolveConditionTargets(target);
-  …
-};
-
-// YES — the name documents an otherwise-opaque predicate
-const looksLikeSubpathMap = keys.some((k) => k === "." || k.startsWith("./"));
+// YES — also single-use, but the initializer is busy enough that the name earns its place
+const subpath = subKey === "." ? "" : subKey.replace(/^\.\/?/, "");
+out.push({ subpath, targetRel: t.replace(/^\.\/?/, "") });
 ```
 
-*First-cut heuristic — the exact "too simple to name" threshold is still being calibrated; expect refinement. Default: inline trivial property/access expressions; name anything with real logic in it.*
+The discriminator is the initializer, not the use-count: both bindings above are used once; only the trivial one should be inlined.
+
+*First-cut heuristic — the exact "too simple to name" threshold is still being calibrated; expect refinement.*
