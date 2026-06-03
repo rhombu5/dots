@@ -143,3 +143,87 @@ return !!result;
 ```
 
 **Tooling note:** these play fine with typescript-eslint's `strict-boolean-expressions` at its defaults — `allowNumber`/`allowString` default to `true`, so non-nullable `number`/`string` truthiness (including `.length`) passes clean. The rule only flags truthiness on *nullable* values (`string | undefined`, etc.) and `any` — to keep truthiness there too, set `allowNullableBoolean` / `allowNullableString` / `allowNullableNumber: true`.
+
+## Generators — yield sequences, buffer deliberately
+
+Prefer a `function*` generator over accumulating into an array and returning it. Yielding is lazy — the consumer stops early at no cost, recursive cases compose via `yield*` with no intermediate allocations, and the caller materializes only when a concrete array is actually required.
+
+```ts
+// NO
+function resolveConditionTargets(target: unknown): string[] {
+  if (typeof target === "string") {
+    return [target];
+  }
+  if (typeof target === "object" && target !== null) {
+    const obj = target as Record<string, unknown>;
+    const out: string[] = [];
+    for (const key of ["types", "import", "module", "default", "require", "node", "bun"]) {
+      const v = obj[key];
+      if (typeof v === "string") {
+        out.push(v);
+      } else if (typeof v === "object" && v !== null) {
+        out.push(...resolveConditionTargets(v));
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
+// YES
+function* resolveConditionTargets(target: unknown): Generator<string> {
+  if (typeof target === "string") {
+    yield target;
+    return;
+  }
+  if (typeof target === "object" && target !== null) {
+    const obj = target as Record<string, unknown>;
+    for (const key of ["types", "import", "module", "default", "require", "node", "bun"]) {
+      const v = obj[key];
+      if (typeof v === "string") {
+        yield v;
+      } else if (typeof v === "object" && v !== null) {
+        yield* resolveConditionTargets(v);
+      }
+    }
+  }
+}
+```
+
+Two payoffs this example makes concrete: (1) the recursive `out.push(...resolveConditionTargets(v))` — which builds a fresh array at every recursion level and then spreads it into `out` — collapses to `yield* resolveConditionTargets(v)`, threading values through directly; (2) a caller that needs an array writes `[...resolveConditionTargets(x)]` at the point of use, not inside the function.
+
+**Buffer deliberately when buffering is clearly the better choice:**
+
+- The caller needs `.length`, random indexing, or multiple passes over the result.
+- All elements are needed together anyway — sorting, dedup, grouping, reversing.
+- A small fixed literal where an array reads clearer than a generator.
+- A public API boundary typed as `T[]` where consumers expect a materialized array.
+- Laziness would hold a resource open (file handle, DB cursor, lock) longer than intended.
+
+Return type: annotate as `Generator<T>` or `IterableIterator<T>`. Both are correct; `Generator<T>` is more precise and preferred when the function explicitly returns nothing.
+
+## Local variables — inline the trivial, name what earns it
+
+Don't bind a local to an expression simple enough to read inline at its use site — a bare property access, a single cheap call, a short literal. Reserve a named local for one that *earns* the name by doing at least one of:
+
+- **Carrying real complexity** — a multi-statement closure, or a long/nested expression that would obscure the surrounding statement if inlined. ("Earns it" is about complexity, not use-count — a justified name needn't be single-use.)
+- **Documenting intent** — the name explains a non-obvious value or predicate.
+- **Meaningful reuse** — repeating the expression inline would cost real work or readability. A trivial alias repeated a few times doesn't qualify; `pkg.json` reads fine wherever it appears.
+
+```ts
+// NO — a trivial destructure-alias for a property access; just write pkg.json
+const { json } = pkg;
+…
+if (json.exports !== undefined) { … }
+
+// YES — a multi-statement closure clearly earns a name (and here it's reused)
+const pushTarget = (subKey: string, target: unknown): void => {
+  const targets = resolveConditionTargets(target);
+  …
+};
+
+// YES — the name documents an otherwise-opaque predicate
+const looksLikeSubpathMap = keys.some((k) => k === "." || k.startsWith("./"));
+```
+
+*First-cut heuristic — the exact "too simple to name" threshold is still being calibrated; expect refinement. Default: inline trivial property/access expressions; name anything with real logic in it.*
