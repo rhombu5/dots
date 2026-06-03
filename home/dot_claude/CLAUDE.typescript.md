@@ -142,4 +142,4 @@ return !!result;
 {!!count && <Badge n={count} />}
 ```
 
-**Tooling note:** these conventions are incompatible with typescript-eslint's `strict-boolean-expressions` — if a project adds a linter, leave that rule off.
+**Tooling note:** these play fine with typescript-eslint's `strict-boolean-expressions` at its defaults — `allowNumber`/`allowString` default to `true`, so non-nullable `number`/`string` truthiness (including `.length`) passes clean. The rule only flags truthiness on *nullable* values (`string | undefined`, etc.) and `any` — to keep truthiness there too, set `allowNullableBoolean` / `allowNullableString` / `allowNullableNumber: true`.
