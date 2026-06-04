@@ -177,6 +177,10 @@ Subagent prompts should include the substance, the style/format constraints, and
 
 The `SendMessage` tool's docstring still leans on "resume a completed background agent" framing in some forms — that's the non-teams default. With teams mode on, mid-flight delivery works; the tooling description hasn't caught up.
 
+## Subagents always run silent
+
+**Every subagent prompt must include a run-silent directive** — no narration, no progress prose, no explanations between tool calls; tools and a terse final report only. This goes in the dispatch prompt itself (e.g. a first line like "RUN SILENT: no narration; terse final report only"), every time, for every agent type and model. Narrating agents burn tokens describing work instead of doing it.
+
 ## Don't echo subagent return messages
 
 When a subagent finishes, its final message is delivered to me directly as a task notification — I can read it. **Don't re-summarize it in your next response.** Echo-summaries are pure duplication: same content I just read, billed twice. Acknowledge completion in a single line ("PR #42 in flight" / "rejected — schema cost too high") and move to the next action, not a paragraph rephrasing what the subagent said.
