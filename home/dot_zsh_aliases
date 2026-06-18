@@ -102,3 +102,38 @@ bw() {
 # Trust model: anyone with an unlocked vault can sudo as you.
 # Same surface as the desktop app's "Unlock with system authentication".
 sudoa() { SUDO_ASKPASS="$HOME/.local/bin/claude-askpass" command sudo -A "$@"; }
+
+# --- md: glow-style markdown renderer with inline mermaid diagrams ---
+# Pipable like glow: `md file.md` or `cat file.md | md`. Each ```mermaid
+# fence is rendered to a PNG via mmdc and drawn inline by mdcat (needs a
+# terminal with image support — Ghostty/kitty/wezterm/iTerm). With no
+# mermaid blocks it's a plain passthrough to mdcat.
+# Deps: mdcat (AUR), mmdc (mermaid-cli, [extra]).
+# NB: `command cat` below bypasses the cat->bat alias above, which zsh
+# would otherwise expand into this function at definition time.
+md() {
+    emulate -L zsh
+    local tmp; tmp=$(mktemp -d) || return
+    local doc="$tmp/doc.md"
+
+    # input from file arg or stdin; rewrite mermaid fences -> image refs,
+    # extracting each block to tmp/N.mmd
+    { [[ -f "$1" ]] && command cat -- "$1" || command cat; } | awk -v dir="$tmp" '
+        /^[[:space:]]*```[[:space:]]*mermaid[[:space:]]*$/ {
+            n++; f=dir "/" n ".mmd"; print "![](" dir "/" n ".png)"; cap=1; next
+        }
+        cap && /^[[:space:]]*```[[:space:]]*$/ { cap=0; close(f); next }
+        cap { print > f; next }
+        { print }
+    ' > "$doc"
+
+    # render each extracted diagram (skipped silently if mmdc absent)
+    if (( ${+commands[mmdc]} )); then
+        for m in "$tmp"/*.mmd(N); do
+            mmdc -i "$m" -o "${m%.mmd}.png" -t dark -b transparent >/dev/null 2>&1
+        done
+    fi
+
+    command mdcat "$doc"
+    rm -rf "$tmp"
+}
