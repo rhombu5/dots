@@ -110,7 +110,8 @@ After cloning a template, walk any `BURN-AFTER-READING.md` (or similarly-named) 
 
 | Owner | Use for | Notes |
 |---|---|---|
-| **`fnrhombus`** | My current personal username. Published or anticipated-published projects. | Default for "I expect this to have value to other people." |
+| **`fnrhombus`** | My current personal username. Published or anticipated-published projects. | Default for "I expect this to have value to other people" — *except* Claude-related work, which goes under `fnclaude`. |
+| **`fnclaude`** | My Claude-related work and publisher persona — the fnclaude CLI, its plugins, and the plugin marketplace (`fnclaude/marketplace`, identity `@fnclaude`). | **Default home for anything Claude Code / plugin / marketplace.** Several older `claude-*` repos still sit under `fnrhombus` (pathfix, hooks, completion, worktree-paths, token-tracker) and should migrate here over time. |
 | **`rhombu5`** | Personal projects not intended to be useful to anyone else. | Default for dotfiles, machine-specific scripts, throwaways. |
 | **`rhom6us`** | An old username turned org. Holds projects I'm undecided about, kept so old links keep resolving. | **Never place anything new here.** |
 | **`rhombus-redux`** | React/Flux tooling. | Don't use unless I tell you to. |
