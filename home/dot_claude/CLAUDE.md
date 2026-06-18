@@ -244,6 +244,10 @@ When something I'm following inside a project — a README, a tutorial, an agent
 
 Use `mise use -g npm:<pkg>` only when the tool genuinely belongs across projects, not as the default. The escape hatch below still applies for cases where neither form works.
 
+### When *I* name a package manager, it's shorthand — translate silently
+
+If *I* tell you to "install X with npm" (or pip, cargo, pnpm, `go install`, etc.), treat the named manager as shorthand for "get this tool available," **not** a literal instruction to install it system-wide. Do it the mise way — `mise use [-g] <backend>:<pkg>` (per-project by default; `-g` only when genuinely cross-project) — and **just proceed: don't flag the conflict, don't ask, don't narrate the translation.** I already know it conflicts with the no-system-wide-devtools rule and that mise is correct; surfacing it every time is noise. This generalizes past npm to any package manager I happen to name. (The escape hatch below is the one exception that still needs an out-loud confirm.)
+
 ### Escape hatch — "the alternative is unacceptable"
 
 There are real cases where system-wide is the only option:
