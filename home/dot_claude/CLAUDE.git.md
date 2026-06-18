@@ -99,8 +99,8 @@ Same template flow as clones — `cloneTemplate` determines the path, the GitHub
 
 When starting a new repo that fits a published pattern, clone from a template instead of scaffolding from scratch:
 
-- **`fnrhombus/aur-template`** — binary CLIs that publish to GitHub releases + the Arch User Repository. Language-agnostic publish chain (release-please + auto-merge + AUR push); fill in `build.yml` + `test.yml` for the language.
-- **`fnrhombus/npm-template`** — npm packages. npm publishing CI + funding config wired up.
+- **`fntemplate/aur`** — binary CLIs that publish to GitHub releases + the Arch User Repository. Language-agnostic publish chain (release-please + auto-merge + AUR push); fill in `build.yml` + `test.yml` for the language.
+- **`fntemplate/npm`** — npm packages. npm publishing CI + funding config wired up.
 
 Trigger: when I propose work that creates a new GitHub repo, check whether one of these fits and use `gh repo create <new-name> --template <owner>/<template> --public` rather than `git init`. If neither fits cleanly, scaffold from scratch — don't bend one into the other.
 
@@ -115,6 +115,7 @@ After cloning a template, walk any `BURN-AFTER-READING.md` (or similarly-named) 
 | **`rhom6us`** | An old username turned org. Holds projects I'm undecided about, kept so old links keep resolving. | **Never place anything new here.** |
 | **`rhombus-redux`** | React/Flux tooling. | Don't use unless I tell you to. |
 | **`rhombus-toolkit`** | General tooling projects. | Don't use unless I tell you to. |
+| **`fntemplate`** | Holds the repo templates I scaffold new projects from (`--template`). | Currently `aur`, `npm`, `claude-code-plugin`. New repos still land under the owner picked from this table — `fntemplate` is the *source*, not the destination. |
 | **`rewso`** | A company I used to work for. | **Never use.** |
 
 `fnrhombus/arch-setup` properly belongs under `rhombu5` — it's an oversight on my part that I'll fix eventually. Don't pattern-match off that location when picking owners for new repos.
