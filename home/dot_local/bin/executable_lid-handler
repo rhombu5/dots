@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Lid switch handler. Wired from Hyprland `binddl` in ~/.config/hypr/binds.conf.
-# Owns ALL lid behavior; logind defers via /etc/systemd/logind.conf.d/10-lid.conf
-# (Handle*=ignore across the board).
+# Owns lid-driven display behavior and invokes the hibernate check on lid close;
+# logind defers via /etc/systemd/logind.conf.d/10-lid.conf (Handle*=ignore).
 #
-# Rule: hibernate on lid close, UNLESS we're on AC AND an external monitor is
-# attached — in that case disable eDP-1 (re-enabled via reload on lid open).
+# Rule: on lid close, disable eDP-1 if an external monitor is attached (stay-awake
+# clamshell, re-enabled via reload on lid open). The hibernate decision is
+# delegated to /usr/local/bin/headless-hibernate — hibernate iff lid-closed AND no
+# external display connected AND on battery (see arch-setup postinstall 1h-bat).
+# This supersedes the old "hibernate on close unless AC+external; unconditional on
+# battery" rule, which hibernated a docked machine whenever it dropped to battery.
 #
 # Approach history (decision lives here, not in commit messages, because the
 # next person to touch this needs the why):
@@ -39,13 +43,6 @@ set -euo pipefail
 action=${1:-}
 internal=eDP-1
 
-on_ac() {
-    # NB: don't be tempted to write `$(<file 2>/dev/null)` — bash's fast-read
-    # idiom returns empty when any redirection is appended, so the test silently
-    # always fails. Use `cat` so error suppression works.
-    [[ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" == 1 ]]
-}
-
 external_attached() {
     hyprctl monitors -j | jq -e --arg n "$internal" 'any(.[]; .name != $n)' >/dev/null
 }
@@ -62,16 +59,18 @@ restart_waybar() {
 
 case $action in
     close)
-        if on_ac && external_attached; then
-            # Hyprland natively migrates workspaces + toplevels off eDP-1
-            # and confines the cursor to the remaining outputs. Layer-shell
-            # surfaces on eDP-1 are destroyed; well-behaved clients survive.
-            # If waybar ever dies in the cascade, lid-open's restart catches
-            # it on the way back.
+        # With an external attached we stay awake (clamshell) regardless of
+        # power, so disable the internal panel: Hyprland migrates workspaces +
+        # toplevels off eDP-1 and confines the cursor to the remaining outputs.
+        # Layer-shell surfaces on eDP-1 are destroyed; well-behaved clients
+        # survive (if waybar dies in the cascade, lid-open's restart catches it).
+        if external_attached; then
             hyprctl keyword monitor "$internal,disable"
-        else
-            systemctl hibernate
         fi
+        # Delegate the hibernate decision to the single system-wide condition
+        # script (covers the lid-close trigger; udev covers AC-unplug + display
+        # disconnect). Runs as the user — polkit rule 49 lets tom hibernate.
+        /usr/local/bin/headless-hibernate
         ;;
     open)
         # Reload re-applies monitors.conf, bringing eDP-1 back at its

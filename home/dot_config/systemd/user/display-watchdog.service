@@ -9,7 +9,16 @@ After=graphical-session.target
 Type=simple
 # Quoted args preserve the space inside --lid-open-action's value.
 # Systemd expands %h before argument parsing.
-ExecStart=%h/.local/bin/display-watchdog --lid-open-action "%h/.local/bin/lid-handler open" --lid-closed-action "systemctl hibernate"
+#
+# lid-closed-action is a no-op (`true`): this daemon detects blackout via
+# compositor DPMS state, so it CANNOT distinguish an idle screen-blank from a
+# genuine "lid shut + external gone" blackout — it used to fire `systemctl
+# hibernate` here and so hibernated the docked machine every time the TV blanked
+# on idle. Hibernate now lives in a system-level mechanism keyed on connector
+# *status* + lid + AC power, which doesn't have that conflation: see arch-setup
+# system-files/{power/headless-hibernate,acpi/events,udev,systemd}. This unit is
+# kept only for its lid-open display-recovery action.
+ExecStart=%h/.local/bin/display-watchdog --lid-open-action "%h/.local/bin/lid-handler open" --lid-closed-action "true"
 # Replaces the old `exec-once`. The script's outer loop already absorbs
 # transient Hyprland-IPC reconnects, so a crash that escapes that loop
 # is genuinely unexpected — bring it back, but don't flap.
