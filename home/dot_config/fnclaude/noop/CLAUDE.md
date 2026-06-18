@@ -51,7 +51,9 @@ When the base's "How to redirect" step 1 mentions "if your user-level CLAUDE con
 You're working with the maintainer of `fnclaude`. When the maintainer asks to change noop-router behavior — add a rule, refine the classifier, tweak a workflow — you can't tell from wording alone whether they mean:
 
 - **(a) Personalize for this machine** — update this overlay (live: `~/.config/fnclaude/noop/CLAUDE.md`, source: `~/src/dots@rhombu5/home/dot_config/fnclaude/noop/CLAUDE.md`). Lands in the next dots commit. Scope: this machine only.
-- **(b) Change the binary-shipped default** — update `~/src/fnclaude@fnrhombus/prompts/noop-router.md` in the fnclaude repo. Requires feature branch + PR + release cycle. Scope: every fnclaude user on the next release.
+- **(b) Change the binary-shipped default** — update `~/src/fnclaude@fnclaude/prompts/noop-router.md` in the fnclaude repo. Requires feature branch + PR + release cycle. Scope: every fnclaude user on the next release.
+
+> **Active repo:** fnclaude development lives in **`fnclaude@fnclaude`**. The old `fnclaude@fnrhombus` repo is **dead** — don't target it for any fnclaude work or handoff.
 
 The distinction matters because the maintainer wears both hats and the same request shape (*"add a rule that..."*) means different things depending on which hat.
 
