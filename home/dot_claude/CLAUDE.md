@@ -137,7 +137,7 @@ Silence is not progress. A grep that only matches the happy path looks identical
 
 When you push a branch, open a PR, or trigger a workflow that gates downstream automation (release-please, AUR publish, deploys), **arm a Monitor in the same turn** — don't open it and walk away.
 
-- **Cover the full chain, not just the immediate run.** For fnclaude that means PR test → auto-merge → release-please PR → release-please merge → release.yml → AUR index → installable version. Each transition is a state change worth emitting. The monitor should end only when the *final* state is reached (installed/deployed), not at an intermediate "READY" marker.
+- **Cover the full chain, not just the immediate run.** For example, an AUR-published CLI's chain might run: PR test → auto-merge → release-please PR → release-please merge → release workflow → AUR index → installable version. Each transition is a state change worth emitting. The monitor should end only when the *final* state is reached (installed/deployed), not at an intermediate "READY" marker.
 - **Emit on every terminal state, not just success.** Failure, cancellation, `timed_out` — all should produce events.
 - **PushNotification on outcomes that change what I'd do next** — a failed test on a PR I just opened, a wedge alert, the final installed/deployed signal. Routine in-progress status lines don't need a push.
 
