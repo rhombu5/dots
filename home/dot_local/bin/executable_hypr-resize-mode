@@ -1,0 +1,80 @@
+#!/bin/sh
+# hypr-resize-mode — paint a loud, ugly visual indicator while the
+# Hyprland "resize" submap is active, and tear it back down on exit.
+#
+# Submaps have NO native visual feedback, so without this there's no way
+# to tell the arrow/hjkl keys are resizing rather than doing their normal
+# thing. This makes resize mode impossible to miss.
+#
+# Called from binds.conf (see "Resize submap" block):
+#   enter (Super+R, global map):  exec, ~/.local/bin/hypr-resize-mode on
+#   exit  (Super+R/Return/Escape, inside resize submap):
+#                                 exec, ~/.local/bin/hypr-resize-mode off
+# The script dispatches the submap switch itself, because a single
+# Hyprland bind fires exactly one dispatcher — so the bind runs this
+# exec, and this exec does both the repaint AND the submap enter/reset.
+#
+# What it touches (all restored on exit):
+#   general:border_size       4  -> 16    (global; NOT overridden per-window)
+#   decoration:dim_inactive   off -> on   (everything else darkens)
+#   decoration:dim_strength   .15 -> .6
+#   active window bordercolor  -> loud red via setprop
+#
+# Border COLOR has to be forced per-window because hyprmural's accent.py
+# owns per-client bordercolor (hyprctl setprop). On exit we re-run
+# accent.py to repaint the correct wallpaper-tracked color back.
+
+set -e
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/hypr-resize-mode"
+saved="$state_dir/saved"
+accent="$HOME/.config/hyprmural/accent.py"
+
+mkdir -p "$state_dir"
+
+case "$1" in
+on)
+    # Stash live values once, so a double-trigger can't clobber them with
+    # the already-modified (resize-mode) values.
+    if [ ! -f "$saved" ]; then
+        bs=$(hyprctl getoption general:border_size -j | jq -r '.int')
+        di=$(hyprctl getoption decoration:dim_inactive -j | jq -r '.int')
+        ds=$(hyprctl getoption decoration:dim_strength -j | jq -r '.float')
+        printf '%s\t%s\t%s\n' "$bs" "$di" "$ds" > "$saved"
+    fi
+
+    hyprctl --batch "\
+keyword general:border_size 16 ; \
+keyword decoration:dim_inactive true ; \
+keyword decoration:dim_strength 0.6" >/dev/null
+
+    hyprctl setprop active bordercolor "rgb(ff1744)" >/dev/null 2>&1 || true
+
+    hyprctl dispatch submap resize >/dev/null
+    ;;
+off)
+    if [ -f "$saved" ]; then
+        tab=$(printf '\t')
+        IFS="$tab" read -r bs di ds < "$saved"
+    else
+        bs=4; di=0; ds=0.15
+    fi
+    if [ "$di" = "1" ]; then di=true; else di=false; fi
+
+    hyprctl --batch "\
+keyword general:border_size ${bs} ; \
+keyword decoration:dim_inactive ${di} ; \
+keyword decoration:dim_strength ${ds}" >/dev/null
+
+    # Let accent.py repaint the real wallpaper-tracked border color,
+    # overwriting the forced red on every window.
+    [ -x "$accent" ] && "$accent" >/dev/null 2>&1 || true
+
+    rm -f "$saved"
+    hyprctl dispatch submap reset >/dev/null
+    ;;
+*)
+    echo "usage: $0 on|off" >&2
+    exit 2
+    ;;
+esac
