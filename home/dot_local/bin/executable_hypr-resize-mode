@@ -15,19 +15,21 @@
 # exec, and this exec does both the repaint AND the submap enter/reset.
 #
 # What it touches (all restored on exit):
-#   decoration:dim_inactive   off -> on   (everything else darkens)
-#   decoration:dim_strength   .15 -> .6
-#   active window bordercolor  -> hyper-contrasty acid-green/magenta via setprop
+#   general:col.active_border  -> hyper-contrast acid-green -> hot-magenta
+#   decoration:dim_inactive    off -> on   (everything else darkens)
+#   decoration:dim_strength    .15 -> .6
 #
-# Border COLOR has to be forced per-window because hyprmural's accent.py
-# owns per-client bordercolor (hyprctl setprop). On exit we re-run
-# accent.py to repaint the correct wallpaper-tracked color back.
+# NOTE: the active border is driven by the GLOBAL general:col.active_border
+# gradient. hyprmural's accent.py *tried* to push per-window bordercolor via
+# `setprop bordercolor`, but that prop name is invalid as of Hyprland 0.55.2,
+# so the per-window override is a no-op and the global keyword is what shows.
+# We capture the live value and restore it on exit (matugen reload would
+# also restore it, but capture/restore is exact and instant).
 
 set -e
 
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/hypr-resize-mode"
 saved="$state_dir/saved"
-accent="$HOME/.config/hyprmural/accent.py"
 
 mkdir -p "$state_dir"
 
@@ -36,37 +38,37 @@ on)
     # Stash live values once, so a double-trigger can't clobber them with
     # the already-modified (resize-mode) values.
     if [ ! -f "$saved" ]; then
+        cb=$(hyprctl getoption general:col.active_border -j | jq -r '.custom')
         di=$(hyprctl getoption decoration:dim_inactive -j | jq -r '.int')
         ds=$(hyprctl getoption decoration:dim_strength -j | jq -r '.float')
-        printf '%s\t%s\n' "$di" "$ds" > "$saved"
+        # getoption emits gradient stops as bare AARRGGBB; keyword needs a
+        # 0x prefix to parse them back, so store the restore-ready form.
+        cb=$(printf '%s' "$cb" | sed -E 's/\b([0-9a-fA-F]{8})\b/0x\1/g')
+        printf '%s\t%s\t%s\n' "$cb" "$di" "$ds" > "$saved"
     fi
 
+    # Maximally jarring: acid green -> hot magenta. Nothing in the normal
+    # wallpaper-tracked palette looks remotely like this.
     hyprctl --batch "\
+keyword general:col.active_border rgb(00ff00) rgb(ff00ff) 45deg ; \
 keyword decoration:dim_inactive true ; \
 keyword decoration:dim_strength 0.6" >/dev/null
-
-    # Maximally jarring: acid green -> hot magenta gradient. Nothing in the
-    # normal wallpaper-tracked palette looks remotely like this.
-    hyprctl setprop active bordercolor "rgb(00ff00) rgb(ff00ff) 45deg" >/dev/null 2>&1 || true
 
     hyprctl dispatch submap resize >/dev/null
     ;;
 off)
     if [ -f "$saved" ]; then
         tab=$(printf '\t')
-        IFS="$tab" read -r di ds < "$saved"
+        IFS="$tab" read -r cb di ds < "$saved"
     else
-        di=0; ds=0.15
+        cb="0xffbcc2ff 0xffe6bad6 45deg"; di=0; ds=0.15
     fi
     if [ "$di" = "1" ]; then di=true; else di=false; fi
 
     hyprctl --batch "\
+keyword general:col.active_border ${cb} ; \
 keyword decoration:dim_inactive ${di} ; \
 keyword decoration:dim_strength ${ds}" >/dev/null
-
-    # Let accent.py repaint the real wallpaper-tracked border color,
-    # overwriting the forced red on every window.
-    [ -x "$accent" ] && "$accent" >/dev/null 2>&1 || true
 
     rm -f "$saved"
     hyprctl dispatch submap reset >/dev/null
