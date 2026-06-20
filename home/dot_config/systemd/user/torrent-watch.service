@@ -1,0 +1,14 @@
+[Unit]
+Description=Auto-open .torrent files dropped into ~/dl
+ConditionEnvironment=WAYLAND_DISPLAY
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/torrent-watch
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,8 @@
+#!/bin/bash
+exec inotifywait -m "$HOME/dl" \
+    -e close_write \
+    -e moved_to \
+    --format '%w%f' |
+while IFS= read -r filepath; do
+    [[ "$filepath" == *.torrent ]] && qbittorrent "$filepath" &
+done
