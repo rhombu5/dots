@@ -1,0 +1,3 @@
+# ripgrep default flags. One flag per line; pointed at by RIPGREP_CONFIG_PATH (set in .zshenv).
+# Try the default Rust regex engine, transparently fall back to PCRE2 when the pattern needs it.
+--engine=auto

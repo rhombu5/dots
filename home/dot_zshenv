@@ -8,3 +8,8 @@
 if [[ -S "$HOME/.bitwarden-ssh-agent.sock" ]]; then
     export SSH_AUTH_SOCK="$HOME/.bitwarden-ssh-agent.sock"
 fi
+
+# Point ripgrep at its config file (default flags, one per line). Lives here
+# (not .zshrc.d/) so scripts and non-interactive shells that invoke `rg` pick
+# up the same defaults. Safe no-op for shells where rg is never run.
+export RIPGREP_CONFIG_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/ripgrep/config"
