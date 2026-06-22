@@ -68,7 +68,7 @@ setopt APPEND_HISTORY SHARE_HISTORY HIST_EXPIRE_DUPS_FIRST HIST_IGNORE_DUPS \
        HIST_SAVE_NO_DUPS HIST_REDUCE_BLANKS
 
 # --- Shell options ---
-setopt NO_BEEP INTERACTIVE_COMMENTS MULTIOS
+setopt NO_BEEP INTERACTIVE_COMMENTS MULTIOS AUTO_CD
 
 # --- Completion ---
 # XDG-clean paths; ensure they exist before compinit reads/writes the cache.
