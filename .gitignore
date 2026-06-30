@@ -17,3 +17,6 @@ Thumbs.db
 
 # Crash artifacts
 *.stackdump
+
+# Generated runbook PDFs — `npm run pdf` re-renders from runbook/*.md.
+/runbook/*.pdf
