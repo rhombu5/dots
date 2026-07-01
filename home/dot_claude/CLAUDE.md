@@ -43,6 +43,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 - [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), Bitwarden / `bw` / `secret-tool` / keyring access (you can unlock the vault yourself — never ask the user), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 - [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
 - [`CLAUDE.typescript.md`](CLAUDE.typescript.md) — TypeScript style — array type syntax.
+- [`CLAUDE.print.md`](CLAUDE.print.md) — printing: driving the HP network laser (`hp_m252dw`) via `lp`/CUPS, the Canon photo printer (incomplete stub), and booklet printing — including the rule that a markdown prints as a folded booklet by default, the imposition pipeline, duplex/fold settings, and wrap-around cover pages.
 
 **Loading is just-in-time and deterministic, not heuristic.** When your next tool call matches a trigger row below, `Read` the file before making the call. Once loaded for a session, it stays loaded — the same trigger won't re-fire. The table itself is part of *this* file, so it's already in your context — checking it costs nothing.
 
@@ -51,6 +52,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 | You're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git`/`gh`/`git worktree`/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
 | You're about to touch `/etc/`, `/usr/`, `sudo`, `pacman`/`yay`, `systemctl`, `chezmoi`, Bitwarden/`bw`/`secret-tool`, or do any of the other Arch/Linux-flavored work named in the index above | [`CLAUDE.linux.md`](CLAUDE.linux.md) |
 | You're about to edit a TypeScript/TSX file (`.ts`/`.tsx`) — `Edit`/`Write`/`MultiEdit`/`NotebookEdit` | [`CLAUDE.typescript.md`](CLAUDE.typescript.md) |
+| You're about to print or drive CUPS (`lp`/`lpr`/`lpstat`/`lpoptions`/`cancel`), or the user asks to print a document — especially a markdown or PDF (which prints as a folded booklet by default) | [`CLAUDE.print.md`](CLAUDE.print.md) |
 
 **The trigger is the tool call's *shape*, not how you're framing the task.** "I'm writing some Go code" feels like one job; the moment the next call is going to `Edit` a file inside a git repo, the code-change work has started — load `CLAUDE.git.md` BEFORE that call, not after the PR is open.
 
