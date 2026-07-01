@@ -74,17 +74,24 @@ cat > "$template" <<'TYPST'
   #it.body
 ]
 
-// Keep headings with at least some following content; avoid orphan headings
-// at the bottom of a page.
-#show heading: it => block(it, breakable: false)
+// Keep headings with their following content; avoid orphan headings stranded
+// at the bottom of a page (sticky pulls the heading to the next page if its
+// content would break there). `dense` docs (cheatsheet) also make lead
+// paragraphs sticky so a heading + one-line intro can't strand above a table.
+#show heading: it => block(it, breakable: false, sticky: true)
+$if(dense)$
+#show par: it => block(it, sticky: true)
+$endif$
 
 // --- Code blocks ---
+// Non-breakable: these docs' code blocks are short (<=~5 lines), so keep each
+// intact and let it move to the next page as a unit rather than split mid-block.
 #show raw.where(block: true): it => block(
   fill: luma(245),
   inset: (x: 8pt, y: 6pt),
   radius: 2pt,
   width: 100%,
-  breakable: true,
+  breakable: false,
 )[#set text(size: 0.82em); #it]
 
 #show raw.where(block: false): it => box(
@@ -126,18 +133,47 @@ $if(toc)$
 #counter(page).update(1)
 $endif$
 
+$if(title)$
+// --- Title block: title + subtitle (the doc's lead line) + date, at the top
+//     of the content. The H1 and lead paragraph are stripped from the body by
+//     render_logical so they aren't duplicated here.
+#block(below: 1.3em)[
+  #text(size: 1.9em, weight: "bold")[$title$]
+  $if(subtitle)$
+  #v(0.35em)
+  #block(width: 100%)[#text(size: 1.05em, fill: luma(90))[#emph[$subtitle$]]]
+  $endif$
+  $if(date)$
+  #v(0.4em)
+  #text(size: 0.85em, fill: luma(130))[$date$]
+  $endif$
+]
+$endif$
+
 $body$
 TYPST
 
 # Render a single markdown file to a logical (un-imposed) 5.5x8.5 PDF.
-# Args: md_path, out_pdf, want_toc (0|1), want_cover (0|1), title
+# Args: md_path, out_pdf, want_toc (0|1), want_cover (0|1), title, want_dense (0|1)
 render_logical() {
-  local md=$1 outpdf=$2 want_toc=$3 want_cover=$4 title=$5
+  local md=$1 outpdf=$2 want_toc=$3 want_cover=$4 title=$5 want_dense=${6:-0}
+
+  # Subtitle = the doc's first non-empty paragraph (its lead line); date = today.
+  # Both feed the rendered title block; strip backticks so inline-code markup in
+  # the lead line doesn't show as literal backticks in the subtitle.
+  local subtitle date_str
+  subtitle=$(awk 'seen && NF { gsub(/`/, ""); print; exit } /^# / { seen = 1 }' "$md")
+  date_str=$(date +'%B %-d, %Y')
 
   local body
   body=$(mktemp --suffix=.md)
-  # Strip the first H1 from the body — the title comes from -M title= instead.
-  sed '0,/^# /{/^# /d;}' "$md" > "$body"
+  # Strip the first H1 (title) and the first non-empty paragraph (subtitle) from
+  # the body — they are rendered in the title block instead of inline.
+  awk '
+    !h1 && /^# / { h1 = 1; next }
+    h1 && !subseen && NF { subseen = 1; next }
+    { print }
+  ' "$md" > "$body"
 
   local args=(
     --from=markdown-citations
@@ -145,12 +181,17 @@ render_logical() {
     --template="$template"
     -V fontsize=10pt
     -M title="$title"
+    -M subtitle="$subtitle"
+    -M date="$date_str"
   )
   if [[ $want_toc -eq 1 ]]; then
     args+=(--toc --toc-depth=2)
   fi
   if [[ $want_cover -eq 1 ]]; then
     args+=(-V cover=true)
+  fi
+  if [[ $want_dense -eq 1 ]]; then
+    args+=(-V dense=true)
   fi
 
   pandoc "$body" -o "$outpdf" "${args[@]}"
@@ -181,10 +222,12 @@ for md in "${mds[@]}"; do
     nvim-cheatsheet)
       want_toc=0
       allow_cover=0   # dense reference; accept trailing blanks rather than pad
+      want_dense=1    # keep heading+lead-para stuck to the following table
       ;;
     *)
       want_toc=1
       allow_cover=1
+      want_dense=0
       ;;
   esac
 
@@ -192,7 +235,7 @@ for md in "${mds[@]}"; do
 
   tmp_logical=$(mktemp --suffix=.pdf)
 
-  if ! render_logical "$md" "$tmp_logical" "$want_toc" 0 "$title"; then
+  if ! render_logical "$md" "$tmp_logical" "$want_toc" 0 "$title" "$want_dense"; then
     echo "  FAIL render: $md"
     failures=$((failures + 1))
     rm -f "$tmp_logical"
@@ -205,7 +248,7 @@ for md in "${mds[@]}"; do
     pages=$(pdfinfo "$tmp_logical" | awk '/^Pages:/ {print $2}')
     if (( pages % 4 == 3 )); then
       echo "   pages=$pages → adding cover to clear trailing blank"
-      if ! render_logical "$md" "$tmp_logical" "$want_toc" 1 "$title"; then
+      if ! render_logical "$md" "$tmp_logical" "$want_toc" 1 "$title" "$want_dense"; then
         echo "  FAIL re-render with cover: $md"
         failures=$((failures + 1))
         rm -f "$tmp_logical"
