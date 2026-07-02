@@ -147,3 +147,10 @@ md() {
 # (NOT `bun` directly — that skips the `--` argv preservation; the shim
 # forwards process.env to the bun child, so FNC_RENDERER propagates).
 alias ffnc="FNC_RENDERER=1 $HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
+
+# --- fnc-dev: same working-tree source as ffnc, but renderer OFF ---
+# Runs the ~/src/fnclaude@fnclaude working tree WITHOUT FNC_RENDERER, so it
+# takes the plain PTY/inherit launch path (renderer dormant). Use to exercise
+# the on-disk source as the stable `fnc` would behave — e.g. validating
+# non-renderer hotfixes before publishing — without touching the npm install.
+alias fnc-dev="$HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
