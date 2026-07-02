@@ -137,3 +137,13 @@ md() {
     command mdcat "$doc"
     rm -rf "$tmp"
 }
+
+# --- ffnc: fnclaude from LOCAL working-tree source, renderer always-on (dev) ---
+# Live `fnc` is the stable npm release (installed via `mise use -g
+# npm:@fnclaude/cli`); `ffnc` runs the working-tree source at
+# ~/src/fnclaude@fnclaude with the in-process renderer forced on
+# (FNC_RENDERER=1), so renderer/CLI dev churn never destabilises the
+# daily-driver `fnc`. Invoked through the fnc.js node→bun preflight shim
+# (NOT `bun` directly — that skips the `--` argv preservation; the shim
+# forwards process.env to the bun child, so FNC_RENDERER propagates).
+alias ffnc="FNC_RENDERER=1 $HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
