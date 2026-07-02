@@ -8,6 +8,12 @@
 
 ---
 
+> # PREFER WHAT IS MOST CORRECT
+>
+> **Prefer what is most CORRECT, not what is quickest or easiest.** When approaches diverge, the deciding axis is correctness — the right abstraction, the right boundary, the design that will still be right later — not the shortest path to something that works. If the correct option costs more turns, more code, or more effort, that's the option. Don't reach for the expedient one and rationalize it; if you're choosing speed over correctness, say so out loud and let me decide.
+
+---
+
 ## Never guess
 
 Don't fabricate a theory and act on it as if verified. If something load-bearing is unknown, **ask** — the *WHEN IN DOUBT — DISCUSS* rule above applies.
