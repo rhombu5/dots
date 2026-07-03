@@ -1,6 +1,6 @@
 ---
-name: fable
-description: Manually-invoked general agent on Fable 5. Use only when the user names it explicitly (@fable / "use fable"). Any task, full tools.
+name: cheap-fable
+description: Manually-invoked general agent on Fable 5. Use only when the user names it explicitly (@cheap-fable / "use cheap-fable"). Any task, full tools.
 model: fable
 ---
 
