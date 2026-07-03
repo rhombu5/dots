@@ -2,3 +2,23 @@
 tmux = "worktree"
 handoff = "3"
 spawn_command = "uwsm app -a ghostty -- ghostty -e {bin} {dest} --name {name} @{summary}"
+
+[[context.notice_tiers]]
+at = 700000
+level = "consider"
+
+[[context.notice_tiers]]
+at = 750000
+level = "plan"
+
+[[context.notice_tiers]]
+at = 800000
+level = "now"
+
+[[context.notice_tiers]]
+at = 850000
+level = "urgent"
+
+[context.notice_repeat]
+every = 25000
+level = "urgent"
