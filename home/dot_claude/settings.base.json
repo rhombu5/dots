@@ -6,7 +6,7 @@
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
-  "model": "sonnet",
+  "model": "opus[1m]",
   "worktree": {
     "baseRef": "fresh"
   },
@@ -27,7 +27,8 @@
     }
   },
   "effortLevel": "xhigh",
-  "awaySummaryEnabled": false,
+  "promptSuggestionEnabled": false,
+  "askUserQuestionTimeout": "5m",
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
   "voice": {
@@ -43,6 +44,7 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": false,
+  "awaySummaryEnabled": false,
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
   "repoSettings": {

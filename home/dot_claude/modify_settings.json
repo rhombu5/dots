@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# chezmoi modify_ script: emits the desired ~/.claude/settings.json.
+# Starts from the stable base snapshot and overrides only the churny,
+# TUI-written "unstable" keys with whatever the live file currently holds.
+# stdin = current live target (piped by chezmoi); may be empty on first apply.
+set -euo pipefail
+
+base="${HOME}/.claude/settings.base.json"
+
+jq -n --indent 2 \
+  --slurpfile base "$base" \
+  --slurpfile live /dev/stdin \
+  '
+    ($base[0]) as $b
+    | (($live[0]) // {}) as $l
+    | $b
+    | reduce ["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout"][] as $k (
+        .;
+        if ($l | has($k)) and ($l[$k] != null) then .[$k] = $l[$k] else . end
+      )
+  '
