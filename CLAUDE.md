@@ -34,6 +34,13 @@ package, it goes there — not here.
 - **Shell plugin list is locked** to the set in `home/dot_zshrc`. Mirror
   any plugin change in arch-setup's `wsl-cli-test.sh` so the WSL shakedown
   catches breakage early.
+- **`settings.json`'s `model` and `effortLevel` fields sync without
+  asking.** If live differs from source on just these two keys, capture
+  live into source (`chezmoi re-add` + commit) and push — no confirmation
+  needed. These are session-tuning knobs the user flips via `/model` and
+  `/effort`; treat the live value as the intended default. Every other
+  `settings.json` field still follows the normal ask-before-capturing-drift
+  default.
 
 ## When `chezmoi verify` fails in pre-commit
 
