@@ -54,6 +54,12 @@ Log: `~/.claude/response-corrections.md`. When a category reaches ~3+ examples, 
 
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`), the context-specific `CLAUDE.<context>.md` siblings indexed below, and any `CLAUDE.<context>.local.md` per-machine overrides alongside them.
 
+## Terminology
+
+Terms I've coined — resolve them without asking:
+
+- **source libs** — the pnpm-workspace pattern where packages consume each other's raw TypeScript *source*, no build step: the dependency points its entry at source (`"main": "index.ts"`, or `exports` at `.ts`), consumers depend via `workspace:*`, and tsconfig sets `"moduleResolution": "bundler"` so `tsc` / a bundler / bun resolve the `.ts` entry directly. Works on plain pnpm — **not** bun-specific.
+
 ## Context files
 
 These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<context>.local.md` sibling alongside the base file for per-machine overrides that aren't committed to the dotfiles repo.
