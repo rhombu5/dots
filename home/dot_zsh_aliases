@@ -154,3 +154,14 @@ alias ffnc="FNC_RENDERER=1 $HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
 # the on-disk source as the stable `fnc` would behave — e.g. validating
 # non-renderer hotfixes before publishing — without touching the npm install.
 alias fnc-dev="$HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
+
+# --- fncodex: open a repo in VS Code via `fncode`, then close this terminal ---
+# Forwards its exact args to `fncode` (resolve repo ref -> exec into `code`),
+# and on success exits the shell — closing the terminal window it was typed
+# into. `code` launches VS Code detached, so closing the terminal doesn't kill
+# it. Must be a function, not an alias, so `"$@"` passes through and `exit`
+# runs in the interactive shell. `&& exit` guards it: if `fncode` fails (bad or
+# ambiguous ref, clone error) the shell stays open so the error is visible.
+fncodex() {
+  fncode "$@" && exit
+}
