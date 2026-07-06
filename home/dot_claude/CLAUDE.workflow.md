@@ -40,6 +40,7 @@ Each parallel subagent is a fresh window paying its own **base context** (system
 - **Front-load everything shared; diverge into per-agent slices late.** The identical prefix is the only part that caches across agents.
 - **Tight scope + terse return** on every subagent, so the fan-out actually offloads context instead of relocating a big window and paying to synthesize it back.
 - **Right-size the model** (prose → sonnet, mechanical → haiku) so the duplicated base context is paid at the cheaper tier.
+- **Tier every `agent()` call on both dials — `model` *and* `effort`.** Set them per stage: cheap `model`/`effort: low` on the rote fan-out stages (transform, scan, mechanical migrate), opus/`high`/`max` only on the few genuinely hard stages (verify, judge, design). Omitting `model` inherits the session model (usually opus) — so an unset `model` on a large fan-out silently pays opus × N; set it explicitly to the cheapest tier that clears the bar. Same right-sizing as a hand-dispatched subagent ([`CLAUDE.md`](CLAUDE.md) § "Subagent model selection"), applied inside the script.
 
 ## Documented unknown — quota vs cache-reads
 

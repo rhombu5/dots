@@ -184,6 +184,12 @@ When I ask how hard / how big / how long / how much work / what's the effort / h
 
 To make the shape concrete: "rename a function across 30 files" is an hour solo, ~5 turns + 10 minutes with you. "Refactor the renderer to be per-monitor" is a day solo, ~40 turns + 3–4 hours with you once review time stacks up.
 
+## Be as token-efficient as possible
+
+**A standing default, not a per-request ask.** One of the biggest levers is *choosing to delegate work you'd otherwise do inline on the main (opus) thread* — so it can run on a cheaper model and/or lower reasoning effort, and so its context stays out of the main window. The trigger to spawn a subagent isn't only "this is big" or "this parallelizes"; it's also **"a cheaper tier could do this slice at equal quality."** When you spot such a slice, hand it off *even if you weren't otherwise going to* — the model/effort saving is itself the reason to delegate. Don't pay for expensive work you don't need, and don't pay opus rates for work sonnet/haiku clears. (Fan-out / `Workflow` cost structure and per-stage tiering: [`CLAUDE.workflow.md`](CLAUDE.workflow.md).)
+
+Once you've decided to delegate, the tiering mechanics are in the next section.
+
 ## Subagent model selection
 
 **Right-size the model to the task.** Opus is the default for the main thread, but if a smaller model can do the work at the same or better quality with lower token cost, dispatch a subagent on that model. Don't burn opus on work a smaller model handles equivalently.
@@ -192,6 +198,7 @@ Concrete cases:
 
 - **Prose-shaped work** — rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md` itself, comparing wordings → **always dispatch a sonnet subagent**, unless I've explicitly told you otherwise this turn. Sonnet's prose is reliably tighter than opus's. The escape hatch is an instruction like "do this on opus" or "don't delegate this one" — *not* the request being addressed to me, which by itself isn't an instruction about model choice.
 - **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; if quality drops, escalate.
+- **Reasoning effort is a second dial, orthogonal to model.** Turn it down for rote mechanical stages and reserve high/max for genuinely hard verify / judge / design steps. Effort multiplies output tokens (the `~5×` kind), so a low-effort haiku on a rote task is the cheapest cell in the grid.
 
 Substance, structure, and tricky design decisions stay on **opus** — only the *execution* gets handed off. Pattern: opus decides *what*, subagent does the *how*.
 
