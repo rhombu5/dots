@@ -25,3 +25,11 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** His "yes?" read as inviting confirmation, and his prior messages had been decisions/answers, so I treated this as another decision to record rather than a claim to verify. I calibrated scrutiny to his phrasing.
 - **Correction:** "everything i said was a proposal, they all need to be thought over. is it a problem just for that one because i said 'yes?' instead of 'agreed?'?"
 - **Should have:** Pressure-tested the proposal on its merits — regardless of phrasing or who authored it — surfaced the erasure flaw myself, applied at most `claude-ready` and *only* after that verification, and left `signoff` for his explicit go. The "?"/tone is irrelevant: correctness sets the scrutiny level, not the user's framing or confidence.
+
+## 2026-07-06 — over-explaining
+
+- **Situation:** On #34, Tom prompted verbatim: "oh i see why the under-the-hood won't work. tell me exactly what we're trying to add to di."
+- **What I did:** Answered the "what are we adding to di" part, but *also* wrote two+ paragraphs re-explaining **why** the under-the-hood approach fails (the three-way teardown, the type-erasure-inside-the-generic argument) — re-deriving at length the exact point he'd just told me he already had.
+- **Why I thought it was warranted:** I read "tell me exactly what we're trying to add to di" as license for a full technical exposition, and — coming right after I'd rubber-stamped #34 — I wanted to demonstrate I now grasped the flaw. I treated his "i see why" as backdrop rather than as an explicit signal to *skip* the why.
+- **Correction:** "i had prompted, verbatim: 'oh i see why the under-the-hood won't work' and you responded with two whole paragraphs explaining to me why under-the-hood won't work."
+- **Should have:** Answered only the narrow question — the concrete `addFactory` registration, "di needs nothing new; the work is the lowering site" — in a few lines. "I see why X" is a hard signal that X is settled: at most one clause acknowledging it, never a re-derivation. Don't re-explain what the user just said he already knows, and don't over-explain to prove comprehension.
