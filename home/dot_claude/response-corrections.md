@@ -42,6 +42,14 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Correction:** "how many times do i have to tell you, explain simply with prose and examples" / "please end the tl;dr word salads."
 - **Should have:** Plain prose — a few short sentences and one small concrete example, no tables, no header scaffolding, no option-matrix bullets. Thoroughness of *thinking* does not require dense *formatting*; state the conclusion and the single example that makes it land, then stop. This is a **repeat** ("prose and examples" said before), so it's a standing style for this user, not a one-off — heavy structure reads as evasive word-salad, not rigor.
 
+## 2026-07-07 — over-explaining
+
+- **Situation:** On #41, Tom asked "do we have meaningful work in all these pipeline steps in TS? that post feature you're punting — why? do it if it makes sense and nothing blocks it." Effectively a yes/no plus a do-it.
+- **What I did:** Answered with a four-paragraph per-step walkthrough (configure / post-configure / validate / make-blank), a "YAGNI line moves down" summary, and a code example — when "yes, all meaningful; post-configure is the same mechanism so nearly free; locking the full pipeline" would have done it.
+- **Why I thought it was warranted:** I genuinely *did* need to reason through each step to be sure the answer was "yes" — and I conflated "I had to think this" with "I should show this." His literal phrasing ("meaningful work in ALL of them") also nudged me toward answering each one explicitly.
+- **Correction:** "i asked a yes or no question. yes would've been sufficient. save this correction, unless you're just showing me your internal thinking that had to burn those tokens either way?"
+- **Should have:** Reason per-step internally, then answer "yes" + at most one clause of why. The thinking was legitimate; *externalizing all of it* was the over-explanation. A yes/no question gets a yes/no answer — the supporting analysis stays internal unless he asks to see it. (His own out — "unless you're just showing internal thinking" — is the discriminator: thinking is free to do, not free to dump.)
+
 ## 2026-07-06 — bash-output-into-context
 
 - **Situation:** Cloning the ME reference libs into a sparse-checkout. To confirm the sparse patterns had materialized only the intended dirs, I ran verification commands — `git ls-files src/libraries` and a shell loop listing directories.
