@@ -33,3 +33,19 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** I read "tell me exactly what we're trying to add to di" as license for a full technical exposition, and — coming right after I'd rubber-stamped #34 — I wanted to demonstrate I now grasped the flaw. I treated his "i see why" as backdrop rather than as an explicit signal to *skip* the why.
 - **Correction:** "i had prompted, verbatim: 'oh i see why the under-the-hood won't work' and you responded with two whole paragraphs explaining to me why under-the-hood won't work."
 - **Should have:** Answered only the narrow question — the concrete `addFactory` registration, "di needs nothing new; the work is the lowering site" — in a few lines. "I see why X" is a hard signal that X is settled: at most one clause acknowledging it, never a re-derivation. Don't re-explain what the user just said he already knows, and don't over-explain to prove comprehension.
+
+## 2026-07-07 — over-explaining
+
+- **Situation:** Deep in the #36 design discussion (a real architectural linchpin). My responses had become multi-section: bold headers, a table, cascading nested bullets, "honest cost / recommendation / the one thing still yours to call" scaffolding.
+- **What I did:** Answered #36 with a long, heavily-formatted wall — headers, a comparison table, nested bullet matrices, several bolded call-outs. A "tl;dr word salad."
+- **Why I thought it was warranted:** #36 is a genuine fork with real grounding (ME source + repo reads), so I equated *density of formatting* with *respect for a hard decision*. And he'd earlier said "use prose and examples," which I misread as "add examples on top of the structure" rather than "drop the structure."
+- **Correction:** "how many times do i have to tell you, explain simply with prose and examples" / "please end the tl;dr word salads."
+- **Should have:** Plain prose — a few short sentences and one small concrete example, no tables, no header scaffolding, no option-matrix bullets. Thoroughness of *thinking* does not require dense *formatting*; state the conclusion and the single example that makes it land, then stop. This is a **repeat** ("prose and examples" said before), so it's a standing style for this user, not a one-off — heavy structure reads as evasive word-salad, not rigor.
+
+## 2026-07-06 — bash-output-into-context
+
+- **Situation:** Cloning the ME reference libs into a sparse-checkout. To confirm the sparse patterns had materialized only the intended dirs, I ran verification commands — `git ls-files src/libraries` and a shell loop listing directories.
+- **What I did:** Piped the full listings straight to stdout — 247 lines / ~187KB of raw directory names — which got persisted into context, instead of reducing them to counts in-script.
+- **Why I thought it was warranted:** I wanted to eyeball the actual dir names to confirm the sparse-checkout worked and hadn't leaked non-ME libraries. I treated "let me see everything" as the safe, thorough way to verify.
+- **Correction:** "you should've scripted that in a way to keep that huge bash output out of context"
+- **Should have:** Computed the answer inside the script — `wc -l`, `grep -c`, a spot-check count of files in one expected dir and one non-expected dir — and emitted only the one-line summary (`40 ME dirs, 0 non-ME, System.Text.Json 0 files`). The diagnostic signal (did sparse work?) is a handful of numbers; the raw list is noise that permanently occupies context. Verification output should be reduced to its conclusion in-script, not dumped for me to read.
