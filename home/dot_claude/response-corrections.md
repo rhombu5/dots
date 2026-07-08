@@ -57,3 +57,11 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** I wanted to eyeball the actual dir names to confirm the sparse-checkout worked and hadn't leaked non-ME libraries. I treated "let me see everything" as the safe, thorough way to verify.
 - **Correction:** "you should've scripted that in a way to keep that huge bash output out of context"
 - **Should have:** Computed the answer inside the script — `wc -l`, `grep -c`, a spot-check count of files in one expected dir and one non-expected dir — and emitted only the one-line summary (`40 ME dirs, 0 non-ME, System.Text.Json 0 files`). The diagnostic signal (did sparse work?) is a handful of numbers; the raw list is noise that permanently occupies context. Verification output should be reduced to its conclusion in-script, not dumped for me to read.
+
+## 2026-07-08 — over-explaining
+
+- **Situation:** Tom asked a direct yes/no clarifying question mid-task, during a multi-round subagent correction sequence for a plan-doc GitHub Action (racing against auto-merge, a design pivot, uncommitted work discovered mid-flight): "is the agent writing the gh action?"
+- **What I did:** Answered "Yes —" but continued with two more sentences restating the division of labor (what the subagent does vs. what I do) and a status recap (corrections sent, waiting on notification) that Tom already had from the preceding messages.
+- **Why I thought it was warranted:** The question landed right after a confusing stretch of the task, so I read it as an implicit request for reassurance about the whole process rather than a closed factual check, and used it as an opening to re-ground the division of labor.
+- **Correction:** "a yes would've been suffecient there"
+- **Should have:** Answered "Yes." — or "Yes, the subagent is writing it." at most — and stopped. A direct yes/no question gets a yes/no answer regardless of how confusing the surrounding task has been; situational complexity doesn't license re-explaining context the user already has. This is the **fourth** over-explaining entry — pattern is well past the ~3 synthesis threshold.
