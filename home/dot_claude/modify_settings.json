@@ -2,6 +2,8 @@
 # chezmoi modify_ script: emits the desired ~/.claude/settings.json.
 # Starts from the stable base snapshot and overrides only the churny,
 # TUI-written "unstable" keys with whatever the live file currently holds.
+# Any key present live but absent from base is assumed volatile too (e.g.
+# a new app-written flag) and passed through as-is, rather than dropped.
 # stdin = current live target (piped by chezmoi); may be empty on first apply.
 set -euo pipefail
 
@@ -13,9 +15,9 @@ jq -n --indent 2 \
   '
     ($base[0]) as $b
     | (($live[0]) // {}) as $l
-    | $b
-    | reduce ["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout"][] as $k (
-        .;
+    | (reduce ["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout"][] as $k (
+        $b;
         if ($l | has($k)) and ($l[$k] != null) then .[$k] = $l[$k] else . end
-      )
+      )) as $merged
+    | $merged + ($l | with_entries(select(.key as $k | ($b | has($k)) | not)))
   '
