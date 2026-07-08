@@ -2,20 +2,36 @@
 # chezmoi modify_ script: emits the desired ~/.claude/settings.json.
 # Starts from the stable base snapshot and overrides only the churny,
 # TUI-written "unstable" keys with whatever the live file currently holds.
-# Any key present live but absent from base is assumed volatile too (e.g.
-# a new app-written flag) and passed through as-is, rather than dropped.
+# Any other key present live but absent from base is assumed volatile too
+# (e.g. a new app-written flag) and passed through as-is, with a
+# non-blocking warning to stderr so it's visible instead of silent.
 # stdin = current live target (piped by chezmoi); may be empty on first apply.
 set -euo pipefail
 
 base="${HOME}/.claude/settings.base.json"
+live_json="$(cat)"
+[[ -n "$live_json" ]] || live_json='{}'
+
+unstable_keys='["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout"]'
+
+passthrough_keys="$(jq -n -r --slurpfile base "$base" --argjson live "$live_json" --argjson unstable "$unstable_keys" '
+    ($base[0]) as $b
+    | ($live | keys) - ($b | keys) - $unstable
+    | .[]
+  ')"
+
+if [[ -n "$passthrough_keys" ]]; then
+  echo "modify_settings.json: passing through key(s) not in settings.base.json: $(tr '\n' ' ' <<<"$passthrough_keys")" >&2
+fi
 
 jq -n --indent 2 \
   --slurpfile base "$base" \
-  --slurpfile live /dev/stdin \
+  --argjson live "$live_json" \
+  --argjson unstable "$unstable_keys" \
   '
     ($base[0]) as $b
-    | (($live[0]) // {}) as $l
-    | (reduce ["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout"][] as $k (
+    | $live as $l
+    | (reduce $unstable[] as $k (
         $b;
         if ($l | has($k)) and ($l[$k] != null) then .[$k] = $l[$k] else . end
       )) as $merged
