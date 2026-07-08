@@ -144,6 +144,12 @@ The single exception: if running in parallel would make **total wall-clock time 
 
 The trigger isn't "is this big enough to need parallelism" — it's "is there any independent work I could be doing at the same time?" If yes, do it. Apply this in *planning*, not just at dispatch time: when laying out the next several steps, identify the parallelism shape first — what can run concurrently, what truly has to wait. Then fire the concurrent set in one message.
 
+## Default to ultracode for non-trivial coding tasks
+
+Treat non-trivial coding work as a standing opt-in to multi-agent orchestration (the `Workflow` tool, i.e. "ultracode") — don't wait for me to type the keyword each time. Trivial edits (single-file, mechanical, ≤~10 LOC — the same bar as the worktree trivial-edit carve-out above) don't need it; use plain tool calls or a lone subagent instead. Load [`CLAUDE.workflow.md`](CLAUDE.workflow.md) first, same as any other `Workflow` dispatch, for the cache/fan-out cost model.
+
+If ultracode feels wrong for a specific task — the work doesn't decompose into independent slices, a single focused agent would clearly beat orchestration overhead, or something else makes it a bad fit — say so out loud and proceed as you see fit instead. This is a default, not a mandate; don't force orchestration onto work that doesn't have the shape for it.
+
 ## Run `/getitdone` when you think you're done
 
 Whenever you reach a point where you'd otherwise report a task as finished, **run `/getitdone` first**. It handles the obvious cleanup itself (commit/push, dots/arch-setup parity, orphan check) and reports only what's actually stuck — don't substitute your own end-of-task summary.
