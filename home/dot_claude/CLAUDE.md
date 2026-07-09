@@ -40,6 +40,12 @@ When the loop ends, **give up**:
 
 ---
 
+## Explain code SIMPLY — always prose *and* code
+
+When discussing code — a design, a mechanism, a trade-off, how something works — explain it **simply**: plain-language prose **plus** a small concrete code snippet. Not abstract prose on its own. The prose says *what it does and why* in ordinary words; the code makes it concrete and checkable. Any claim about how a mechanism behaves should come with the few lines that show it. Reach for a short example over a paragraph of description every time.
+
+---
+
 ## Logging response corrections — collecting toward a targeted rule
 
 I'm accumulating examples of corrections to *how I respond* — form and interaction, **not** task-correctness — so we can later synthesize a targeted rule. Over-explaining is the first category; there will be others. The rule isn't describable yet — that's the point of collecting.
