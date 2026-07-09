@@ -99,6 +99,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 - `hypr-layout-toggle` — flip active workspace between dwindle and scrolling (per-workspace persistent state)
 - `hypr-panel-toggle` — toggle waybar visibility; recovers from crash or detached-surfaces lock/unlock state
 - `waybar-healthcheck` — probe waybar's layer surfaces; used by hypridle's `unlock_cmd` to self-heal post-unlock
+- `waybar-mem-sampler` — per-PID memory snapshot of the waybar.service cgroup → `~/.local/state/waybar-mem/samples.tsv` (leak attribution; driven by `waybar-mem-sampler.timer`)
 - `hypr-plugins-on-login` — load Hyprland plugins + their post-plugins.d configs (idempotent)
 - `if-tilemode`, `if-scrollmode` — conditional dispatchers (only run if active workspace matches layout)
 - `validate-hypr-binds` — parse `binds.conf` + fragments for duplicates and unknown dispatchers (chezmoi pre-apply hook + CI)
@@ -128,6 +129,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 | `hyprmural.service` | Per-workspace wallpaper layer (`Restart=always`, journald logging) |
 | `hypridle.service` | Upstream unit + drop-in raising `Restart=on-failure` → `Restart=always` (silent exits observed; idle daemon must not stay dead) |
 | `waybar.service` | Upstream unit + drop-ins (`ExecStartPre=sleep 1.5`, `Restart=always`, flap-cap; `MemoryMax=512M` + `MemorySwapMax=256M` + `OOMPolicy=kill` after the 2026-07 leak incidents) — auto-respawn on GdkMonitor UAF crashes (Waybar #3530/#4361) and on OOM-kill at the cap |
+| `waybar-mem-sampler.service` + `.timer` | Every 10 min: per-PID memory snapshot of the waybar.service cgroup (leak attribution; retire once the leaker is identified) |
 | `cliphist.service` | Upstream unit (`wl-paste --watch cliphist store`) — clipboard history |
 | `swayosd-server.service` | OSD server for volume / brightness / capslock keys |
 | `iio-hyprland.service` | IIO sensor → Hyprland transform daemon (auto-rotate) |

@@ -1,0 +1,13 @@
+# One-shot per-PID memory snapshot of the waybar.service cgroup.
+# Companion to waybar.service.d/memory-cap.conf — records the ramp that
+# attributes the leak (waybar vs glycin vs swaync-client). See the
+# sampler script header for the incident history and retirement note.
+#
+# No ConditionEnvironment=WAYLAND_DISPLAY: the script only reads /sys
+# and /proc, and exits 0 by itself when waybar.service isn't running.
+[Unit]
+Description=Sample waybar.service per-PID memory (leak attribution)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/waybar-mem-sampler

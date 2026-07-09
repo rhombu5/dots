@@ -1,0 +1,12 @@
+# Drives waybar-mem-sampler.service every 10 minutes. Temporary
+# diagnostic — disable once the waybar leak is attributed (see the
+# sampler script header).
+[Unit]
+Description=Sample waybar.service per-PID memory every 10 min
+
+[Timer]
+OnCalendar=*:0/10
+# No Persistent= — a sample missed while logged out is meaningless.
+
+[Install]
+WantedBy=timers.target

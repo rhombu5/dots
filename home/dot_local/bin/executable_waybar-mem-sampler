@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# waybar-mem-sampler — append a per-PID memory snapshot of the
+# waybar.service cgroup to a TSV, for leak attribution.
+#
+# Why: waybar.service leaked multi-GB twice (systemd-oomd kill
+# 2026-07-07 01:53 at 10.1G swap; manual restart 2026-07-09 00:20 after
+# ~6G RSS / 5.6G swap zombied the session). Which process inside the
+# cgroup leaks is unconfirmed — candidates are waybar itself
+# (config/CSS reload churn from hyprmural/matugen), the glycin bwrap
+# icon loaders, and the two `swaync-client -swb` module processes. This
+# sampler records the per-PID ramp so the next cap trip (see
+# waybar.service.d/memory-cap.conf) attributes the growth and gives a
+# rate.
+#
+# Driven by waybar-mem-sampler.timer (every 10 min). Output:
+#   ~/.local/state/waybar-mem/samples.tsv
+# Columns: ts, cgroup memory.current/swap.current (bytes), then pid,
+# comm, VmRSS, VmSwap (kB) — one row per PID per sample, cgroup totals
+# repeated on each row so a grep of one timestamp is self-contained.
+#
+# Retire (systemctl --user disable --now waybar-mem-sampler.timer) once
+# the leaker is identified.
+set -euo pipefail
+
+cg=$(systemctl --user show waybar.service -p ControlGroup --value)
+[[ -n "$cg" ]] || exit 0
+cgdir="/sys/fs/cgroup${cg}"
+[[ -d "$cgdir" ]] || exit 0
+
+out_dir="${XDG_STATE_HOME:-$HOME/.local/state}/waybar-mem"
+out="$out_dir/samples.tsv"
+mkdir -p "$out_dir"
+[[ -f "$out" ]] || printf 'ts\tcgroup_mem_bytes\tcgroup_swap_bytes\tpid\tcomm\trss_kb\tswap_kb\n' > "$out"
+
+ts=$(date -Is)
+mem=$(cat "$cgdir/memory.current" 2>/dev/null || echo 0)
+swap=$(cat "$cgdir/memory.swap.current" 2>/dev/null || echo 0)
+
+while read -r pid; do
+    # A PID can exit between the cgroup.procs listing and the status read.
+    status="/proc/$pid/status"
+    [[ -r "$status" ]] || continue
+    comm=$(awk '/^Name:/  {print $2; exit}' "$status")
+    rss=$(awk '/^VmRSS:/  {print $2; exit}' "$status")
+    swp=$(awk '/^VmSwap:/ {print $2; exit}' "$status")
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$ts" "$mem" "$swap" "$pid" "${comm:-?}" "${rss:-0}" "${swp:-0}" >> "$out"
+done < "$cgdir/cgroup.procs"
