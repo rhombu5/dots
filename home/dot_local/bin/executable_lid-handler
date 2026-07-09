@@ -59,6 +59,11 @@ restart_waybar() {
 
 case $action in
     close)
+        # Record clamshell truth where `hyprctl reload` re-reads it
+        # (runtime-monitors.conf via hypr-lid-sync), then apply immediately
+        # via keyword — reload-persistence and the instant disable are
+        # separate mechanisms.
+        "$HOME/.local/bin/hypr-lid-sync"
         # With an external attached we stay awake (clamshell) regardless of
         # power, so disable the internal panel: Hyprland migrates workspaces +
         # toplevels off eDP-1 and confines the cursor to the remaining outputs.
@@ -73,8 +78,10 @@ case $action in
         /usr/local/bin/headless-hibernate
         ;;
     open)
-        # Reload re-applies monitors.conf, bringing eDP-1 back at its
+        # Drop the runtime-monitors.conf disable override first, then
+        # reload: re-applies monitors.conf, bringing eDP-1 back at its
         # configured position/scale and re-binding workspaces 6-9.
+        "$HOME/.local/bin/hypr-lid-sync"
         hyprctl reload
         sleep 0.3
         restart_waybar

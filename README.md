@@ -62,6 +62,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
   - `hyprlock.conf` — lock screen
   - `post-plugins.d/{hyprgrass,hyprspace}.conf` — plugin-specific config
   - `runtime-layouts.conf` — written by `hypr-layout-toggle`, persists per-workspace dwindle/scrolling state
+  - `runtime-monitors.conf` — written by `hypr-lid-sync`, persists the clamshell eDP-1 disable across `hyprctl reload`
 - **`waybar/`** — status bar (`config.jsonc`, `style.css`, custom `modules/network.sh` and `modules/theme-toggle.sh`)
 - **`swaync/`** — notification centre (`config.json`, matugen-themed `style.css`)
 - **`fuzzel/`** — application launcher (`fuzzel.ini`)
@@ -104,6 +105,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 
 **Hardware / 2-in-1**
 - `lid-handler` — custom lid-close behaviour (hibernate, or disable eDP-1 on AC + external monitor)
+- `hypr-lid-sync` — regenerate `runtime-monitors.conf` from lid + external-monitor truth (called by `lid-handler` and `hypr-plugins-on-login`)
 - `tablet-mode-toggle` — flip kbd / touchpad / OSK for tablet folding
 - `tablet-mode-watcher` — poll IIO hinge-angle sensor; calls toggle at 180° crossings (systemd user service)
 - `display-watchdog` — Hyprland blackout-recovery daemon (extracted-repo candidate — see `project_display_watchdog.md`)

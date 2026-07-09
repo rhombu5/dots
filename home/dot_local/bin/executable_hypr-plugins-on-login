@@ -29,7 +29,22 @@
 
 set -u
 
-if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || ! command -v hyprpm >/dev/null; then
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    exit 0
+fi
+
+# Phase 0: sync runtime-monitors.conf to current lid truth BEFORE any
+# reload below. Phase 2's `hyprpm reload` triggers a full config
+# re-parse; this sync is what makes that re-parse (and every later
+# `hyprctl reload`, e.g. a mid-session reload keybind) land on the
+# correct clamshell state instead of resurrecting eDP-1 from
+# monitors.conf — observed 2026-07-09 as a phantom eDP-1 doubling
+# waybar bars + hyprmural surfaces while the lid had been closed for a
+# week. See hypr-lid-sync for the mechanism.
+"$HOME/.local/bin/hypr-lid-sync" || true
+
+# The plugin phases below need hyprpm; phase 0 above doesn't.
+if ! command -v hyprpm >/dev/null; then
     exit 0
 fi
 
@@ -81,12 +96,12 @@ for entry in "${plugins[@]}"; do
     fi
 done
 
-# Phase 4: re-apply lid-closed clamshell disable. Phase 2's `hyprpm reload`
-# triggers a full `hyprctl reload`, which re-parses monitors.conf and wipes
-# any `monitor=eDP-1,disable` keyword override previously set by exec.conf
-# or by lid-handler close. Re-evaluate AC + external + lid-closed here, AFTER
-# the last reload of the session-start path, so a boot-with-lid-closed lands
-# in the same clamshell state as closing the lid in-session.
+# Phase 4: apply lid-closed clamshell disable immediately. Phase 0's sync
+# means phase 2's reload already re-applied the correct eDP-1 state from
+# runtime-monitors.conf — this keyword pass is belt-and-braces for paths
+# where no reload fired after the sync (empty plugin list, swallowed
+# hyprpm errors) and for the very first parse of the session, which read
+# whatever runtime-monitors.conf the PREVIOUS session left behind.
 #
 # Inline (rather than calling lid-handler close) so the battery/no-external
 # else-branch (systemctl hibernate) cannot fire from a config reload — that
