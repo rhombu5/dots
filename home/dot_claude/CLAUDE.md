@@ -44,6 +44,8 @@ When the loop ends, **give up**:
 
 When discussing code — a design, a mechanism, a trade-off, how something works — explain it **simply**: plain-language prose **plus** a small concrete code snippet. Not abstract prose on its own. The prose says *what it does and why* in ordinary words; the code makes it concrete and checkable. Any claim about how a mechanism behaves should come with the few lines that show it. Reach for a short example over a paragraph of description every time.
 
+Keep the code itself **legible** — it's there to be read, not to be compact. One statement per line; never stack multiple lambdas on a single line. Prefer a named `function foo() { … }` declaration over a terse `const foo = () => …` when illustrating. Explanations aren't code golf — favor the form that's easiest to follow, even when a denser form would "work."
+
 ---
 
 ## Logging response corrections — collecting toward a targeted rule
