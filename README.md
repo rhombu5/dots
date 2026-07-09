@@ -127,7 +127,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 | `tablet-mode-watcher.service` | Hinge-angle polling daemon; restarts on failure |
 | `hyprmural.service` | Per-workspace wallpaper layer (`Restart=always`, journald logging) |
 | `hypridle.service` | Upstream unit + drop-in raising `Restart=on-failure` → `Restart=always` (silent exits observed; idle daemon must not stay dead) |
-| `waybar.service` | Upstream unit + drop-in (`ExecStartPre=sleep 1.5`, `Restart=always`, flap-cap) — auto-respawn on the recurring GdkMonitor UAF crashes (Waybar #3530/#4361) |
+| `waybar.service` | Upstream unit + drop-ins (`ExecStartPre=sleep 1.5`, `Restart=always`, flap-cap; `MemoryMax=512M` + `MemorySwapMax=256M` + `OOMPolicy=kill` after the 2026-07 leak incidents) — auto-respawn on GdkMonitor UAF crashes (Waybar #3530/#4361) and on OOM-kill at the cap |
 | `cliphist.service` | Upstream unit (`wl-paste --watch cliphist store`) — clipboard history |
 | `swayosd-server.service` | OSD server for volume / brightness / capslock keys |
 | `iio-hyprland.service` | IIO sensor → Hyprland transform daemon (auto-rotate) |
