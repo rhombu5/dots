@@ -9,6 +9,29 @@ Prefer the bracket form over the generic form:
 
 The bracket form is house style for both readonly and mutable arrays. Apply it consistently — new code, edits, and reviews.
 
+## Interface naming — `I`-prefix service interfaces, not DTOs
+
+A **service** interface — one describing behavior, a contract with methods that something implements — gets an `I` prefix. A **DTO** interface — a plain data shape, a bag of fields with no behavior — does not.
+
+```ts
+// YES — service interface (behavior/contract): I-prefixed
+interface IClock {
+  now(): number;
+}
+interface IUserRepository {
+  findById(id: string): Promise<User>;
+}
+
+// YES — DTO (plain data shape): no prefix
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+```
+
+The discriminator is behavior vs. data: if the interface is something you *implement* (methods, a capability), prefix it; if it's just the *shape* of a value passed around, leave it bare.
+
 ## No lambda types — always `Func`
 
 **Never write a bare arrow/lambda function *type*.** Use `Func<Args, Return>` from
