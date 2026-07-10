@@ -9,6 +9,37 @@ Prefer the bracket form over the generic form:
 
 The bracket form is house style for both readonly and mutable arrays. Apply it consistently — new code, edits, and reviews.
 
+## File naming — single-type files take the type's name
+
+When a `.ts` file's exports comprise **exactly one declaration and that declaration is a type**
+(`class`, `interface`, `enum`, or `type` alias), name the file identically to that type —
+PascalCase, the exact same string. Files exporting a single function/const (not a type),
+files with multiple exports, and barrels (`index.ts`) keep their descriptive kebab-case names —
+this rule doesn't touch them.
+
+```ts
+// NO
+// application-lifetime.ts
+export class ApplicationLifetime { … }
+
+// YES
+// ApplicationLifetime.ts
+export class ApplicationLifetime { … }
+
+// unaffected — single export, but not a type: kebab-case stays
+// resolve-condition-targets.ts
+export function resolveConditionTargets(target: unknown) { … }
+
+// unaffected — multiple exports: kebab-case stays
+// service-manifest.ts
+export class ServiceManifest { … }
+export interface ServiceManifestOptions { … }
+```
+
+The discriminator is **exactly-one-export and that export is a type** — not "the file is about a
+class," not "there's a type in here somewhere." A file with a type plus a helper function, or two
+types, stays kebab-case.
+
 ## Interface naming — `I`-prefix service interfaces, not DTOs
 
 A **service** interface — one describing behavior, a contract with methods that something implements — gets an `I` prefix. A **DTO** interface — a plain data shape, a bag of fields with no behavior — does not.
