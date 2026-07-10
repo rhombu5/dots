@@ -1,11 +1,13 @@
 ---
 name: done
-description: Completeness check that surfaces everything not yet finished or landed, regardless of which session created it. Confirms work is committed, pushed, PRs merged, CI green, orphans cleared, and system state in parity. Trigger when the user asks any variant of "are we done?", "is it finished?", "all wrapped up?", "anything left?", "ready to stop?", "good to go?", "can I close this?", "all set?", "loose ends?" — or otherwise signals they're checking whether the session can end.
+description: Completeness check that surfaces everything from this session's work not yet finished or landed. Confirms the session's work is committed, pushed, PRs merged, CI green, orphans cleared, and system state in parity. Trigger when the user asks any variant of "are we done?", "is it finished?", "all wrapped up?", "anything left?", "ready to stop?", "good to go?", "can I close this?", "all set?", "loose ends?" — or otherwise signals they're checking whether the session can end.
 ---
 
 # Done?
 
 Walk this checklist before stopping. For each item: **check, then report status** (✓ clear or N/A / ✗ outstanding / ⚠ needs a look) with a one-line note. N/A items get the check icon — they're not a problem, so don't flag them with a warning. Don't fix anything silently — surface every ✗ or ⚠ for the user to decide.
+
+**Scope: this session only.** Every item below is evaluated against work the *current session* actually did — files touched, commits made, repos worked in, system changes applied. Pre-existing or unrelated state (uncommitted changes that pre-date the session, unpushed commits from other work, dots drift you didn't cause, PRs you didn't open or advance) is **out of scope: omit it from the report entirely** — don't list it as ⚠, don't fold it into a "while I'm here" note. This is a session-wrap checkpoint, not a whole-machine audit; `/dots` owns the machine-wide parity view. If it's genuinely unclear whether something is this session's doing, surface it as a question rather than a finding.
 
 ## 1. Task complete
 
@@ -44,21 +46,21 @@ Don't invent gates that don't exist. Don't run a full repo-wide suite when only 
 
 ## 6. Git: committed
 
-- `git status` in every repo with outstanding work — clean working tree?
-- If there are stray changes: are they yours, or pre-existing? Don't commit pre-existing without asking.
+- `git status` in every repo this session worked in — clean working tree?
+- If there are stray changes: are they from this session, or pre-existing? Pre-existing changes are out of scope — omit them (and certainly never commit them).
 - Commits atomic (one logical change each)? If multiple tasks were batched into one commit, flag it.
 
 ## 7. Git: pushed
 
-- `git log @{u}..` in every repo with commits — empty?
+- `git log @{u}..` in every repo this session committed to — empty? Unpushed commits that pre-date the session are out of scope.
 - If a feature spans multiple commits, all of them landed before pushing? (Per user prefs: push on feature completion, not partial.)
 - Any branch that should have a PR but doesn't?
 
 ## 8. Open PRs
 
-- Any open PRs — including drafts? A draft PR implies unfinished work. A thing cannot be done while a PR is open.
-- `gh pr list --state open` to check. Any open PR (draft or otherwise) is ✗ outstanding until merged or deliberately closed.
-- ✓ only when all PRs that should land are merged (or explicitly closed as won't-fix).
+- Any open PRs this session created or advanced — including drafts? A draft PR implies unfinished work. A thing cannot be done while a PR is open.
+- `gh pr list --state open` to check, then filter to this session's PRs — open PRs from other work don't belong in the report.
+- Any in-scope open PR (draft or otherwise) is ✗ outstanding until merged or deliberately closed. ✓ only when all of them are merged (or explicitly closed as won't-fix).
 
 ## 9. CI green
 
@@ -78,7 +80,7 @@ Don't invent gates that don't exist. Don't run a full repo-wide suite when only 
 
 ## 12. System parity (Linux machines only)
 
-For every system change, all three states must agree:
+For every system change *made this session*, all three states must agree (drift caused by other work is `/dots`'s job, not this checklist's):
 
 - **Live system** — change is applied and working.
 - **`dots`** — if it's a user-config / chezmoi-managed file, the change is in `~/src/dots@rhombu5/` and committed + pushed.
@@ -86,9 +88,9 @@ For every system change, all three states must agree:
 
 Verify with:
 
-- `chezmoi diff` — empty output means dots is in sync with live.
-- `git status` + `git log @{u}..` in both `dots` and `arch-setup`.
-- For packages: spot-check that anything you `pacman -S`'d appears in the arch-setup package list.
+- `chezmoi diff` — filter the output to files this session touched; drift elsewhere is out of scope.
+- `git status` + `git log @{u}..` in both `dots` and `arch-setup` — again scoped to this session's changes.
+- For packages: spot-check that anything you `pacman -S`'d this session appears in the arch-setup package list.
 
 ✓ = N/A on non-Linux.
 

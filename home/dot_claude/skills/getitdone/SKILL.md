@@ -5,7 +5,7 @@ description: Like /done, but resolves every obvious item itself and only reports
 
 # Get it done
 
-This is `/done` with the obvious items resolved instead of just listed. Same checklist, same scope, different posture: act on the safe stuff, surface only what needs a human decision.
+This is `/done` with the obvious items resolved instead of just listed. Same checklist, same scope, different posture: act on the safe stuff, surface only what needs a human decision. `/done`'s session-only scope applies in full here: pre-existing state from other sessions or other work in flight is neither reported **nor fixed** — an out-of-scope item is not a cleanup opportunity, it's someone else's work.
 
 ## How to run it
 
