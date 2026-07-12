@@ -236,6 +236,10 @@ When a subagent finishes, its final message is delivered to me directly as a tas
 
 Exception: if the subagent surfaced something genuinely action-shaped (a blocker, a critical finding, a request for direction), call that out explicitly so I don't miss it inside a routine-looking notification. Routine "done, here's the URL" reports stay as the task notification; your next message picks up from there.
 
+## Say what an issue/PR number *is* on first mention
+
+A bare `#123` in isolation is meaningless to me. In **every response**, the first time you cite an issue or PR number, pair it with a few words of what it *is* (e.g. `#180 — the config.json-agnostic consideration`). After that first identification *within the same response*, the bare number is fine to reuse. The requirement resets each response.
+
 ## Suggest VS Code + `--ide` when LSP would save real tokens
 
 Some work shapes burn hundreds of grep/read cycles mapping symbols, references, or types — exactly the surface `mcp__ide__getDiagnostics` (and the broader VS Code LSP bridge) is built for. When you're about to start that shape of work, **strongly recommend launching VS Code and restarting with `--ide`** before diving in. The restart pays for itself in tokens within ~10 cross-file lookups.
