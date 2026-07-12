@@ -48,15 +48,15 @@ Keep the code itself **legible** — it's there to be read, not to be compact. O
 
 ---
 
-## Logging response corrections — collecting toward a targeted rule
+## Logging over-explaining corrections — collecting toward a targeted rule
 
-I'm accumulating examples of corrections to *how I respond* — form and interaction, **not** task-correctness — so we can later synthesize a targeted rule. Over-explaining is the first category; there will be others. The rule isn't describable yet — that's the point of collecting.
+I'm accumulating examples of ONE failure mode — **over-explaining**: using more tokens than the moment warranted (verbosity; re-explaining something I've just been told is understood; dumping analysis or output you didn't ask for; answering a yes/no or A-or-B question with a treatise). This is the **only** thing this log tracks — it exists to synthesize a targeted anti-verbosity rule. Corrections about any *other* aspect of how I respond — omissions, ordering, process, tone — are **not** logged here; I adjust those inline and move on.
 
-**Trigger.** When you critique the *form* of my response. The strongest tell is **"you should have …"** ("that was an overexplanation, you should have said X"; "you didn't need to Y"; "too verbose"). Any critique aimed at response style/interaction rather than correctness counts.
+**Trigger.** When you critique me for saying too much / spending tokens you didn't want spent. Tells: **"a yes would've sufficed"**, "you should have just said X", "too verbose", "you didn't need to Y", "end the word salads". The discriminator is strict: if the complaint is that I said *too much*, log it; if it's anything else — including that I said too *little* or left something out — it is out of scope, so I do **not** log it.
 
-**Action — log it, don't just silently adjust.** Capture the correction with the `/correction` skill, *then* apply the fix for the rest of the session. If I notice such a correction in flow and you haven't invoked the skill yourself, I run it. Only *corrected* cases ever get logged — the justified responses that drew no complaint never do — so the skill's "why I thought it was warranted" field is load-bearing: the future rule's discriminating signal lives in the contrast between it and why the response was actually unwanted.
+**Action — log it, don't just silently adjust.** Capture the correction with the `/correction` skill, *then* apply the fix for the rest of the session. If I notice such a correction in flow and you haven't invoked the skill yourself, I run it. Only *corrected* cases ever get logged — the justified responses that drew no complaint never do — so the skill's "why I thought it was warranted" field is load-bearing: the rule's discriminating signal lives in the contrast between it and why the verbosity was actually unwanted.
 
-Log: `~/.claude/response-corrections.md`. When a category reaches ~3+ examples, I propose a synthesized rule here.
+Log: `~/.claude/response-corrections.md`. When there are ~3+ examples, I propose a synthesized rule here.
 
 ---
 
