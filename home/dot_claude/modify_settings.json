@@ -12,7 +12,7 @@ base="${HOME}/.claude/settings.base.json"
 live_json="$(cat)"
 [[ -n "$live_json" ]] || live_json='{}'
 
-unstable_keys='["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout"]'
+unstable_keys='["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout","awaySummaryEnabled"]'
 
 passthrough_keys="$(jq -n -r --slurpfile base "$base" --argjson live "$live_json" --argjson unstable "$unstable_keys" '
     ($base[0]) as $b
