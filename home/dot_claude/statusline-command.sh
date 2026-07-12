@@ -939,9 +939,9 @@ ctx_color_for_tokens() {
         (( point > best_at )) && { best_at=$point; best_level=$repeat_level; }
     fi
     case "$best_level" in
-        consider) printf '%s' '\033[33m'       ;;  # yellow
-        plan)     printf '%s' '\033[38;5;208m' ;;  # orange
-        now)      printf '%s' '\033[38;5;202m' ;;  # red-orange
+        consider) printf '%s' '\033[32m'       ;;  # green
+        plan)     printf '%s' '\033[33m'       ;;  # yellow
+        now)      printf '%s' '\033[38;5;208m' ;;  # orange
         urgent)   printf '%s' '\033[31m'       ;;  # red
         *)        printf '%s' '\033[32m'       ;;  # green — below the first tier
     esac
@@ -955,8 +955,8 @@ if [ -n "$model" ]; then
     #   - effort comes from .effort.level (opus 4.x only); reflects live /effort state
     #   - ctx is the raw used% with no label; its COLOR is stepped against fnclaude's
     #     context-notice ladder (ctx_color_for_tokens) rather than fixed % cutoffs, so
-    #     green → yellow → orange → red-orange → red tracks consider/plan/now/urgent —
-    #     the same rungs where fnc starts nudging for a compaction.
+    #     consider→green, plan→yellow, now→orange, urgent→red track the rungs where
+    #     fnc starts nudging for a compaction (below the first tier is green too).
     label_w=${#model}
     [ -n "$effort" ] && label_w=$(( label_w + 1 + ${#effort} ))
     if [ -n "$used" ]; then
