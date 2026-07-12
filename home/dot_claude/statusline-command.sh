@@ -135,7 +135,17 @@ mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
 model=$(jq -r '.model.display_name // ""' <<<"$input")
 effort=$(jq -r '.effort.level // ""' <<<"$input")
 used=$(jq -r '.context_window.used_percentage // empty' <<<"$input")
-exceeds_200k=$(jq -r '.exceeds_200k_tokens // false' <<<"$input")
+# Absolute context size for the latest turn = input + cache_creation + cache_read.
+# This is the exact quantity fnclaude's context-notice monitor watches
+# (turn.input + cacheCreation + cacheRead; see context-monitor.ts), so coloring
+# ctx% off this same number makes the color escalate on precisely the token
+# thresholds where fnc fires its <fnc-notice> compaction nudges. Falls back to
+# total_input_tokens (which mirrors the sum) if the per-field breakdown is absent.
+ctx_tokens=$(jq -r '
+    (.context_window.current_usage // {}) as $u
+    | (($u.input_tokens // 0) + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0)) as $sum
+    | if $sum > 0 then $sum else (.context_window.total_input_tokens // 0) end
+' <<<"$input")
 rl5_used=$(jq   -r '.rate_limits.five_hour.used_percentage // empty' <<<"$input")
 rl5_resets=$(jq -r '.rate_limits.five_hour.resets_at       // empty' <<<"$input")
 rl7_used=$(jq   -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
@@ -858,24 +868,101 @@ for ((i=0; i<n; i++)); do
     fi
 done
 
+# ── fnclaude context-notice ladder → ctx% color ─────────────────────────────
+# fnclaude fires <fnc-notice> compaction nudges when the session's context size
+# crosses a ladder of token thresholds (consider → plan → now → urgent). Color
+# the ctx% readout off that SAME ladder so the number visibly escalates on the
+# exact tokens where fnc starts nudging, instead of fixed 50/80% steps.
+#
+# resolve_notice_ladder mirrors fnclaude's resolveContextNoticeLadder precedence,
+# emitting uniform "TIER <at> <level>" lines plus an optional "REPEAT <every>
+# <level>" line:
+#   1. FNC_CONTEXT_NOTICE_THRESHOLD env       → single 'now' tier
+#   2. [[context.notice_tiers]] + [context.notice_repeat] in config.toml
+#   3. legacy [context] notice_threshold      → single 'now' tier
+#   4. built-in default ladder (150k/200k/250k, repeat 50k urgent)
+FNC_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/fnclaude/config.toml"
+
+resolve_notice_ladder() {
+    local env_raw="${FNC_CONTEXT_NOTICE_THRESHOLD:-}"
+    if [[ "$env_raw" =~ ^[0-9]+$ ]] && (( env_raw > 0 )); then
+        printf 'TIER %s now\n' "$env_raw"; return
+    fi
+    if [ -r "$FNC_CONFIG" ]; then
+        local parsed
+        parsed=$(awk '
+            function flush() {
+                if (sec=="tier"   && at!=""    && lvl!="") print "TIER " at " " lvl
+                if (sec=="repeat" && every!="" && lvl!="") print "REPEAT " every " " lvl
+                sec=""; at=""; every=""; lvl=""
+            }
+            function strval(s) { if (match(s, /"[^"]*"/)) return substr(s, RSTART+1, RLENGTH-2); return "" }
+            { sub(/#.*/, "") }
+            /^[[:space:]]*\[\[context\.notice_tiers\]\][[:space:]]*$/ { flush(); sec="tier";   next }
+            /^[[:space:]]*\[context\.notice_repeat\][[:space:]]*$/    { flush(); sec="repeat"; next }
+            /^[[:space:]]*\[/ { flush(); next }
+            sec=="tier"   && /^[[:space:]]*at[[:space:]]*=/    { v=$0; gsub(/[^0-9]/, "", v); at=v;    next }
+            sec=="tier"   && /^[[:space:]]*level[[:space:]]*=/ { lvl=strval($0);                       next }
+            sec=="repeat" && /^[[:space:]]*every[[:space:]]*=/ { v=$0; gsub(/[^0-9]/, "", v); every=v; next }
+            sec=="repeat" && /^[[:space:]]*level[[:space:]]*=/ { lvl=strval($0);                       next }
+            END { flush() }
+        ' "$FNC_CONFIG")
+        if [[ "$parsed" == *"TIER "* ]]; then printf '%s\n' "$parsed"; return; fi
+        local legacy
+        legacy=$(awk -F= '/^[[:space:]]*notice_threshold[[:space:]]*=/ { v=$2; gsub(/[^0-9]/,"",v); print v; exit }' "$FNC_CONFIG")
+        if [[ "$legacy" =~ ^[0-9]+$ ]] && (( legacy > 0 )); then printf 'TIER %s now\n' "$legacy"; return; fi
+    fi
+    printf 'TIER 150000 consider\nTIER 200000 plan\nTIER 250000 now\nREPEAT 50000 urgent\n'
+}
+
+# ctx_color_for_tokens <tokens> → a literal "\033[..m" escape (stored the same way
+# as the other color vars in this script). Finds the highest ladder point ≤ tokens
+# — finite tiers plus repeat points past the last finite tier — exactly like
+# fnclaude's highestCrossedPoint, then maps that point's level to an escalating hue.
+ctx_color_for_tokens() {
+    local T="$1"
+    [[ "$T" =~ ^[0-9]+$ ]] || T=0
+    local kind a lvl
+    local best_at=-1 best_level="" last_tier_at=0 repeat_every=0 repeat_level=""
+    while read -r kind a lvl; do
+        case "$kind" in
+            TIER)
+                (( a > last_tier_at )) && last_tier_at=$a
+                if (( a <= T )) && (( a > best_at )); then best_at=$a; best_level=$lvl; fi
+                ;;
+            REPEAT) repeat_every=$a; repeat_level=$lvl ;;
+        esac
+    done < <(resolve_notice_ladder)
+    if (( repeat_every > 0 )) && (( T >= last_tier_at + repeat_every )); then
+        local n=$(( (T - last_tier_at) / repeat_every ))
+        local point=$(( last_tier_at + n * repeat_every ))
+        (( point > best_at )) && { best_at=$point; best_level=$repeat_level; }
+    fi
+    case "$best_level" in
+        consider) printf '%s' '\033[33m'       ;;  # yellow
+        plan)     printf '%s' '\033[38;5;208m' ;;  # orange
+        now)      printf '%s' '\033[38;5;202m' ;;  # red-orange
+        urgent)   printf '%s' '\033[31m'       ;;  # red
+        *)        printf '%s' '\033[32m'       ;;  # green — below the first tier
+    esac
+}
+
 # Right-side: model on row 0, ctx% on row 1 — both right-aligned to the terminal edge.
 # SEP is hoisted to the top of the file so the col-2 budgeter can use it.
 
 if [ -n "$model" ]; then
     # Row 0 packs model, effort, and ctx% into one right-aligned label.
     #   - effort comes from .effort.level (opus 4.x only); reflects live /effort state
-    #   - ctx is the raw used% with no label, color-stepped against the same thresholds
-    #     as before (green <50, yellow 50-79, red >=80)
+    #   - ctx is the raw used% with no label; its COLOR is stepped against fnclaude's
+    #     context-notice ladder (ctx_color_for_tokens) rather than fixed % cutoffs, so
+    #     green → yellow → orange → red-orange → red tracks consider/plan/now/urgent —
+    #     the same rungs where fnc starts nudging for a compaction.
     label_w=${#model}
     [ -n "$effort" ] && label_w=$(( label_w + 1 + ${#effort} ))
     if [ -n "$used" ]; then
         used_int=$(printf '%.0f' "$used")
         ctx_text="${used_int}%"
-        if   [ "$exceeds_200k" = "true" ]; then ctx_color="\033[31m"
-        elif (( used_int >= 80 ));         then ctx_color="\033[31m"
-        elif (( used_int >= 50 ));         then ctx_color="\033[33m"
-        else                                    ctx_color="\033[32m"
-        fi
+        ctx_color=$(ctx_color_for_tokens "$ctx_tokens")
         label_w=$(( label_w + 1 + ${#ctx_text} ))
     fi
     target_col=$(( TERM_WIDTH - label_w ))
