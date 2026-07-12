@@ -1,18 +1,18 @@
 ---
 name: correction
-description: Use when Tom corrects *how you responded* — the form/interaction of a reply, not its task-correctness. The tell is "you should have …", "that was an overexplanation", "you didn't need to X", "too verbose", or any critique aimed at response style rather than content. Logs the correction with full context (situation, what you said, why you thought it was warranted, the correction, the fix) to ~/.claude/response-corrections.md, accumulating examples toward a future targeted rule. Also invoked directly as /correction.
+description: Use when Tom corrects me for over-explaining — saying more than the moment warranted (verbosity, re-explaining something already understood, unsolicited analysis or output, a treatise where yes/no or A-or-B would do). The tell is "a yes would've sufficed", "you should have just said X", "too verbose", "you didn't need to Y", "end the word salads". Other response-form critiques (omissions, ordering, process, tone) are out of scope — handled inline, not logged. Logs the correction with full context (situation, what you said, why you thought it was warranted, the correction, the fix) to ~/.claude/response-corrections.md, accumulating examples toward a future anti-verbosity rule. Also invoked directly as /correction.
 ---
 
-# correction — log a response-form correction toward a future rule
+# correction — log an over-explaining correction toward a future rule
 
-Tom is collecting examples of corrections to *how I respond* (form and interaction, **not** task-correctness) so a targeted rule can be synthesized once there's enough coverage. This skill captures one correction — richly enough that a future reader can tell the corrected case apart from the justified responses that never get logged.
+Tom is collecting examples of ONE failure mode — **over-explaining**: using more tokens than the moment warranted (verbosity; re-explaining something already understood; dumping analysis or output he didn't ask for; answering a yes/no or A-or-B question with a treatise). This is the **only** thing the log tracks, toward a targeted anti-verbosity rule — corrections about any *other* aspect of how I respond (omissions, ordering, process, tone) get handled inline, not logged. This skill captures one correction — richly enough that a future reader can tell the corrected case apart from the justified responses that never get logged.
 
 ## When this fires
 
 - Tom explicitly invokes `/correction [text]`.
-- Tom critiques the *form* of a response mid-conversation. Strongest tell: **"you should have …"** ("that was an overexplanation, you should have said X"; "you didn't need to Y"; "too verbose"). When I notice this and he hasn't invoked the skill, I run it myself — then apply the fix for the rest of the session.
+- Tom critiques me for saying too much — spending tokens he didn't want spent — mid-conversation. Tells: **"a yes would've sufficed"**, "you should have just said X", "too verbose", "you didn't need to Y", "end the word salads". When I notice this and he hasn't invoked the skill, I run it myself — then apply the fix for the rest of the session.
 
-**Not** this skill: corrections to task *correctness* (a wrong answer, a real bug, a misread requirement). Those are normal work, not response-form data.
+**Not** this skill: corrections to task *correctness* (a wrong answer, a real bug, a misread requirement), or any critique that isn't "you said too much" — including saying too *little*, omissions, ordering, process, tone. Those are handled inline and moved on from, not logged here.
 
 ## What to capture
 
