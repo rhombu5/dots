@@ -28,6 +28,7 @@
   },
   "effortLevel": "xhigh",
   "promptSuggestionEnabled": false,
+  "awaySummaryEnabled": false,
   "askUserQuestionTimeout": "5m",
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
