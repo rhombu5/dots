@@ -86,6 +86,7 @@ Comprehensive inventory of everything chezmoi applies. System-level pieces
 | `helix/` | Helix editor | `config.toml`; theme `~/.config/helix/themes/matugen.toml` |
 | `nvim/` | Neovim editor | kickstart-modular base (`vim.pack` + Mason); `tsgo` primary TS LSP with dormant `vtsls` fallback (`.nvim-ts-node` sentinel, `<leader>ts` toggle); conform format-on-save; motion-learning plugins (hardtime, precognition, flash, vim-be-good) |
 | `yazi/` | Yazi file manager | Opener rules for helix / xdg-open / nautilus / mpv / imv / zathura |
+| `mpv/` | mpv media player | OpenGL renderer fallback for Hyprland, avoiding the failing Vulkan swapchain |
 | `imv/` | Image viewer | Vim-style bindings |
 | `zathura/` | PDF/document viewer | Sources matugen colour fragment |
 | `remmina/` | RDP client | `Callisto.remmina` profile for the home server |
