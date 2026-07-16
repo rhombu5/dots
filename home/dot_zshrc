@@ -78,6 +78,14 @@ _zsh_completions_dir="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/completions"
 [[ -d "$_zsh_completions_dir" ]] || mkdir -p "$_zsh_completions_dir"
 fpath=("$_zsh_completions_dir" $fpath)
 
+# codex ships completions via `codex completion zsh`. Cache to the fpath dir so
+# autoload stays lazy (no CLI invocation per shell); regenerate only when the
+# file is missing, so a fresh install repopulates it. `rm _codex` forces a
+# refresh after a codex upgrade adds subcommands.
+if command -v codex &>/dev/null && [[ ! -f "$_zsh_completions_dir/_codex" ]]; then
+  codex completion zsh > "$_zsh_completions_dir/_codex" 2>/dev/null
+fi
+
 autoload -Uz compinit
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
   compinit
