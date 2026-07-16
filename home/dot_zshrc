@@ -140,3 +140,9 @@ REPORTTIME=2
 
 # --- Powerlevel10k config ---
 [[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+
+# >>> grok installer >>>
+export PATH="$HOME/.grok/bin:$PATH"
+fpath=(~/.grok/completions/zsh $fpath)
+autoload -Uz compinit && compinit -C
+# <<< grok installer <<<
