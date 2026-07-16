@@ -42,6 +42,59 @@ Each parallel subagent is a fresh window paying its own **base context** (system
 - **Right-size the model** (prose → sonnet, mechanical → haiku) so the duplicated base context is paid at the cheaper tier.
 - **Tier every `agent()` call on both dials — `model` *and* `effort`.** Set them per stage: cheap `model`/`effort: low` on the rote fan-out stages (transform, scan, mechanical migrate), opus/`high`/`max` only on the few genuinely hard stages (verify, judge, design). Omitting `model` inherits the session model (usually opus) — so an unset `model` on a large fan-out silently pays opus × N; set it explicitly to the cheapest tier that clears the bar. Same right-sizing as a hand-dispatched subagent ([`CLAUDE.md`](CLAUDE.md) § "Subagent model selection"), applied inside the script.
 
+## The design-debate pattern — default for brainstorm/design work
+
+The brainstorm/design instantiation of the standing ultracode default
+([`CLAUDE.md`](CLAUDE.md) § "Default to ultracode for non-trivial coding tasks"). **Trigger:** a
+brainstorm, design exploration, architecture decision, or competing-approaches question
+("adversarial brainstorm", "how should we architect X") — default to this `Workflow` shape rather
+than answering inline. Established 2026-07-16 (the transforms-plugin-architecture run in
+std@fnioc).
+
+Five stages, tiered per-stage on **both** model and effort — never all-fable:
+
+- **1. Research** (sonnet/high, parallel — one agent per evidence domain: primary sources, local
+  code spelunking, web prior art). Front-load the shared `CONTEXT` block across every prompt (the
+  cache rule above). Each agent writes a browsable file **and** returns full markdown — the return
+  is the real channel, since downstream stages embed it verbatim; the file is convenience only.
+  RUN SILENT.
+- **2. Frame** (fable/high, structured output `{angles: [{key, stance}], dropped: []}`). Reads all
+  research and defines the proposal slate: 2–4 maximally-DISTINCT, evidence-grounded stances that
+  disagree on core mechanism, each a self-contained marching order. Pre-research guesses pass
+  through only as seed candidates to keep/rework/drop, drops recorded with reasons. **Never
+  pre-commit the slate before research lands** — the load-bearing insight; a hardcoded slate wastes
+  proposers on evidence-dead angles and misses angles research surfaces. No slate back → abort the
+  workflow.
+- **3. Propose** (opus/high, one agent per stance, parallel via `pipeline()`). Full design per
+  stance, grounded in the research, stating what evidence would falsify it.
+- **4. Debate** (iterated per proposal, attack fable/high vs. rebut opus/high, both structured
+  output). Attack round 1 is comprehensive: HOLDS/BREAKS/NEEDS-VERIFICATION verdicts, one-line
+  evidence each, every point tagged NEW or CARRYOVER. Rebuttal answers each open point with exactly
+  one of DEFEND (citation required), AMEND (concrete, buildable revision), or CONCEDE — an honest
+  concession scores better than a weak defense. Later attack rounds raise only new-or-unresolved
+  points (repeating a conceded or evidence-defended point with no new evidence is forbidden) and
+  declare `settled: true` once nothing new survives; a proposer may concede the whole proposal
+  (`conceded: true`) and end its debate early. Hard cap ~4 rounds; status travels with the
+  transcript as SETTLED / CONCEDED / UNSETTLED-at-cap.
+- **5. Synthesize** (fable/xhigh, one agent). Scores surviving designs on stated axes in their
+  final AMENDED form, not the original pitch; a conceded proposal is eliminated but its transcript
+  gets mined for salvageable ideas; UNSETTLED points get adjudicated on the evidence;
+  citation-less DEFENDs are penalized. Output: a recommendation, a migration/verification checklist
+  ordered cheapest-to-falsify first, and OPEN QUESTIONS that genuinely need my call.
+
+**Mechanics**: `pipeline()` across stances — debates serialize within a stance, run parallel across
+stances. The workflow returns only the synthesis plus a file index; full research/proposals stay
+out of the parent context (`journal.jsonl` is the durable copy of every agent return, scratchpad
+files are `/tmp` and don't survive reboot).
+
+**Tiering** (set 2026-07-16): fable on the intense-thinking steps (frame, attack, judge), opus on
+the proposer side (propose, rebut), sonnet for research. Never all-fable.
+
+**Scale to the decision's weight.** The full five-stage shape is for consequential/architectural
+calls. For a smaller design question, shrink it — 2 stances, a single debate round, or collapse
+straight to a plain judge panel — rather than skip the pattern outright. If even the shrunk shape
+feels disproportionate, say so and propose the lighter version before firing.
+
 ## Documented unknown — quota vs cache-reads
 
 API *billing* discounts cache-reads to `0.1×`. Whether the **subscription weekly quota** counts cache-read tokens at that discount or flat is **not documented** (support docs only say overage bills at "standard API rates"). Don't assert a number. To actually measure: run one warm-cache session and one `DISABLE_PROMPT_CACHING` session doing equivalent work, and diff the `/usage` weekly delta.
