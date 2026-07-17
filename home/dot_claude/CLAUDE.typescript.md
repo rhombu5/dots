@@ -9,13 +9,14 @@ Prefer the bracket form over the generic form:
 
 The bracket form is house style for both readonly and mutable arrays. Apply it consistently — new code, edits, and reviews.
 
-## File naming — single-type files take the type's name
+## File naming — dominant-export files take the export's name
 
-When a `.ts` file's exports comprise **exactly one declaration and that declaration is a type**
-(`class`, `interface`, `enum`, or `type` alias), name the file identically to that type —
-PascalCase, the exact same string. Files exporting a single function/const (not a type),
-files with multiple exports, and barrels (`index.ts`) keep their descriptive kebab-case names —
-this rule doesn't touch them.
+When a `.ts` file has one **dominant** exported declaration — a type (`class`, `interface`,
+`enum`, or `type` alias) or a PascalCase-named const (a factory object, an augmentation-set
+object) — name the file identically to that export: PascalCase, the exact same string. Minor
+co-exports don't exempt it — dominance, not exactly-one-export, is the test. Files whose exports
+are all lowercase-named (helper functions), multi-export files with no single dominant member,
+and barrels (`index.ts`) keep descriptive kebab-case.
 
 ```ts
 // NO
@@ -26,19 +27,26 @@ export class ApplicationLifetime { … }
 // ApplicationLifetime.ts
 export class ApplicationLifetime { … }
 
+// YES — dominant type export; a minor co-export doesn't change that
+// BrowserLifetime.ts
+export class BrowserLifetime { … }
+export const BROWSER_LIFECYCLE_CATEGORY = "browser";
+
 // unaffected — single export, but not a type: kebab-case stays
 // resolve-condition-targets.ts
 export function resolveConditionTargets(target: unknown) { … }
 
-// unaffected — multiple exports: kebab-case stays
-// service-manifest.ts
-export class ServiceManifest { … }
-export interface ServiceManifestOptions { … }
+// unaffected — no single dominant member: kebab-case stays
+// descriptor-verbs.ts
+export function tryAdd(...) { … }
+export function tryAddEnumerable(...) { … }
+export function replace(...) { … }
 ```
 
-The discriminator is **exactly-one-export and that export is a type** — not "the file is about a
-class," not "there's a type in here somewhere." A file with a type plus a helper function, or two
-types, stays kebab-case.
+The discriminator is **dominance**, not export count. `ServiceManifest.ts` exporting
+`class ServiceManifest` plus a minor `interface ServiceManifestOptions` is the dominant case —
+PascalCase, not kebab-case; treating a co-export as an automatic exemption was the old (wrong)
+reading of this rule.
 
 ## Interface naming — `I`-prefix service interfaces, not DTOs
 
