@@ -116,6 +116,13 @@ calls. For a smaller design question, shrink it — 2 stances, a single debate r
 straight to a plain judge panel — rather than skip the pattern outright. If even the shrunk shape
 feels disproportionate, say so and propose the lighter version before firing.
 
+**Spikes are written as future deliverable code** (owner rule, 2026-07-17). A feasibility spike
+called for by a checklist or debate goes into the real package/module layout under
+production-shaped names, its probes as actual unit tests, committed conventionally on the work's
+branch/worktree — never throwaway scratch. A pass is banked foundation the implementer inherits
+and extends; a fail costs the same either way it was written. Exception, to justify not default:
+probes that genuinely can't live in deliverable shape (a one-off environment check) stay scratch.
+
 ## Documented unknown — quota vs cache-reads
 
 API *billing* discounts cache-reads to `0.1×`. Whether the **subscription weekly quota** counts cache-read tokens at that discount or flat is **not documented** (support docs only say overage bills at "standard API rates"). Don't assert a number. To actually measure: run one warm-cache session and one `DISABLE_PROMPT_CACHING` session doing equivalent work, and diff the `/usage` weekly delta.
