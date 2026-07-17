@@ -70,17 +70,34 @@ Five stages, tiered per-stage on **both** model and effort — never all-fable:
 - **4. Debate** (iterated per proposal, attack fable/high vs. rebut fable/high, both structured
   output). Attack round 1 is comprehensive: HOLDS/BREAKS/NEEDS-VERIFICATION verdicts, one-line
   evidence each, every point tagged NEW or CARRYOVER. Rebuttal answers each open point with exactly
-  one of DEFEND (citation required), AMEND (concrete, buildable revision), or CONCEDE — an honest
-  concession scores better than a weak defense. Later attack rounds raise only new-or-unresolved
-  points (repeating a conceded or evidence-defended point with no new evidence is forbidden) and
-  declare `settled: true` once nothing new survives; a proposer may concede the whole proposal
-  (`conceded: true`) and end its debate early. Hard cap ~4 rounds; status travels with the
-  transcript as SETTLED / CONCEDED / UNSETTLED-at-cap.
+  one of DEFEND (citation required), AMEND (concrete, buildable revision), or CONCEDE, then reports
+  a debate-level `verdict`: `stands` (continues), `stands-amended` (continues, attacks now target
+  the amendments), `dominated` (still repairable within the stance, but the designer no longer
+  believes it should win — ends the debate; the judge inherits the designer's stated reasons and
+  weighs the proposal accordingly), or `dead` (an unrepairable kill-shot holds — eliminated). This
+  replaced a flat `conceded` boolean (revised 2026-07-17, evidence from five completed debates):
+  point-level concessions front-load into round 1, while later rounds attack the amendments
+  themselves (drawing DEFEND/AMEND, not fresh CONCEDEs); wholesale concession never fired at all —
+  "repairable within stance" is nearly always true — so `dominated` was the real state recurring
+  unexpressed (one designer argued against its own design four rounds running without ever
+  conceding). Later attack rounds raise only new-or-unresolved points (repeating a conceded or
+  evidence-defended point with no new evidence is forbidden). **Convergence**: the debate ends two
+  rounds after the last AMEND — a rebuttal with no AMEND (DEFEND/CONCEDE only) forces the next
+  attack round to bring genuinely new evidence or declare `settled: true`; re-litigating a resolved
+  point is forbidden. Hard cap stays ~4 rounds: evidence shows round 4 earns its cost only while
+  amendments keep creating fresh attack surface (a round-3 amendment produced a genuine round-4
+  contradiction in one debate; a four-round falsification streak was itself the eliminating
+  evidence in another), and late rounds are cheap (attack sizes shrink ~3× by round 4). The cap
+  doesn't fix wrong EARLY settlement, though — one debate settled at round 3 on a blind spot both
+  sides shared, caught only by cross-debate evidence — which is why parallel debates plus a
+  verifying judge stay part of the pattern. Status travels with the transcript as SETTLED /
+  DOMINATED / DEAD / UNSETTLED-at-cap.
 - **5. Synthesize** (fable/xhigh, one agent). Scores surviving designs on stated axes in their
-  final AMENDED form, not the original pitch; a conceded proposal is eliminated but its transcript
-  gets mined for salvageable ideas; UNSETTLED points get adjudicated on the evidence;
-  citation-less DEFENDs are penalized. Output: a recommendation, a migration/verification checklist
-  ordered cheapest-to-falsify first, and OPEN QUESTIONS that genuinely need my call.
+  final AMENDED form, not the original pitch; a dead proposal is eliminated but its transcript
+  gets mined for salvageable ideas, a dominated one is retained but weighted by the designer's
+  stated reasons; UNSETTLED points get adjudicated on the evidence; citation-less DEFENDs are
+  penalized. Output: a recommendation, a migration/verification checklist ordered
+  cheapest-to-falsify first, and OPEN QUESTIONS that genuinely need my call.
 
 **Mechanics**: `pipeline()` across stances — debates serialize within a stance, run parallel across
 stances. The workflow returns only the synthesis plus a file index; full research/proposals stay
