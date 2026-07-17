@@ -67,8 +67,8 @@ Five stages, tiered per-stage on **both** model and effort — never all-fable:
   workflow.
 - **3. Propose** (opus/high, one agent per stance, parallel via `pipeline()`). Full design per
   stance, grounded in the research, stating what evidence would falsify it.
-- **4. Debate** (iterated per proposal, attack fable/high vs. rebut fable/high, both structured
-  output). Attack round 1 is comprehensive: HOLDS/BREAKS/NEEDS-VERIFICATION verdicts, one-line
+- **4. Debate** (iterated per proposal, attack vs. rebut, both structured output, tiered by round —
+  opus/high for rounds 1–2, fable/high for rounds 3–4). Attack round 1 is comprehensive: HOLDS/BREAKS/NEEDS-VERIFICATION verdicts, one-line
   evidence each, every point tagged NEW or CARRYOVER. Rebuttal answers each open point with exactly
   one of DEFEND (citation required), AMEND (concrete, buildable revision), or CONCEDE, then reports
   a debate-level `verdict`: `stands` (continues), `stands-amended` (continues, attacks now target
@@ -104,12 +104,11 @@ stances. The workflow returns only the synthesis plus a file index; full researc
 out of the parent context (`journal.jsonl` is the durable copy of every agent return, scratchpad
 files are `/tmp` and don't survive reboot).
 
-**Tiering** (revised 2026-07-16): fable on frame, attack, rebut, and judge — rebuttal carries
-asymmetric leverage, since designs are judged in their final AMENDED form: a wrong concession or
-amendment poisons the winner, while an over-strong defense costs nothing (the attacker gets
-another round). Observed in the pattern's first run (transforms-plugin-architecture, 2026-07-16),
-where the sole clear reasoning failure was a rebuttal-side over-correction. Opus stays on propose
-only; sonnet for research. Never all-fable.
+**Tiering** (revised 2026-07-17, supersedes the 2026-07-16 all-fable rebut flip): attack and rebut
+split by round — opus/high for rounds 1–2, fable/high for rounds 3–4. Early rounds harvest blind
+spots, where verified evidence does the work; late rounds argue against deliberately-amended
+designs, where the subtler reasoning earns its cost. Frame and judge stay fable; propose stays
+opus; research stays sonnet. Never all-fable.
 
 **Scale to the decision's weight.** The full five-stage shape is for consequential/architectural
 calls. For a smaller design question, shrink it — 2 stances, a single debate round, or collapse
