@@ -68,7 +68,7 @@ Five stages, tiered per-stage on **both** model and effort — never all-fable:
 - **3. Propose** (opus/high, one agent per stance, parallel via `pipeline()`). Full design per
   stance, grounded in the research, stating what evidence would falsify it.
 - **4. Debate** (iterated per proposal, attack vs. rebut, both structured output, tiered by round —
-  opus/high for rounds 1–2, fable/high for rounds 3–4). Attack round 1 is comprehensive: HOLDS/BREAKS/NEEDS-VERIFICATION verdicts, one-line
+  opus/xhigh for rounds 1–2, fable/xhigh for rounds 3–4). Attack round 1 is comprehensive: HOLDS/BREAKS/NEEDS-VERIFICATION verdicts, one-line
   evidence each, every point tagged NEW or CARRYOVER. Rebuttal answers each open point with exactly
   one of DEFEND (citation required), AMEND (concrete, buildable revision), or CONCEDE, then reports
   a debate-level `verdict`: `stands` (continues), `stands-amended` (continues, attacks now target
@@ -105,10 +105,10 @@ out of the parent context (`journal.jsonl` is the durable copy of every agent re
 files are `/tmp` and don't survive reboot).
 
 **Tiering** (revised 2026-07-17, supersedes the 2026-07-16 all-fable rebut flip): attack and rebut
-split by round — opus/high for rounds 1–2, fable/high for rounds 3–4. Early rounds harvest blind
-spots, where verified evidence does the work; late rounds argue against deliberately-amended
-designs, where the subtler reasoning earns its cost. Frame and judge stay fable; propose stays
-opus; research stays sonnet. Never all-fable.
+split by round — opus/xhigh for rounds 1–2, fable/xhigh for rounds 3–4 (all debate rounds run at
+xhigh effort). Early rounds harvest blind spots, where verified evidence does the work; late
+rounds argue against deliberately-amended designs, where the subtler reasoning earns its cost.
+Frame and judge stay fable; propose stays opus; research stays sonnet. Never all-fable.
 
 **Scale to the decision's weight.** The full five-stage shape is for consequential/architectural
 calls. For a smaller design question, shrink it — 2 stances, a single debate round, or collapse
