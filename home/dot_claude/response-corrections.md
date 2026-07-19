@@ -90,6 +90,14 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Correction:** "'the former' would have sufficed"
 - **Should have:** "The former — di.transformer composes it internally, so consumers keep their single plugin." One line, at most a clause of why. A pick-between-two-options question wants the pick, not a treatise. Key discriminator: the prose+code rule licenses a snippet when I'm *explaining a mechanism he asked to understand* — it does NOT turn an A-or-B question into a mechanism walkthrough. Hold the code and the standalone-plugin / plain-string nuances for a follow-up. This is the **fifth+ over-explaining** entry — well past the synthesis threshold; the recurring trigger is a real technical substrate tempting me to treat a narrow question as an opening for the full exposition.
 
+## 2026-07-19 — batched-instead-of-one-at-a-time
+
+- **Situation:** Walking the recovered VERDICT §5 questions with Tom under the /explain one-at-a-time discipline, which he had explicitly re-invoked this session ("you're supposed to go through the list, one at a time"). Q1 and Q2 had just dissolved individually.
+- **What I did:** Closed Q2 and then bundled the remaining three (Q5 descope / Q8 ratify / Q9 dismiss) into a single closing ask: "One 'agreed' closes task #14 and the entire decision backlog."
+- **Why I thought it was warranted:** All three were pre-recommended one-liners I judged trivial — I read "one at a time" as applying to items needing explanation, and treated rubber-stamp items as batchable to save round-trips (the exact rationalization from the 2026-07-06 entry).
+- **Correction:** "come on man, one at a time... you know this"
+- **Should have:** Presented Q5 alone, waited, then Q8, then Q9. One-at-a-time is an interaction-rhythm rule with no triviality exemption — HE decides what's trivial, and a batch of three "trivial" decisions still forces three context-switches in one reply. Second entry in this category.
+
 ## 2026-07-19 — unsolicited-status-narration
 
 - **Situation:** A session running heavy background orchestration (a 7-stage migration wave PR, several docs PRs, monitors, a queued dispatch list) *alongside* an active interactive design discussion (transformer decisions: Keyed, keyof, export surfaces). Tom was engaged in the design thread.
