@@ -1,6 +1,6 @@
 ---
 name: watch-tmp
-description: Reclaim tmpfs (/tmp) space. `/watch-tmp` (scoped, the default) cleans only THIS session's own transient build artifacts — its /tmp/<session-id>/ root PLUS other dirs it remembers creating (e.g. go-build*) — safe to run while other sessions are live. `/watch-tmp global` sweeps ALL idle transient dirs regardless of owner, for orphans whose creating session is dead. Run before Go-heavy work or on a tmpfs-pressure alert.
+description: Reclaim tmpfs (/tmp) space. `/watch-tmp` (scoped, the default) cleans only THIS session's own transient build artifacts — its /tmp/<session-id>/ root PLUS other dirs it remembers creating (e.g. go-build*) — safe to run while other sessions are live. `/watch-tmp global` sweeps ALL idle transient dirs regardless of owner, for orphans whose creating session is dead. Run before build-heavy work or on a tmpfs-pressure alert.
 ---
 
 # watch-tmp
@@ -15,7 +15,7 @@ The safety call needs *this* session's awareness of what it launched and what's 
 
 `/watch-tmp` or `/watch-tmp scoped`. Remove only the transient `/tmp` artifacts THIS session owns — safe alongside live sibling sessions, because you never touch anything you didn't make. Clean from **both** sources:
 
-**a) Your session root `/tmp/$CLAUDE_CODE_SESSION_ID/`** (once fnc routes build tmp there). Everything under it is yours — clean its idle entries (idle-checked so you don't nuke your own running build):
+**a) Your session root `/tmp/$CLAUDE_CODE_SESSION_ID/`** (when build tmp is routed there). Everything under it is yours — clean its idle entries (idle-checked so you don't nuke your own running build):
 
 ```bash
 root="/tmp/$CLAUDE_CODE_SESSION_ID"
@@ -25,9 +25,9 @@ root="/tmp/$CLAUDE_CODE_SESSION_ID"
 done
 ```
 
-**b) Other dirs you remember creating that land outside that root.** The big one is `/tmp/go-build*` — the Go compiler writes there by default, unique names per build, so it won't move into your session root just because the scratchpad did. You know which are yours because you launched the builds. **Keep a running note of transient dirs your builds produce** (append their paths to a file in your scratchpad) — that's how the session "remembers"; scoped-clean reads that note. Idle-check each, and **leave any you can't confidently attribute to yourself** — that's a sibling's or an orphan, which is what `global` is for.
+**b) Other dirs you remember creating that land outside that root.** The common one is `/tmp/go-build*` — the Go toolchain writes there by default, unique names per build, so it stays at the `/tmp` root even when your scratch dir doesn't. You know which are yours because you launched the builds. **Keep a running note of transient dirs your builds produce** (append their paths to a file in your scratchpad) — that's how the session "remembers"; scoped-clean reads that note. Idle-check each, and **leave any you can't confidently attribute to yourself** — that's a sibling's or an orphan, which is what `global` is for.
 
-Do NOT scope-clean the shared per-suite `fnioc-ttsc-*` e2e dirs: they're reused across runs and sessions at the same path (the std@fnioc #245 reuse bug), so no single session owns them — they're `global`-only.
+Don't scope-clean a **shared** working dir: some build/test harnesses create a fixed-path, per-suite working dir under `/tmp` and reuse it across runs *and* sessions. No single session owns it, so it can't be attributed — clean those only in `global` mode.
 
 ## Mode 2 — global: sweep ALL idle orphans, whoever made them
 
@@ -35,7 +35,8 @@ Do NOT scope-clean the shared per-suite `fnioc-ttsc-*` e2e dirs: they're reused 
 
 ```bash
 echo "=== /tmp before ==="; df -h /tmp | tail -1
-for d in /tmp/go-build* /tmp/fnioc-ttsc-* /tmp/node-compile-cache; do
+# generic dev-tool temps; add the current project's own transient /tmp working-dir patterns to this list
+for d in /tmp/go-build* /tmp/node-compile-cache; do
   [ -e "$d" ] || continue
   if [ -z "$(find "$d" -newermt '-5 minutes' 2>/dev/null | head -1)" ]; then
     rm -rf "$d" 2>/dev/null && echo "removed $(basename "$d") (idle)"
@@ -51,12 +52,12 @@ Extra caution in global mode: a large, recent (`< ~10 min`) dir might be *anothe
 ## What each candidate is
 
 - `go-build*` — Go compiler temp dirs, uniquely named. Go removes them on a clean exit, so an idle one is orphaned (a killed/crashed build) → safe. Attributes cleanly to a session.
-- `fnioc-ttsc-*` — ttsc e2e working dirs (std@fnioc), per-suite and reused across sessions → shared, so `global`-only.
+- **Test/e2e harness working dirs** — many projects drop a reusable per-suite dir in `/tmp`; shared across sessions → `global`-only. Learn the current project's pattern and add it to the global list.
 - `node-compile-cache` and other transient caches — idle-only.
 
 ## When to run it
 
-- **Proactively** before Go-heavy dispatches (the standing `/tmp` hygiene rule) — scoped, so you clear your own leftovers without touching a sibling's.
+- **Proactively** before build-heavy dispatches (the standing `/tmp` hygiene habit) — scoped, so you clear your own leftovers without touching a sibling's.
 - **On a tmpfs-pressure alert** — scoped first; escalate to `global` when pressure persists and you suspect dead-session orphans. Advisory around ~80%; act decisively at ~88%+ (wedge territory).
 
 ## The watch stays separate
