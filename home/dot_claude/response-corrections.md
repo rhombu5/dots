@@ -105,3 +105,11 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** I read the Monitor-everything duty and the harness's task-list/status reminders as "keep the owner continuously informed," and treated each reply as a chance to sync him on fleet state. I conflated *my* obligation to track the orchestration with *his* need to read about it each turn.
 - **Correction:** "you can drop the workflow narrration -- it only serves to confuse me from our active discussion."
 - **Should have:** Kept discussion replies purely on the discussion. Orchestration state surfaces only when action-shaped — a blocker, a needed decision, a failure — or when he asks; the task list and monitor notifications already carry routine progress. Monitoring duty is about *acting* on events, not narrating them.
+
+## 2026-07-23 — over-explaining
+
+- **Situation:** Deep in the immutable-manifest / token-tree design talk, Tom asked a yes/no design question: "do we blow up unions into overloads at reg time?"
+- **What I did:** Answered with a long response — an observational-equivalence proof (odometer order == per-param resolution), two worked examples, two payoffs (one resolve mechanism, no emit bloat), a composes-with-real-overloads note, and a factory-param corner, plus a TODO edit. The answer is "yes."
+- **Why I thought it was warranted:** I treated it as a design decision whose soundness I had to *demonstrate* — normalizing union→overloads changes the representation, so I felt I owed an equivalence argument rather than a bare "yes." I conflated "this must be sound" with "I must show the soundness."
+- **Correction:** "'yes' would've sufficed."
+- **Should have:** "Yes" — plus at most one clause of load-bearing caveat. Tom had clearly already reasoned to the answer and wanted it confirmed; the equivalence proof was mine to hold unless he pulled for it. Same discriminator as the 2026-07-08 / #41 entry: I'm free to *reason* the soundness internally, not to *externalize* it. ~6th over-explaining entry — synthesis is overdue.
