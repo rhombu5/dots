@@ -44,4 +44,4 @@ Keep the user-facing output terse: one confirmation line (`logged — <category>
 
 ## Synthesis
 
-When a category reaches **~3+ entries**, offer to draft a targeted rule from the pattern and add it to `~/.claude/CLAUDE.md`. **Don't auto-write the rule** — propose it. The whole reason for collecting is that the rule wasn't describable up front, so Tom validates the synthesis before it lands.
+When a category reaches **~3+ entries**, draft a targeted rule from the pattern and present it directly — don't ask first whether to draft one. **Still don't auto-write it to `~/.claude/CLAUDE.md`** — show the drafted rule for Tom to validate before it lands. The whole reason for collecting is that the rule wasn't describable up front, so the draft itself is what gets reviewed, not a prior yes/no about whether to attempt one.
