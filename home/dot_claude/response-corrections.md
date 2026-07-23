@@ -113,3 +113,11 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** I treated it as a design decision whose soundness I had to *demonstrate* — normalizing union→overloads changes the representation, so I felt I owed an equivalence argument rather than a bare "yes." I conflated "this must be sound" with "I must show the soundness."
 - **Correction:** "'yes' would've sufficed."
 - **Should have:** "Yes" — plus at most one clause of load-bearing caveat. Tom had clearly already reasoned to the answer and wanted it confirmed; the equivalence proof was mine to hold unless he pulled for it. Same discriminator as the 2026-07-08 / #41 entry: I'm free to *reason* the soundness internally, not to *externalize* it. ~6th over-explaining entry — synthesis is overdue.
+
+## 2026-07-23 — over-explaining
+
+- **Situation:** Mid-design (token-tree / inliner discussion), Tom's operative question was binary: "does the inliner work in chained calls?"
+- **What I did:** Instead of "yes," delivered a wall — the inliner's full current-state bullets, a code example, an IIFE/multiline analysis, and a fold/survive resolution.
+- **Why I thought it was warranted:** I read a yes/no status check, arriving mid-design, as an invitation to lay out the inliner's whole state and the architecture implications hanging off it — conflating "there's a rich answer behind this" with "he wants it."
+- **Correction:** "jesus, tl;dr. does it work in chained calls? yes or no."
+- **Should have:** "Yes." A binary question about a fact gets the fact; the status detail and architecture analysis stay held unless he pulls for them. ~7th over-explaining entry — synthesis is well overdue (nearly every entry says so).
