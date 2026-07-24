@@ -686,19 +686,40 @@ fi
 
 # ── Column split. The left side is ONE list — repo headers (project_dir +
 # added_dirs) first, then every worktree — laid out column-major: fill column A
-# top-to-bottom, then spill the tail into column B. Two constraints:
+# top-to-bottom, then spill the tail into column B. Constraints:
 #   • column A never drops below right_rows, so the burndown / rate-limit rows
-#     on the right always have a left row to sit beside; and
+#     on the right always have a left row to sit beside;
 #   • once the list is long enough that half of it exceeds right_rows, the two
-#     columns grow evenly (balanced rowcounts) rather than piling into B.
-# Both fall out of one formula for the split height:
+#     columns grow evenly (balanced rowcounts) rather than piling into B; and
+#   • column B is only actually used if it fits horizontally beside the right-
+#     side content — the fit test in the reflow block below drops back to a
+#     single column (taller, but no burndown collision) when it doesn't.
+# The candidate split height is:
 #       rows = max(right_rows, ceil(total / 2))
 # with column A = left items [0, rows) and column B = left items [rows, total).
-# n (the number of display rows) is exactly `rows`, since rows ≥ right_rows.
 total_left=$(( ${#col1_path[@]} + ${#col2_path[@]} ))
 rows=$(( (total_left + 1) / 2 ))
 (( rows < right_rows )) && rows=$right_rows
 n=$rows
+
+# Right-side horizontal reservations, for the column-B fit test in the reflow
+# block: rr_row0 = the model+effort+ctx% label on row 0; rr_plot = the width the
+# burndown (or text rate rows) occupy on rows 1..3.
+rr_row0=0
+if [ -n "$model" ]; then
+    rr_row0=${#model}
+    [ -n "$effort" ] && rr_row0=$(( rr_row0 + 1 + ${#effort} ))
+    if [ -n "$used" ]; then
+        rr_used_int=$(printf '%.0f' "$used")
+        rr_row0=$(( rr_row0 + 1 + ${#rr_used_int} + 1 ))   # " " + digits + "%"
+    fi
+fi
+rr_plot=0
+if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
+    rr_plot=38    # 3 burndown plots × 12 cells + 2 gaps (BURNDOWN_TOTAL_W)
+elif [ -n "$rl5_used" ] || [ -n "$rl7_used" ] || [ -n "$rlf_used" ]; then
+    rr_plot=34    # widest text rate-limit row
+fi
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
 for ((i=0; i<n; i++)); do row_str[i]=""; row_vw[i]=0; done
@@ -755,8 +776,8 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         read -r pr_state ci_state _branch_ci _pr_ci pr_num <<<"$pr"
         pc=$(color_for_pr "$pr_state" "$dimflag")
         # PR info is part of the status suffix - no bold.
-        cell+=$(printf "  ${pc}%s\033[0m" "$pr_num")
-        cell_w=$(( cell_w + 2 + ${#pr_num} ))
+        cell+=$(printf " ${pc}%s\033[0m" "$pr_num")
+        cell_w=$(( cell_w + 1 + ${#pr_num} ))
         if [ "$pr_state" = "open" ]; then
             cg=$(glyph_for_ci "$ci_state")
             if [ -n "$cg" ]; then
@@ -905,7 +926,7 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
             fi
         fi
         # PR # in light gray (status suffix).
-        wappend "$j" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
+        wappend "$j" $(( 1 + ${#pr_num} )) " ${wt_rhs_c}%s\033[0m" "$pr_num"
         if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
             # "(merged)" suppressed - strikethrough on branch carries it.
             # "(open)" suppressed - branch color carries it.
@@ -928,11 +949,39 @@ for ((j=0; j<${#wt_cell_str[@]}; j++)); do
     left_vw+=("${wt_cell_vw[$j]}")
 done
 
-# Column A cell width = widest cell that actually lands in column A.
+# Column A cell width = widest cell that lands in column A (the [0, rows) slice).
 colA_width=0
 for ((r=0; r<rows && r<${#left_str[@]}; r++)); do
     (( left_vw[r] > colA_width )) && colA_width=${left_vw[r]}
 done
+
+# Only actually use column B if every one of its cells clears the right-side
+# content on its row. A column-B cell sits at colA_width + 3 (the pipe), so the
+# cell shown on display row k needs
+#     colA_width + 3 + cell_width + SEP + reserve(k) <= TERM_WIDTH,
+# where reserve is the model label on row 0 and the burndown/rate width on rows
+# 1..3. If any cell doesn't clear it, drop column B and stack the whole list in
+# a single column — taller, but no collision with the burndown. This is what
+# "don't use the second column if they don't fit" asks for.
+colB_count=$(( total_left - rows ))
+(( colB_count < 0 )) && colB_count=0
+if (( colB_count > 0 )); then
+    two_col_fits=1
+    for ((k=0; k<colB_count; k++)); do
+        reserve=0
+        if   (( k == 0 )); then reserve=$rr_row0
+        elif (( k <= 3 )); then reserve=$rr_plot
+        fi
+        if (( colA_width + 3 + left_vw[rows + k] + SEP + reserve > TERM_WIDTH )); then
+            two_col_fits=0; break
+        fi
+    done
+    if (( ! two_col_fits )); then
+        rows=$total_left
+        (( rows < right_rows )) && rows=$right_rows
+        n=$rows
+    fi
+fi
 
 # Assemble each display row: the column-A cell (padded only when column B
 # follows on that row), a dim pipe divider, then the column-B cell. Column B's
