@@ -348,12 +348,13 @@ vcs_text_for() {
     stash=$(git --no-optional-locks -C "$d" stash list 2>/dev/null | wc -l)
 
     local counts_part=""
-    (( behind > 0 ))    && counts_part+=" ⇣$behind"
-    (( ahead > 0 ))     && counts_part+=" ⇡$ahead"
-    (( stash > 0 ))     && counts_part+=" *$stash"
-    (( staged > 0 ))    && counts_part+=" +$staged"
-    (( unstaged > 0 ))  && counts_part+=" !$unstaged"
-    (( untracked > 0 )) && counts_part+=" ?$untracked"
+    (( behind > 0 ))    && counts_part+="⇣$behind"
+    (( ahead > 0 ))     && counts_part+="⇡$ahead"
+    (( stash > 0 ))     && counts_part+="*$stash"
+    (( staged > 0 ))    && counts_part+="+$staged"
+    (( unstaged > 0 ))  && counts_part+="!$unstaged"
+    (( untracked > 0 )) && counts_part+="?$untracked"
+    [ -n "$counts_part" ] && counts_part=" $counts_part"   # one leading space; tokens packed
 
     printf '%s\t%s\t%s' "$icons_part" "$branch_part" "$counts_part"
 }
@@ -765,8 +766,8 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         # not row identity. Only the path/cwd-suffix carry the bold.
         IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"$vt"
         vt_full="${vt_icons}${vt_branch}${vt_counts}"
-        cell+=$(printf "  ${c_vcs}%s\033[0m" "$vt_full")
-        cell_w=$(( cell_w + 2 + ${#vt_full} ))
+        cell+=$(printf " ${c_vcs}%s\033[0m" "$vt_full")
+        cell_w=$(( cell_w + 1 + ${#vt_full} ))
     fi
 
     pr="${col1_pr[$i]}"
@@ -895,13 +896,12 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
         fi
     fi
     if [ -n "$pr_num" ]; then
-        # Two-glyph CI cluster: slot 1 = branch-commit CI (event=push),
-        # slot 2 = PR-open CI (event=pull_request). Glyph per state:
+        # CI cluster: branch-commit CI (event=push) then PR-open CI
+        # (event=pull_request). Glyph per state:
         #   pass → ✓ (green)   pending → ● (cyan)
         #   fail → ✗ (red)
-        # No glyph (and no padding) when neither slot has a renderable
-        # state. When at least one has a state, both slots are rendered
-        # (the absent slot becomes a space) so position remains meaningful.
+        # Squeezed: only glyphs that have a state are drawn (no blank-slot
+        # padding), so a lone ✓/✗/● is 1 cell and both present are 2 adjacent.
         g1=""; c1=""; g2=""; c2=""
         case "$branch_ci" in
             pass)    g1="✓"; c1=$(color_for_ci pass    "$wt_dim") ;;
@@ -914,16 +914,9 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
             pending) g2="●"; c2=$(color_for_ci pending "$wt_dim") ;;
         esac
         if [ -n "$g1" ] || [ -n "$g2" ]; then
-            if [ -n "$g1" ]; then
-                wappend "$j" 2 " ${c1}%s\033[0m" "$g1"
-            else
-                wappend "$j" 2 "  "
-            fi
-            if [ -n "$g2" ]; then
-                wappend "$j" 1 "${c2}%s\033[0m" "$g2"
-            else
-                wappend "$j" 1 " "
-            fi
+            wappend "$j" 1 " "
+            [ -n "$g1" ] && wappend "$j" 1 "${c1}%s\033[0m" "$g1"
+            [ -n "$g2" ] && wappend "$j" 1 "${c2}%s\033[0m" "$g2"
         fi
         # PR # in light gray (status suffix).
         wappend "$j" $(( 1 + ${#pr_num} )) " ${wt_rhs_c}%s\033[0m" "$pr_num"
