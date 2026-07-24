@@ -217,7 +217,7 @@ refresh_oauth_usage_async
 # 8601, converted here to the epoch seconds every downstream window calculation
 # assumes. Both stay empty until the first async fetch lands, which the rest of
 # the script treats the same as "this window isn't present".
-rlf_used=""; rlf_resets=""; rlf_iso=""
+rlf_used=""; rlf_resets=""; rlf_iso=""; rlf_epoch=""
 if [ -s "$OAUTH_USAGE_CACHE" ]; then
     read -r rlf_used rlf_iso < <(jq -r '
         (.limits // [])
@@ -226,7 +226,18 @@ if [ -s "$OAUTH_USAGE_CACHE" ]; then
         | .[0] // empty
         | "\(.percent) \(.resets_at)"
     ' "$OAUTH_USAGE_CACHE" 2>/dev/null)
-    [ -n "$rlf_iso" ] && rlf_resets=$(date -d "$rlf_iso" +%s 2>/dev/null)
+    # The endpoint jitters resets_at either side of the boundary second — one
+    # call returns ...T01:59:59.99+00:00, the next ...T02:00:00.08+00:00 — and
+    # `date -d` floors. A raw conversion therefore yields two different epochs
+    # for the same window, which (the epoch being the usage log's filename key)
+    # silently splits the burndown's history across two files. Reset boundaries
+    # always land on a whole minute, so round to the nearest one for a key
+    # that's stable across fetches. The five_hour/seven_day paths don't need
+    # this: the payload hands them an integer epoch with no rounding to do.
+    if [ -n "$rlf_iso" ]; then
+        rlf_epoch=$(date -d "$rlf_iso" +%s 2>/dev/null)
+        [ -n "$rlf_epoch" ] && rlf_resets=$(( (rlf_epoch + 30) / 60 * 60 ))
+    fi
 fi
 log_usage_point "fable" "$rlf_used" "$rlf_resets"
 
