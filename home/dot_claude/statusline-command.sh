@@ -173,6 +173,63 @@ CACHE_DIR="$HOME/.cache/claude-statusline"
 CACHE_TTL=60
 mkdir -p "$CACHE_DIR" 2>/dev/null
 
+# ── Fable weekly limit ───────────────────────────────────────────────────────
+# The statusline payload carries only five_hour and seven_day. The per-model
+# weekly bucket that /usage renders as "Current week (Fable)" isn't in it — it
+# lives in the OAuth usage endpoint's limits[] array, as the weekly_scoped entry
+# whose scope.model.display_name is "Fable". So fetch it ourselves, on the same
+# async-refresh-plus-cache idiom the PR/CI annotations use below: the render path
+# reads only the cache file and never blocks on the network.
+#
+# A longer TTL than CACHE_TTL because this is a per-account number that moves on
+# the scale of a 7-day window, not a per-keystroke one.
+OAUTH_USAGE_CACHE="$CACHE_DIR/oauth-usage.json"
+OAUTH_USAGE_TTL=300
+
+refresh_oauth_usage_async() {
+    local age lock_file="$OAUTH_USAGE_CACHE.lock"
+    if [ -f "$OAUTH_USAGE_CACHE" ]; then
+        age=$(( $(date +%s) - $(stat -c %Y "$OAUTH_USAGE_CACHE" 2>/dev/null || echo 0) ))
+        (( age < OAUTH_USAGE_TTL )) && return
+    fi
+    (
+        flock -n 200 || exit 0
+        token=$(jq -r '.claudeAiOauth.accessToken // empty' "$HOME/.claude/.credentials.json" 2>/dev/null)
+        [ -z "$token" ] && exit 0
+        # On failure (expired token, offline), touch the cache instead of
+        # overwriting it: the last good body stays readable and the mtime bump
+        # backs the retry off by one TTL rather than refetching every render.
+        if body=$(curl -sf --max-time 5 \
+                    -H "Authorization: Bearer $token" \
+                    -H "Content-Type: application/json" \
+                    -H "anthropic-beta: oauth-2025-04-20" \
+                    https://api.anthropic.com/api/oauth/usage); then
+            printf '%s\n' "$body" > "$OAUTH_USAGE_CACHE"
+        else
+            touch "$OAUTH_USAGE_CACHE"
+        fi
+    ) 200>"$lock_file" >/dev/null 2>&1 &
+    disown 2>/dev/null
+}
+refresh_oauth_usage_async
+
+# .percent is already 0-100 (same scale as used_percentage); .resets_at is ISO
+# 8601, converted here to the epoch seconds every downstream window calculation
+# assumes. Both stay empty until the first async fetch lands, which the rest of
+# the script treats the same as "this window isn't present".
+rlf_used=""; rlf_resets=""; rlf_iso=""
+if [ -s "$OAUTH_USAGE_CACHE" ]; then
+    read -r rlf_used rlf_iso < <(jq -r '
+        (.limits // [])
+        | map(select(.kind == "weekly_scoped"
+                     and (.scope.model.display_name // "") == "Fable"))
+        | .[0] // empty
+        | "\(.percent) \(.resets_at)"
+    ' "$OAUTH_USAGE_CACHE" 2>/dev/null)
+    [ -n "$rlf_iso" ] && rlf_resets=$(date -d "$rlf_iso" +%s 2>/dev/null)
+fi
+log_usage_point "fable" "$rlf_used" "$rlf_resets"
+
 shorten() { local p="$1"; printf '%s' "${p/#$HOME/\~}"; }
 
 # Read repoSettings.cloneTemplate's literal prefix (everything before {repo}) so
@@ -607,12 +664,14 @@ n=${#col1_short[@]}
 right_rows=1
 if (( USAGE_BURNDOWN_GRAPH )); then
     if { [ -n "$rl5_used" ] && [ -n "$rl5_resets" ]; } \
-    || { [ -n "$rl7_used" ] && [ -n "$rl7_resets" ]; }; then
+    || { [ -n "$rl7_used" ] && [ -n "$rl7_resets" ]; } \
+    || { [ -n "$rlf_used" ] && [ -n "$rlf_resets" ]; }; then
         right_rows=4
     fi
 else
     [ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=2
     [ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=3
+    [ -n "$rlf_used" ] && [ -n "$rlf_resets" ] && right_rows=4
 fi
 (( right_rows > n )) && n=$right_rows
 
@@ -630,14 +689,15 @@ if [ -n "$model" ]; then
     fi
     row_right_reserved[0]=$rr_label_w
 fi
-if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
+if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
     # Burndown plot total cell width is hard-coded in the burndown block below;
     # mirror the constant here so col-2 can budget without depending on order.
-    for rr in 1 2 3; do (( rr < n )) && row_right_reserved[rr]=25; done
+    for rr in 1 2 3; do (( rr < n )) && row_right_reserved[rr]=38; done
 else
     # Text-mode rate-limit rows. ~30 cells covers the widest "5hr: 200% (100%/100%) Mon 12:00pm".
     [ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && (( 1 < n )) && row_right_reserved[1]=30
     [ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && (( 2 < n )) && row_right_reserved[2]=30
+    [ -n "$rlf_used" ] && [ -n "$rlf_resets" ] && (( 3 < n )) && row_right_reserved[3]=30
 fi
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
@@ -1047,8 +1107,9 @@ add_rate_row() {
     RATE_TIME+=("$(date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null)")
 }
 
-add_rate_row "5hr"  "$rl5_used" "$rl5_resets" 18000
-add_rate_row "7day" "$rl7_used" "$rl7_resets" 604800
+add_rate_row "5hr"   "$rl5_used" "$rl5_resets" 18000
+add_rate_row "7day"  "$rl7_used" "$rl7_resets" 604800
+add_rate_row "fable" "$rlf_used" "$rlf_resets" 604800
 
 if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
     # Column widths = max across present rows. Numbers render right-justified
@@ -1098,20 +1159,22 @@ if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Burndown graph (USAGE_BURNDOWN_GRAPH=1): two side-by-side plots, each 12 cell
-# cols × 3 cell rows (= 24 × 12 dots). 5hr on the left, 7day on the right, with
-# a 1-cell gap between. Total width: 12 + 1 + 12 = 25 cells. Right-aligned.
+# Burndown graph (USAGE_BURNDOWN_GRAPH=1): three side-by-side plots, each 12
+# cell cols × 3 cell rows (= 24 × 12 dots), in the same order /usage lists them:
+# 5hr, then 7day, then Fable's 7-day, with a 1-cell gap between each. Total
+# width: 12 + 1 + 12 + 1 + 12 = 38 cells. Right-aligned.
 #
-# Y axis (both plots) = percent remaining (top = 100%, bottom = 0%); each dot
+# Y axis (all plots) = percent remaining (top = 100%, bottom = 0%); each dot
 # encodes (100 - used%) from the JSON.
 #
 # Per-plot layer priority (highest wins on cell overlap within that plot):
-#   5hr plot:  red    > white-ideal
-#   7day plot: lblue  > white-ideal
+#   5hr plot:   red    > white-ideal
+#   7day plot:  lblue  > white-ideal
+#   fable plot: yellow > white-ideal
 # White is a dotted diagonal across the full plot (the un-elapsed future
 # included); the data line only extends to the current elapsed-x.
 # ────────────────────────────────────────────────────────────────────────────
-if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ]; }; then
+if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
     # Per-plot layout: 12 cells × 3 cells = 24 × 12 dots.
     #
     # Axes occupy specific dot positions, not entire cells: the Y axis is
@@ -1138,8 +1201,10 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     BURNDOWN_DATA_X_OFFSET=2                            # shift past Y axis cell
     BURNDOWN_DATA_W_DOTS=$(( BURNDOWN_W_DOTS - BURNDOWN_DATA_X_OFFSET ))    # 22
     BURNDOWN_DATA_H_DOTS=$(( BURNDOWN_H_DOTS - 1 ))                          # 11  (only the X axis dot row at y=11 is off-limits)
+    BURNDOWN_PLOT_COUNT=3
     BURNDOWN_GAP_CELLS=1
-    BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * 2 + BURNDOWN_GAP_CELLS ))   # 25
+    BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * BURNDOWN_PLOT_COUNT \
+                         + BURNDOWN_GAP_CELLS * (BURNDOWN_PLOT_COUNT - 1) ))   # 38
 
     # Axis dot bitmasks (per axis cell):
     #   left col   = bits 1 + 2 + 4 + 64 = 0x47  (⡇)
@@ -1152,7 +1217,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     # Braille bit per (dx,dy). Standard mapping from U+2800 base.
     BURNDOWN_BITS=(1 2 4 64 8 16 32 128)
 
-    declare -a br5_data br5_ideal br7_data br7_ideal
+    declare -a br5_data br5_ideal br7_data br7_ideal brf_data brf_ideal
 
     burndown_set() {
         local -n layer=$1
@@ -1219,8 +1284,10 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
 
     burndown_plot_ideal br5_ideal
     burndown_plot_ideal br7_ideal
-    burndown_plot_log   br5_data "5hr"  "$rl5_resets" 18000
-    burndown_plot_log   br7_data "7day" "$rl7_resets" 604800
+    burndown_plot_ideal brf_ideal
+    burndown_plot_log   br5_data "5hr"   "$rl5_resets" 18000
+    burndown_plot_log   br7_data "7day"  "$rl7_resets" 604800
+    burndown_plot_log   brf_data "fable" "$rlf_resets" 604800
 
     # X-axis tick: cell column matching "now" inside this plot's window.
     # Same elapsed→dot-x math as the data plotter, then dot→cell.
@@ -1238,6 +1305,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
     }
     br5_now_cell=$(burndown_now_cell "$rl5_resets" 18000)
     br7_now_cell=$(burndown_now_cell "$rl7_resets" 604800)
+    brf_now_cell=$(burndown_now_cell "$rlf_resets" 604800)
 
     # Emit one cell. Data and ideal layers stay exclusive of each other (the
     # ideal-under-data merge was tried and rejected: ideal dots in overlapped
@@ -1312,8 +1380,16 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ];
         burndown_str+=' '
         burndown_vw=$(( burndown_vw + 1 ))
 
-        # Right plot: 7day (light blue \033[94m).
+        # Middle plot: 7day (light blue \033[94m).
         burndown_emit_plot_row "$burndown_cy" br7_data br7_ideal "\033[94m" "$br7_now_cell"
+        burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
+
+        # Gap.
+        burndown_str+=' '
+        burndown_vw=$(( burndown_vw + 1 ))
+
+        # Right plot: Fable's 7day (yellow \033[33m).
+        burndown_emit_plot_row "$burndown_cy" brf_data brf_ideal "\033[33m" "$brf_now_cell"
         burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
 
         row_str[burndown_row]+=$burndown_str
