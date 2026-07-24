@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Claude Code status line — two-column multi-row layout.
-# Col 1: repo root of project_dir + repo root of each added_dir.
-# Col 2: cwd first, then every linked worktree of every col-1 repo (deduped vs col 1).
-# Each col-2 row also shows (branch) and PR/CI status (cached, async refresh).
-# Row 1 right side: model + ctx%.
+# The left side is ONE list, laid out column-major: repo root of project_dir,
+# then each added_dir, then every linked worktree of those repos (deduped). It
+# fills column A top-to-bottom to the height the right-side stack forces (the
+# burndown / rate-limit rows), then wraps the tail into column B — keeping the
+# two columns even once the list outgrows that height. Header cells show the
+# path + vcs + PR/CI; worktree cells show (branch) + PR/CI (cached, async).
+# Right side: row 0 = model + effort + ctx%; rows below = rate-limit burndown.
 
 input=$(cat)
 
@@ -662,15 +665,11 @@ for ((k=0; k<${#col1_path[@]}; k++)); do
     fi
 done
 
-col2_w=0
-for s in "${col2_short[@]}"; do (( ${#s} > col2_w )) && col2_w=${#s}; done
-
-n=${#col1_short[@]}
-(( ${#col2_path[@]} > n )) && n=${#col2_path[@]}
-
-# Right-side stack: row 0 packs model+effort+ctx; rate-limit rows fall below.
-# Inflate n if the left side has fewer rows so the rate-limit rows have slots.
-# Graph mode (USAGE_BURNDOWN_GRAPH=1) reserves 3 rows for the braille plot;
+# Right-side stack height: row 0 packs model+effort+ctx; the rows below hold
+# either the text rate-limit rows or the 3-row braille burndown. This is the
+# MINIMUM height the layout must reach so the right side has its slots — and,
+# below, the height column A fills to before the worktree list wraps into B.
+# Graph mode (USAGE_BURNDOWN_GRAPH=1) reserves 3 rows for the plot (row 1..3);
 # text mode reserves 1 row per present rate-limit window.
 right_rows=1
 if (( USAGE_BURNDOWN_GRAPH )); then
@@ -684,32 +683,22 @@ else
     [ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && right_rows=3
     [ -n "$rlf_used" ] && [ -n "$rlf_resets" ] && right_rows=4
 fi
-(( right_rows > n )) && n=$right_rows
 
-# Per-row right-side reservation, used by col 2 to decide whether the optional
-# CI-word column fits. Computed up front so col-2 rendering can budget against
-# it; the actual right-side content is rendered later in the script.
-declare -a row_right_reserved
-for ((i=0; i<n; i++)); do row_right_reserved[i]=0; done
-if [ -n "$model" ]; then
-    rr_label_w=${#model}
-    [ -n "$effort" ] && rr_label_w=$(( rr_label_w + 1 + ${#effort} ))
-    if [ -n "$used" ]; then
-        rr_used_int=$(printf '%.0f' "$used")
-        rr_label_w=$(( rr_label_w + 1 + ${#rr_used_int} + 1 ))   # " " + digits + "%"
-    fi
-    row_right_reserved[0]=$rr_label_w
-fi
-if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
-    # Burndown plot total cell width is hard-coded in the burndown block below;
-    # mirror the constant here so col-2 can budget without depending on order.
-    for rr in 1 2 3; do (( rr < n )) && row_right_reserved[rr]=38; done
-else
-    # Text-mode rate-limit rows. ~30 cells covers the widest "5hr: 200% (100%/100%) Mon 12:00pm".
-    [ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && (( 1 < n )) && row_right_reserved[1]=30
-    [ -n "$rl7_used" ] && [ -n "$rl7_resets" ] && (( 2 < n )) && row_right_reserved[2]=30
-    [ -n "$rlf_used" ] && [ -n "$rlf_resets" ] && (( 3 < n )) && row_right_reserved[3]=30
-fi
+# ── Column split. The left side is ONE list — repo headers (project_dir +
+# added_dirs) first, then every worktree — laid out column-major: fill column A
+# top-to-bottom, then spill the tail into column B. Two constraints:
+#   • column A never drops below right_rows, so the burndown / rate-limit rows
+#     on the right always have a left row to sit beside; and
+#   • once the list is long enough that half of it exceeds right_rows, the two
+#     columns grow evenly (balanced rowcounts) rather than piling into B.
+# Both fall out of one formula for the split height:
+#       rows = max(right_rows, ceil(total / 2))
+# with column A = left items [0, rows) and column B = left items [rows, total).
+# n (the number of display rows) is exactly `rows`, since rows ≥ right_rows.
+total_left=$(( ${#col1_path[@]} + ${#col2_path[@]} ))
+rows=$(( (total_left + 1) / 2 ))
+(( rows < right_rows )) && rows=$right_rows
+n=$rows
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
 for ((i=0; i<n; i++)); do row_str[i]=""; row_vw[i]=0; done
@@ -720,8 +709,8 @@ append() {
     row_vw[i]=$(( row_vw[i] + w ))
 }
 
-# ── Pass 1: build each col-1 cell (dir + optional cyan suffix + vcs + PR), tracking widths
-col1_cell_max_w=0
+# ── Pass 1: build each col-1 (repo header) cell — dir + optional cyan cwd
+# suffix + vcs + PR + main-CI marker — recording each cell's visible width.
 for ((i=0; i<${#col1_short[@]}; i++)); do
     cell=""
     cell_w=0
@@ -796,146 +785,181 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 
     col1_cell_str[$i]="$cell"
     col1_cell_vw[$i]=$cell_w
-    (( cell_w > col1_cell_max_w )) && col1_cell_max_w=$cell_w
 done
 
-# ── Pass 2: assemble rows. Col 1 cell padded to col1_cell_max_w, then col 2.
-# Rows with no col-2 content skip both the padding and the divider pipe — the
-# pipe is purely a col-1/col-2 separator, so don't draw it when nothing follows.
-for ((i=0; i<n; i++)); do
-    has_col2=0
-    (( i < ${#col2_path[@]} )) && has_col2=1
+# ── Pre-render each worktree into a standalone cell (branch + PR/CI status, no
+# path). Built once here so a worktree renders identically whether it lands in
+# column A (under the repo headers) or wraps into column B.
+#   Hue        — inherits from the parent col-1 entry (project_dir or one of the
+#                added_dirs). Lets you trace a worktree back to its repo.
+#   Saturation — bright when cwd lives in this worktree, dim otherwise.
+#   Italic     — set when an active subagent is in this worktree.
+#   Strike     — set when the PR is merged (the "(merged)" label is then dropped).
+declare -a wt_cell_str wt_cell_vw
+wappend() {  # wappend <j> <visible-width> <printf-fmt> [args…] → append to worktree cell j
+    local j=$1 w=$2; shift 2
+    wt_cell_str[j]+=$(printf "$@")
+    wt_cell_vw[j]=$(( ${wt_cell_vw[j]:-0} + w ))
+}
+for ((j=0; j<${#col2_path[@]}; j++)); do
+    wt_cell_str[j]=""
+    wt_cell_vw[j]=0
 
-    if (( i < ${#col1_cell_str[@]} )); then
-        row_str[i]+="${col1_cell_str[$i]}"
-        row_vw[i]=${col1_cell_vw[$i]}
-        if (( has_col2 )); then
-            pad=$(( col1_cell_max_w - col1_cell_vw[i] ))
-            (( pad > 0 )) && row_str[i]+=$(printf '%*s' "$pad" "") && row_vw[i]=$col1_cell_max_w
+    wt_real=$(realpath_safe "${col2_path[$j]}")
+
+    # Subagent here? SUBAGENT_CWDS now combines /proc-walked forked claudes
+    # and transcript-cwd-scanned in-process subagents, so one pass covers
+    # both PR-bound (feat-foo) and isolation-spawned (agent-<id>) worktrees.
+    has_subagent=0
+    for sc in "${SUBAGENT_CWDS[@]}"; do
+        sc_real=$(realpath_safe "$sc")
+        if [ "$sc_real" = "$wt_real" ] || [[ "$sc_real" == "$wt_real"/* ]]; then
+            has_subagent=1; break
         fi
-    elif (( has_col2 )); then
-        row_str[i]+=$(printf '\033[0m%*s' "$col1_cell_max_w" "")
-        row_vw[i]=$col1_cell_max_w
+    done
+
+    # Main cwd here?
+    has_main=0
+    if [ "$cwd_real" = "$wt_real" ] || [[ "$cwd_real" == "$wt_real"/* ]]; then
+        has_main=1
     fi
 
-    if (( has_col2 )); then
-        # Column delimiter: dim pipe with breathing room on either side
+    # PR state pulled up early so strikethrough can wrap the whole cell.
+    pr_state=""; ci_state=""; branch_ci=""; pr_ci=""; pr_num=""
+    if [ -n "${col2_pr[$j]}" ]; then
+        read -r pr_state ci_state branch_ci pr_ci pr_num <<<"${col2_pr[$j]}"
+        [ "$branch_ci" = "-" ] && branch_ci=""
+        [ "$pr_ci"     = "-" ] && pr_ci=""
+    fi
+
+    parent_hi=$(hue_idx_for "${col2_origin_idx[$j]}")
+    if (( has_main )); then
+        wt_head_c=$(sgr_hue "$parent_hi" 0); wt_rhs_c=$C_BRANCH;     wt_dim=""
+    else
+        wt_head_c=$(sgr_hue "$parent_hi" 1); wt_rhs_c=$C_BRANCH_DIM; wt_dim="dim"
+    fi
+    italic_flag=0; (( has_subagent ))          && italic_flag=1
+    strike_flag=0; [ "$pr_state" = "merged" ] && strike_flag=1
+    bold_flag=0;   (( has_main ))              && bold_flag=1
+    # All text decorations (italic for subagent, strike for merged, bold for
+    # bright) attach to the branch name only - icons left of it and the status
+    # suffix right of it stay undecorated, just colored.
+    ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$bold_flag")
+
+    # Branch color: overall CI state overrides the inherited repo hue when
+    # there's an open PR with a known CI state. Per-event states surface as
+    # the glyph cluster after the branch; the branch itself carries the
+    # aggregate signal. Saturation honors wt_dim so the existing bright/dim
+    # has_main rule still applies.
+    wt_branch_c="$wt_head_c"
+    if [ "$pr_state" = "open" ]; then
+        case "$ci_state" in
+            pass|fail|pending|none) wt_branch_c=$(color_for_ci "$ci_state" "$wt_dim") ;;
+        esac
+    fi
+    if [ -n "${col2_vcs[$j]}" ]; then
+        # Icons + branch share the aggregate CI color when there's an open
+        # PR (else the repo hue); counts in light gray (matches col 1). The
+        # icons track the branch color so the whole name cluster recolors
+        # together on CI state, rather than the glyphs staying repo-hue.
+        IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"${col2_vcs[$j]}"
+        if [ -n "$vt_icons" ]; then
+            wappend "$j" "${#vt_icons}" "${wt_branch_c}%s\033[0m" "$vt_icons"
+        fi
+        if [ -n "$vt_branch" ]; then
+            wappend "$j" "${#vt_branch}" "${ap_branch}${wt_branch_c}%s\033[0m" "$vt_branch"
+        fi
+        if [ -n "$vt_counts" ]; then
+            wappend "$j" "${#vt_counts}" "${wt_rhs_c}%s\033[0m" "$vt_counts"
+        fi
+    fi
+    if [ -n "$pr_num" ]; then
+        # Two-glyph CI cluster: slot 1 = branch-commit CI (event=push),
+        # slot 2 = PR-open CI (event=pull_request). Glyph per state:
+        #   pass → ✓ (green)   pending → ● (cyan)
+        #   fail → ✗ (red)
+        # No glyph (and no padding) when neither slot has a renderable
+        # state. When at least one has a state, both slots are rendered
+        # (the absent slot becomes a space) so position remains meaningful.
+        g1=""; c1=""; g2=""; c2=""
+        case "$branch_ci" in
+            pass)    g1="✓"; c1=$(color_for_ci pass    "$wt_dim") ;;
+            fail)    g1="✗"; c1=$(color_for_ci fail    "$wt_dim") ;;
+            pending) g1="●"; c1=$(color_for_ci pending "$wt_dim") ;;
+        esac
+        case "$pr_ci" in
+            pass)    g2="✓"; c2=$(color_for_ci pass    "$wt_dim") ;;
+            fail)    g2="✗"; c2=$(color_for_ci fail    "$wt_dim") ;;
+            pending) g2="●"; c2=$(color_for_ci pending "$wt_dim") ;;
+        esac
+        if [ -n "$g1" ] || [ -n "$g2" ]; then
+            if [ -n "$g1" ]; then
+                wappend "$j" 2 " ${c1}%s\033[0m" "$g1"
+            else
+                wappend "$j" 2 "  "
+            fi
+            if [ -n "$g2" ]; then
+                wappend "$j" 1 "${c2}%s\033[0m" "$g2"
+            else
+                wappend "$j" 1 " "
+            fi
+        fi
+        # PR # in light gray (status suffix).
+        wappend "$j" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
+        if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
+            # "(merged)" suppressed - strikethrough on branch carries it.
+            # "(open)" suppressed - branch color carries it.
+            # Draft/closed keep their word.
+            wappend "$j" $(( 3 + ${#pr_state} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_state"
+        fi
+    fi
+done
+
+# ── Reflow into two columns. One column-major list — repo header cells (built
+# in Pass 1) then worktree cells — split at `rows`: column A = [0, rows),
+# column B = [rows, total). See the `rows` derivation above.
+declare -a left_str left_vw
+for ((h=0; h<${#col1_cell_str[@]}; h++)); do
+    left_str+=("${col1_cell_str[$h]}")
+    left_vw+=("${col1_cell_vw[$h]}")
+done
+for ((j=0; j<${#wt_cell_str[@]}; j++)); do
+    left_str+=("${wt_cell_str[$j]}")
+    left_vw+=("${wt_cell_vw[$j]}")
+done
+
+# Column A cell width = widest cell that actually lands in column A.
+colA_width=0
+for ((r=0; r<rows && r<${#left_str[@]}; r++)); do
+    (( left_vw[r] > colA_width )) && colA_width=${left_vw[r]}
+done
+
+# Assemble each display row: the column-A cell (padded only when column B
+# follows on that row), a dim pipe divider, then the column-B cell. Column B's
+# row i holds left-list item (rows + i). Rows with no column-B content skip both
+# the padding and the divider — the pipe is purely a column-A/column-B separator.
+for ((i=0; i<n; i++)); do
+    bidx=$(( rows + i ))
+    has_colB=0
+    (( bidx < ${#left_str[@]} )) && has_colB=1
+
+    if (( i < ${#left_str[@]} )); then
+        row_str[i]+="${left_str[$i]}"
+        row_vw[i]=${left_vw[$i]}
+        if (( has_colB )); then
+            pad=$(( colA_width - left_vw[i] ))
+            (( pad > 0 )) && row_str[i]+=$(printf '%*s' "$pad" "") && row_vw[i]=$colA_width
+        fi
+    elif (( has_colB )); then
+        row_str[i]+=$(printf '\033[0m%*s' "$colA_width" "")
+        row_vw[i]=$colA_width
+    fi
+
+    if (( has_colB )); then
+        # Column delimiter: dim pipe with breathing room on either side.
         append "$i" 3 " ${C_SEP}|\033[0m "
-
-        # Col 2: git info only (no path).
-        # Hue        — inherits from the parent col-1 entry (project_dir or one of
-        #              the added_dirs). Lets you trace a worktree back to its repo.
-        # Saturation — bright when cwd lives in this worktree, dim otherwise.
-        # Italic     — set when an active subagent is in this worktree.
-        # Strike     — set when the PR is merged (the "(merged)" label is then dropped).
-        wt_real=$(realpath_safe "${col2_path[$i]}")
-
-        # Subagent here? SUBAGENT_CWDS now combines /proc-walked forked claudes
-        # and transcript-cwd-scanned in-process subagents, so one pass covers
-        # both PR-bound (feat-foo) and isolation-spawned (agent-<id>) worktrees.
-        has_subagent=0
-        for sc in "${SUBAGENT_CWDS[@]}"; do
-            sc_real=$(realpath_safe "$sc")
-            if [ "$sc_real" = "$wt_real" ] || [[ "$sc_real" == "$wt_real"/* ]]; then
-                has_subagent=1; break
-            fi
-        done
-
-        # Main cwd here?
-        has_main=0
-        if [ "$cwd_real" = "$wt_real" ] || [[ "$cwd_real" == "$wt_real"/* ]]; then
-            has_main=1
-        fi
-
-        # PR state pulled up early so strikethrough can wrap the whole col-2 cell.
-        pr_state=""; ci_state=""; branch_ci=""; pr_ci=""; pr_num=""
-        if [ -n "${col2_pr[$i]}" ]; then
-            read -r pr_state ci_state branch_ci pr_ci pr_num <<<"${col2_pr[$i]}"
-            [ "$branch_ci" = "-" ] && branch_ci=""
-            [ "$pr_ci"     = "-" ] && pr_ci=""
-        fi
-
-        parent_hi=$(hue_idx_for "${col2_origin_idx[$i]}")
-        if (( has_main )); then
-            wt_head_c=$(sgr_hue "$parent_hi" 0); wt_rhs_c=$C_BRANCH;     wt_dim=""
-        else
-            wt_head_c=$(sgr_hue "$parent_hi" 1); wt_rhs_c=$C_BRANCH_DIM; wt_dim="dim"
-        fi
-        italic_flag=0; (( has_subagent ))          && italic_flag=1
-        strike_flag=0; [ "$pr_state" = "merged" ] && strike_flag=1
-        bold_flag=0;   (( has_main ))              && bold_flag=1
-        # All text decorations (italic for subagent, strike for merged, bold
-        # for bright) attach to the branch name only - icons left of it and the
-        # status suffix right of it stay undecorated, just colored.
-        ap_branch=$(attrs_prefix "$italic_flag" "$strike_flag" "$bold_flag")
-
-        # Branch color: overall CI state overrides the inherited repo hue when
-        # there's an open PR with a known CI state. Per-event states surface as
-        # the glyph cluster after the branch; the branch itself carries the
-        # aggregate signal. Saturation honors wt_dim so the existing bright/dim
-        # has_main rule still applies.
-        wt_branch_c="$wt_head_c"
-        if [ "$pr_state" = "open" ]; then
-            case "$ci_state" in
-                pass|fail|pending|none) wt_branch_c=$(color_for_ci "$ci_state" "$wt_dim") ;;
-            esac
-        fi
-        if [ -n "${col2_vcs[$i]}" ]; then
-            # Icons + branch share the aggregate CI color when there's an open
-            # PR (else the repo hue); counts in light gray (matches col 1). The
-            # icons track the branch color so the whole name cluster recolors
-            # together on CI state, rather than the glyphs staying repo-hue.
-            IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"${col2_vcs[$i]}"
-            if [ -n "$vt_icons" ]; then
-                append "$i" "${#vt_icons}" "${wt_branch_c}%s\033[0m" "$vt_icons"
-            fi
-            if [ -n "$vt_branch" ]; then
-                append "$i" "${#vt_branch}" "${ap_branch}${wt_branch_c}%s\033[0m" "$vt_branch"
-            fi
-            if [ -n "$vt_counts" ]; then
-                append "$i" "${#vt_counts}" "${wt_rhs_c}%s\033[0m" "$vt_counts"
-            fi
-        fi
-        if [ -n "$pr_num" ]; then
-            # Two-glyph CI cluster: slot 1 = branch-commit CI (event=push),
-            # slot 2 = PR-open CI (event=pull_request). Glyph per state:
-            #   pass → ✓ (green)   pending → ● (cyan)
-            #   fail → ✗ (red)
-            # No glyph (and no padding) when neither slot has a renderable
-            # state. When at least one has a state, both slots are rendered
-            # (the absent slot becomes a space) so position remains meaningful.
-            g1=""; c1=""; g2=""; c2=""
-            case "$branch_ci" in
-                pass)    g1="✓"; c1=$(color_for_ci pass    "$wt_dim") ;;
-                fail)    g1="✗"; c1=$(color_for_ci fail    "$wt_dim") ;;
-                pending) g1="●"; c1=$(color_for_ci pending "$wt_dim") ;;
-            esac
-            case "$pr_ci" in
-                pass)    g2="✓"; c2=$(color_for_ci pass    "$wt_dim") ;;
-                fail)    g2="✗"; c2=$(color_for_ci fail    "$wt_dim") ;;
-                pending) g2="●"; c2=$(color_for_ci pending "$wt_dim") ;;
-            esac
-            if [ -n "$g1" ] || [ -n "$g2" ]; then
-                if [ -n "$g1" ]; then
-                    append "$i" 2 " ${c1}%s\033[0m" "$g1"
-                else
-                    append "$i" 2 "  "
-                fi
-                if [ -n "$g2" ]; then
-                    append "$i" 1 "${c2}%s\033[0m" "$g2"
-                else
-                    append "$i" 1 " "
-                fi
-            fi
-            # PR # in light gray (status suffix).
-            append "$i" $(( 2 + ${#pr_num} )) "  ${wt_rhs_c}%s\033[0m" "$pr_num"
-            if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
-                # "(merged)" suppressed - strikethrough on branch carries it.
-                # "(open)" suppressed - branch color carries it.
-                # Draft/closed keep their word.
-                append "$i" $(( 3 + ${#pr_state} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_state"
-            fi
-        fi
+        row_str[i]+="${left_str[$bidx]}"
+        row_vw[i]=$(( row_vw[i] + left_vw[bidx] ))
     fi
 done
 
