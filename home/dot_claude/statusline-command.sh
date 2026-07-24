@@ -717,7 +717,7 @@ if [ -n "$model" ]; then
 fi
 rr_plot=0
 if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
-    rr_plot=38    # 3 burndown plots × 12 cells + 2 gaps (BURNDOWN_TOTAL_W)
+    rr_plot=38    # flat burndown = 3 plots × 12 cells + 2 gaps (worst case)
 elif [ -n "$rl5_used" ] || [ -n "$rl7_used" ] || [ -n "$rlf_used" ]; then
     rr_plot=34    # widest text rate-limit row
 fi
@@ -1236,10 +1236,13 @@ if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Burndown graph (USAGE_BURNDOWN_GRAPH=1): three side-by-side plots, each 12
-# cell cols × 3 cell rows (= 24 × 12 dots), in the same order /usage lists them:
-# 5hr, then 7day, then Fable's 7-day, with a 1-cell gap between each. Total
-# width: 12 + 1 + 12 + 1 + 12 = 38 cells. Right-aligned.
+# Burndown graph (USAGE_BURNDOWN_GRAPH=1): three plots, each 12 cell cols × 3
+# cell rows (= 24 × 12 dots). Single-row order is 5hr, Fable, 7day. When the
+# worktree list has already made the status area taller than 3 rows, the plots
+# column-wrap to use that height and shrink horizontally (we never ADD rows for
+# them): 2 bands of vertical room → 7day drops beneath Fable (2 cols, 25 cells);
+# 3 bands → Fable drops too (1 col, 12 cells). 5hr always anchors the top-left.
+# Right-aligned. Layout math lives in the render loop near the end of this block.
 #
 # Y axis (all plots) = percent remaining (top = 100%, bottom = 0%); each dot
 # encodes (100 - used%) from the JSON.
@@ -1279,9 +1282,6 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     BURNDOWN_DATA_W_DOTS=$(( BURNDOWN_W_DOTS - BURNDOWN_DATA_X_OFFSET ))    # 22
     BURNDOWN_DATA_H_DOTS=$(( BURNDOWN_H_DOTS - 1 ))                          # 11  (only the X axis dot row at y=11 is off-limits)
     BURNDOWN_PLOT_COUNT=3
-    BURNDOWN_GAP_CELLS=1
-    BURNDOWN_TOTAL_W=$(( BURNDOWN_PLOT_W_CELLS * BURNDOWN_PLOT_COUNT \
-                         + BURNDOWN_GAP_CELLS * (BURNDOWN_PLOT_COUNT - 1) ))   # 38
 
     # Axis dot bitmasks (per axis cell):
     #   left col   = bits 1 + 2 + 4 + 64 = 0x47  (⡇)
@@ -1440,38 +1440,66 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
         done
     }
 
-    burndown_cy=0
-    while (( burndown_cy < BURNDOWN_PLOT_H_CELLS )); do
-        burndown_row=$(( 1 + burndown_cy ))
-        burndown_target_col=$(( TERM_WIDTH - BURNDOWN_TOTAL_W ))
-        burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
-        (( burndown_pad < SEP )) && burndown_pad=$SEP
-        printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
-        burndown_vw=$burndown_pad
+    # How many 3-row bands the existing layout gives us (rows 1..n-1; row 0 is
+    # the model label). We NEVER add rows for the graphs — this is purely what
+    # the worktree list already made room for. More bands ⇒ stack plots ⇒ a
+    # narrower block: 1 band = flat 3-across, 2 = two columns, 3 = one column.
+    burndown_bands=$(( (n - 1) / BURNDOWN_PLOT_H_CELLS ))
+    (( burndown_bands < 1 )) && burndown_bands=1
+    (( burndown_bands > BURNDOWN_PLOT_COUNT )) && burndown_bands=$BURNDOWN_PLOT_COUNT
 
-        # Left plot: 5hr (red).
-        burndown_emit_plot_row "$burndown_cy" br5_data br5_ideal "\033[31m" "$br5_now_cell"
-        burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
+    # Plots in single-row order: 5hr, Fable, 7day (left→right when flat). As
+    # bands appear, plots drop below to shrink width — 7day first, then Fable;
+    # 5hr always anchors the top-left. A dropped plot stacks under the rightmost
+    # column, so the block narrows right-to-left. plot index: 0=5hr 1=Fable 2=7day.
+    burndown_layer_data=(br5_data brf_data br7_data)
+    burndown_layer_ideal=(br5_ideal brf_ideal br7_ideal)
+    burndown_layer_color=("\033[31m" "\033[33m" "\033[94m")   # 5hr red, Fable yellow, 7day blue
+    burndown_layer_now=("$br5_now_cell" "$brf_now_cell" "$br7_now_cell")
+    case $burndown_bands in
+        1) burndown_pb=(0 0 0); burndown_pc=(0 1 2); burndown_ncols=3 ;;  # [5hr][Fable][7day]
+        2) burndown_pb=(0 0 1); burndown_pc=(0 1 1); burndown_ncols=2 ;;  # 5hr | Fable-over-7day
+        *) burndown_pb=(0 1 2); burndown_pc=(0 0 0); burndown_ncols=1 ;;  # 5hr / Fable / 7day
+    esac
+    burndown_total_w=$(( burndown_ncols * BURNDOWN_PLOT_W_CELLS + (burndown_ncols - 1) ))
 
-        # Gap.
-        burndown_str+=' '
-        burndown_vw=$(( burndown_vw + 1 ))
+    # Walk band by band; each band's 3 cell-rows land on consecutive display
+    # rows. On each row, walk columns left→right, emitting the plot that sits at
+    # (band, col) or a blank 12-cell gap where none does (e.g. band 2 left col).
+    for ((burndown_band=0; burndown_band<burndown_bands; burndown_band++)); do
+        for ((burndown_cy=0; burndown_cy<BURNDOWN_PLOT_H_CELLS; burndown_cy++)); do
+            burndown_row=$(( 1 + burndown_band * BURNDOWN_PLOT_H_CELLS + burndown_cy ))
+            burndown_target_col=$(( TERM_WIDTH - burndown_total_w ))
+            burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
+            (( burndown_pad < SEP )) && burndown_pad=$SEP
+            printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
+            burndown_vw=$burndown_pad
 
-        # Middle plot: 7day (light blue \033[94m).
-        burndown_emit_plot_row "$burndown_cy" br7_data br7_ideal "\033[94m" "$br7_now_cell"
-        burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
+            for ((burndown_col=0; burndown_col<burndown_ncols; burndown_col++)); do
+                if (( burndown_col > 0 )); then
+                    burndown_str+=' '
+                    burndown_vw=$(( burndown_vw + 1 ))
+                fi
+                burndown_p=-1
+                for ((bp=0; bp<BURNDOWN_PLOT_COUNT; bp++)); do
+                    if (( burndown_pb[bp] == burndown_band && burndown_pc[bp] == burndown_col )); then
+                        burndown_p=$bp; break
+                    fi
+                done
+                if (( burndown_p >= 0 )); then
+                    burndown_emit_plot_row "$burndown_cy" \
+                        "${burndown_layer_data[burndown_p]}" "${burndown_layer_ideal[burndown_p]}" \
+                        "${burndown_layer_color[burndown_p]}" "${burndown_layer_now[burndown_p]}"
+                else
+                    printf -v burndown_blank '%*s' "$BURNDOWN_PLOT_W_CELLS" ""
+                    burndown_str+=$burndown_blank
+                fi
+                burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
+            done
 
-        # Gap.
-        burndown_str+=' '
-        burndown_vw=$(( burndown_vw + 1 ))
-
-        # Right plot: Fable's 7day (yellow \033[33m).
-        burndown_emit_plot_row "$burndown_cy" brf_data brf_ideal "\033[33m" "$brf_now_cell"
-        burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
-
-        row_str[burndown_row]+=$burndown_str
-        row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
-        burndown_cy=$(( burndown_cy + 1 ))
+            row_str[burndown_row]+=$burndown_str
+            row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
+        done
     done
 fi
 
