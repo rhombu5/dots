@@ -778,10 +778,10 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         pc=$(color_for_pr "$pr_state" "$dimflag")
         # PR info is part of the status suffix - no bold.
         if [ "$pr_state" = "draft" ]; then
-            # Draft: parens around the number carry the state - "(#274)"
-            # instead of "#274 (draft)". Same signal, 6 fewer columns.
-            cell+=$(printf " ${pc}(%s)\033[0m" "$pr_num")
-            cell_w=$(( cell_w + 3 + ${#pr_num} ))
+            # Draft: italic on the number carries the state - "#274" in
+            # italic instead of "#274 (draft)". Zero extra columns.
+            cell+=$(printf " \033[3m${pc}%s\033[0m" "$pr_num")
+            cell_w=$(( cell_w + 1 + ${#pr_num} ))
         else
             cell+=$(printf " ${pc}%s\033[0m" "$pr_num")
             cell_w=$(( cell_w + 1 + ${#pr_num} ))
@@ -927,9 +927,9 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
         fi
         # PR # in light gray (status suffix).
         if [ "$pr_state" = "draft" ]; then
-            # Draft: parens around the number carry the state - "(#274)"
-            # instead of "#274 (draft)". Same signal, 6 fewer columns.
-            wappend "$j" $(( 3 + ${#pr_num} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_num"
+            # Draft: italic on the number carries the state - "#274" in
+            # italic instead of "#274 (draft)". Zero extra columns.
+            wappend "$j" $(( 1 + ${#pr_num} )) " \033[3m${wt_rhs_c}%s\033[0m" "$pr_num"
         else
             wappend "$j" $(( 1 + ${#pr_num} )) " ${wt_rhs_c}%s\033[0m" "$pr_num"
             if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
