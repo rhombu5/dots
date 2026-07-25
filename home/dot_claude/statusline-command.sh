@@ -777,19 +777,26 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         read -r pr_state ci_state _branch_ci _pr_ci pr_num <<<"$pr"
         pc=$(color_for_pr "$pr_state" "$dimflag")
         # PR info is part of the status suffix - no bold.
-        cell+=$(printf " ${pc}%s\033[0m" "$pr_num")
-        cell_w=$(( cell_w + 1 + ${#pr_num} ))
-        if [ "$pr_state" = "open" ]; then
-            cg=$(glyph_for_ci "$ci_state")
-            if [ -n "$cg" ]; then
-                cc=$(color_for_ci "$ci_state" "$dimflag")
-                cell+=$(printf " ${cc}%s\033[0m" "$cg")
-                cell_w=$(( cell_w + 2 ))
+        if [ "$pr_state" = "draft" ]; then
+            # Draft: parens around the number carry the state - "(#274)"
+            # instead of "#274 (draft)". Same signal, 6 fewer columns.
+            cell+=$(printf " ${pc}(%s)\033[0m" "$pr_num")
+            cell_w=$(( cell_w + 3 + ${#pr_num} ))
+        else
+            cell+=$(printf " ${pc}%s\033[0m" "$pr_num")
+            cell_w=$(( cell_w + 1 + ${#pr_num} ))
+            if [ "$pr_state" = "open" ]; then
+                cg=$(glyph_for_ci "$ci_state")
+                if [ -n "$cg" ]; then
+                    cc=$(color_for_ci "$ci_state" "$dimflag")
+                    cell+=$(printf " ${cc}%s\033[0m" "$cg")
+                    cell_w=$(( cell_w + 2 ))
+                fi
+            elif [ "$pr_state" != "merged" ]; then
+                # "(merged)" suppressed to save space - terminal state, common.
+                cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
+                cell_w=$(( cell_w + 3 + ${#pr_state} ))
             fi
-        elif [ "$pr_state" != "merged" ]; then
-            # "(merged)" suppressed to save space - terminal state, common.
-            cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
-            cell_w=$(( cell_w + 3 + ${#pr_state} ))
         fi
     fi
 
@@ -919,12 +926,18 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
             [ -n "$g2" ] && wappend "$j" 1 "${c2}%s\033[0m" "$g2"
         fi
         # PR # in light gray (status suffix).
-        wappend "$j" $(( 1 + ${#pr_num} )) " ${wt_rhs_c}%s\033[0m" "$pr_num"
-        if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
-            # "(merged)" suppressed - strikethrough on branch carries it.
-            # "(open)" suppressed - branch color carries it.
-            # Draft/closed keep their word.
-            wappend "$j" $(( 3 + ${#pr_state} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_state"
+        if [ "$pr_state" = "draft" ]; then
+            # Draft: parens around the number carry the state - "(#274)"
+            # instead of "#274 (draft)". Same signal, 6 fewer columns.
+            wappend "$j" $(( 3 + ${#pr_num} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_num"
+        else
+            wappend "$j" $(( 1 + ${#pr_num} )) " ${wt_rhs_c}%s\033[0m" "$pr_num"
+            if [ "$pr_state" != "open" ] && [ "$pr_state" != "merged" ]; then
+                # "(merged)" suppressed - strikethrough on branch carries it.
+                # "(open)" suppressed - branch color carries it.
+                # Closed keeps its word.
+                wappend "$j" $(( 3 + ${#pr_state} )) " ${wt_rhs_c}(%s)\033[0m" "$pr_state"
+            fi
         fi
     fi
 done
