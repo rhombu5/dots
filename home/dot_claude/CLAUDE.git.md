@@ -108,6 +108,26 @@ Trigger: when I propose work that creates a new GitHub repo, check whether one o
 
 After cloning a template, walk any `BURN-AFTER-READING.md` (or similarly-named) one-time setup doc and delete the file once done.
 
+## Repo settings as code — `.github/settings.yml`
+
+Where the **Probot Settings app** (`github.com/apps/settings`) is installed, repository settings, labels and rulesets live in `.github/settings.yml` and are applied from the default branch. **Installed on `fnioc` only** — not `fntemplate`, `rhombu5`, `fnclaude`, or `rhombus-redux`. A `settings.yml` in a repo whose owner lacks the app does nothing whatsoever, and says nothing about it.
+
+> **Give a sync 15 minutes before calling it failed.** Observed lag from merge to rulesets appearing: **~13 minutes**. The app creates no check run in any version, so a slow sync and a dead one are indistinguishable. I burned a full debugging pass declaring sections "silently skipped" on a sync that was still running, and reported a wrong root cause off the back of it.
+
+- **Every list section deletes what it omits.** `labels`, `rulesets`, `teams`, `collaborators`, `milestones`, `environments` and `branches` are diffed against live state: an entry present on GitHub and absent from the file is DELETED. Dropping a label strips it from every issue and PR carrying it. Omitting a whole section is a safe no-op; half-populating one is not.
+- **It is not a reconciler.** It syncs on a push touching `settings.yml`, on `repository.created`, on `repository.edited` when the default branch changed — and, in the deployed build, on `label` events, which `index.js` at HEAD does *not* handle. The hosted app is therefore **not** the source you just read; don't reason about its behaviour from upstream `main`. Arbitrary drift persists until one of those fires.
+- **`repository:` is a pass-through PATCH**, so any field that endpoint accepts works, not just the documented subset. `topics` is a comma-separated **string**, not a list.
+- **Write ruleset parameters out in full**, API defaults included — the app decides "changed?" by deep-equal against what GitHub returns, so an omitted default re-PUTs the ruleset every sync.
+- **Secrets and variables are out of scope permanently** — secrets are sealed client-side before upload and this file is public plaintext. Use `gh secret set` / `gh variable set`.
+- **Anyone with `push` becomes an effective admin**, since pushing to the default branch rewrites repo settings. The natural guard — a push rule protecting the file — is impossible (below), so branch protection is the only thing in front of it.
+
+**Verified impossible — don't re-derive these:**
+
+- **Push rules** (`target: push`, so `file_path_restriction`, `file_extension_restriction`, `max_file_size`, `max_file_path_length`) — `"Source public repos cannot have push rules"`. A repo-*visibility* limit, not a plan limit.
+- **The `workflows` ruleset rule** — every well-formed request fails with `"Workflow error at index 0: "` and an empty detail, while a bogus `repository_id` returns a specific error and `code_scanning` / `required_signatures` / `required_linear_history` all create fine. Cause unknown; retest before assuming it still fails.
+
+**Validate a ruleset before committing it**: POST it with `enforcement: disabled`, confirm it's accepted, then DELETE it. That never touches the live ruleset.
+
 ## My GitHub user/orgs
 
 | Owner | Use for | Notes |
