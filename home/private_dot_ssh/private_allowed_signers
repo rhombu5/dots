@@ -1,0 +1,5 @@
+# Commit-signing keys for 2511516+fnrhombus@users.noreply.github.com, one per machine.
+# chezmoi-managed: every host needs every host's key to verify history.
+2511516+fnrhombus@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICmgv+3Enh89mb5vutzHEgwzKitOzdrje8lQVF/bss/X
+2511516+fnrhombus@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILhFCMGjKIqo5SvNVqFWmlwS4s45dFluJoPuzBqpn5iO
+2511516+fnrhombus@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEOHk/jFVvm27t89W7bjQoVsxv3CBd4OY2OOK7tPgm3q
