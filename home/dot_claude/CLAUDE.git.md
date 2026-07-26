@@ -121,6 +121,13 @@ Where the **Probot Settings app** (`github.com/apps/settings`) is installed, rep
 - **Secrets and variables are out of scope permanently** — secrets are sealed client-side before upload and this file is public plaintext. Use `gh secret set` / `gh variable set`.
 - **Anyone with `push` becomes an effective admin**, since pushing to the default branch rewrites repo settings. The natural guard — a push rule protecting the file — is impossible (below), so branch protection is the only thing in front of it.
 
+**Two `repository:` keys the app cannot apply — set them by hand:**
+
+- **`security_and_analysis`** — unfixable in the app's design. GitHub silently drops the block when it arrives alongside other repository fields, and the app sends exactly one PATCH containing all of them; the identical block sent alone applies. No error either way. Reproduced twice.
+- **`topics`** — the PUT is never issued. The same call succeeds manually, including with the app's own deprecated `mercy` preview header, so the header is not the cause.
+
+Everything else applies: `repository:` scalars, `labels:`, and `rulesets:` (all created correctly, just slowest to land). Comment unappliable keys out rather than leaving them declared — a declared key that never applies makes the file misdescribe the repo.
+
 **Verified impossible — don't re-derive these:**
 
 - **Push rules** (`target: push`, so `file_path_restriction`, `file_extension_restriction`, `max_file_size`, `max_file_path_length`) — `"Source public repos cannot have push rules"`. A repo-*visibility* limit, not a plan limit.
