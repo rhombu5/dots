@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Prune stale entries from Go's build cache.
+#
+# Go's cache has no size cap. It evicts only entries unused for 5+ days, and
+# checks at most once a day -- which a workload that recompiles the same module
+# many times a day defeats completely. Transformer work on std@fnioc wrote about
+# 40 GB/day into it and filled a 476 GB disk with three days' accumulation, none
+# of it old enough for Go's own trim to touch a single file.
+#
+# Removing an entry is safe in itself: Go treats a missing entry as a cache miss
+# and recompiles that one unit. There is no index to corrupt. The hazard is
+# purely timing -- pruning underneath a running build makes it recompile work it
+# had already cached. So this refuses to run whenever a build might be in
+# flight, and overrides that refusal only where the alternative is the build
+# dying on ENOSPC, which is worse than the build being slow.
+
+set -euo pipefail
+
+CACHE="${GOCACHE:-$HOME/.cache/go-build}"
+[ -d "$CACHE" ] || exit 0
+
+# Available GB on the filesystem holding the cache.
+avail_gb() {
+  df -BG --output=avail "$CACHE" | tail -1 | tr -dc '0-9'
+}
+
+# Anything that could be compiling Go right now. `compile`, `link` and `asm` are
+# the toolchain workers the go driver spawns; matching only `go` would miss a
+# build sitting mid-compile with the driver blocked in wait().
+#
+# Exact name matches only (-x, against comm). A -f match on a substring like
+# "ttsc" also hits any shell whose command line merely mentions it -- an editor,
+# a grep, an agent session -- which would wedge this into skipping forever.
+# Nothing is lost by leaving it out: ttsc builds its sidecar through this same
+# toolchain, so a sidecar compile shows up as `compile`/`link`/`go` regardless.
+build_in_flight() {
+  pgrep -x go >/dev/null 2>&1 ||
+    pgrep -x compile >/dev/null 2>&1 ||
+    pgrep -x link >/dev/null 2>&1 ||
+    pgrep -x asm >/dev/null 2>&1
+}
+
+# A write in the last 30 minutes means a build just finished, so its working set
+# is still the hot one and the next build will very likely reuse it. Skip this
+# tick rather than race the build that is probably about to start.
+written_recently() {
+  [ -n "$(find "$CACHE" -type f -mmin -30 -print -quit 2>/dev/null)" ]
+}
+
+avail=$(avail_gb)
+
+# The 24h default keeps a full day's working set, which is the whole reason the
+# cache is worth having. The tighter tiers engage only under real pressure,
+# trading hit rate for headroom exactly when that trade is the right one.
+if [ "$avail" -lt 10 ]; then
+  tier=critical
+  age=(-mmin +360)
+elif [ "$avail" -lt 40 ]; then
+  tier=pressure
+  age=(-mmin +360)
+else
+  tier=normal
+  age=(-mtime +0)
+fi
+
+# The one case that outranks never-interrupt-a-build.
+if [ "$tier" != critical ]; then
+  if build_in_flight; then
+    echo "skip: build in flight"
+    exit 0
+  fi
+  if written_recently; then
+    echo "skip: cache written <30m ago"
+    exit 0
+  fi
+fi
+
+# -printf ahead of -delete so find reports each file's size as it removes it:
+# one tree walk, instead of a du before and a du after.
+freed=$(find "$CACHE" -type f "${age[@]}" ! -name trim.txt ! -name README \
+  -printf '%s\n' -delete 2>/dev/null | awk '{ s += $1 } END { print s + 0 }')
+find "$CACHE" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
+printf 'tier=%s freed=%sGB avail_before=%sGB\n' \
+  "$tier" \
+  "$(awk -v b="$freed" 'BEGIN { printf "%.1f", b / 1073741824 }')" \
+  "$avail"

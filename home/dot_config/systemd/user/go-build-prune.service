@@ -1,0 +1,11 @@
+[Unit]
+Description=Prune stale entries from Go's build cache
+
+[Service]
+Type=oneshot
+# Never compete with real work. Lowest CPU priority, and the idle I/O class so
+# any build, editor or browser gets the disk ahead of this -- the prune has no
+# deadline, and the script's own guards already keep it away from live builds.
+Nice=19
+IOSchedulingClass=idle
+ExecStart=%h/.local/bin/go-build-prune

@@ -1,0 +1,22 @@
+[Unit]
+Description=Prune Go's build cache hourly
+Requires=go-build-prune.service
+
+[Timer]
+# Hourly rather than daily: the script self-tiers on free space, so a frequent
+# tick is what gives the pressure guard its resolution. At normal free space
+# nearly every run is a no-op, since it only removes entries already 24h stale.
+#
+# OnUnitInactiveSec (not OnUnitActiveSec) so the next run is measured from the
+# previous one *finishing* -- a long prune on a large cache can't stack up runs.
+#
+# Deliberately monotonic, with no Persistent=. Persistent= only has an effect on
+# OnCalendar= timers, so setting it here would be a no-op that reads like a
+# guarantee. Catch-up would buy nothing anyway: a machine that was powered off
+# wrote nothing into the cache while it was down, so there is no missed work.
+OnBootSec=15min
+OnUnitInactiveSec=1h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
