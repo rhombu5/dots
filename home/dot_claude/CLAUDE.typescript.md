@@ -284,3 +284,25 @@ out.push({ subpath, targetRel: t.replace(/^\.\/?/, "") });
 The discriminator is the initializer, not the use-count: both bindings above are used once; only the trivial one should be inlined.
 
 *First-cut heuristic — the exact "too simple to name" threshold is still being calibrated; expect refinement.*
+
+## Overrides — always write `override`
+
+Every member that redeclares a base-class member carries the `override` keyword, **implementations of `abstract` members included**. It puts the relationship at the member itself, and it turns a renamed or deleted base member into a compile error instead of a silently-orphaned method.
+
+```ts
+abstract class Visitor<R> {
+  protected abstract visitUnion(node: UnionNode): R;
+}
+
+// NO
+class Printer extends Visitor<string> {
+  protected visitUnion(node: UnionNode) { … }
+}
+
+// YES
+class Printer extends Visitor<string> {
+  protected override visitUnion(node: UnionNode) { … }
+}
+```
+
+**`noImplicitOverride` does not cover the abstract case** — it only fires when a *concrete* base member is redeclared, so a class implementing an abstract base compiles clean either way. That exemption is exactly why this is a convention rather than something the compiler will remember for you. Turn the flag on regardless; it covers the other half.

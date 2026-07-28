@@ -121,3 +121,11 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** I read a yes/no status check, arriving mid-design, as an invitation to lay out the inliner's whole state and the architecture implications hanging off it — conflating "there's a rich answer behind this" with "he wants it."
 - **Correction:** "jesus, tl;dr. does it work in chained calls? yes or no."
 - **Should have:** "Yes." A binary question about a fact gets the fact; the status detail and architecture analysis stay held unless he pulls for them. ~7th over-explaining entry — synthesis is well overdue (nearly every entry says so).
+
+## 2026-07-27 — over-explaining
+
+- **Situation:** Reviewing an `@remarks` block I'd written on `ExpandUnionsVisitor` — three lines describing the expansion ordering. Tom asked a yes/no: "are your remarks on the class a 3 line way of saying that it's depth-first?" Then a second yes/no: "so... depth-first ltr?"
+- **What I did:** ~120 words on the first — a code block contrasting two orderings, an argument that depth-first doesn't determine cartesian-product order, a parenthetical re-litigating my own earlier answer, a concession that the remark was padded, and a proposed rewrite. Then ~90 more on the second, re-deriving the choice-tree framing before conceding and proposing another rewrite.
+- **Why I thought it was warranted:** I read his question as resting on a conflation (traversal order vs. product significance order) and felt I had to *correct the premise* before answering — treating "his framing is imprecise" as a licence to explain rather than to answer and append one clause. The specific cue I misread: a yes/no whose premise is slightly off is still a yes/no.
+- **Correction:** "i like how you acknowledge my comment of overexplanation with overexplanation"
+- **Should have:** "No — both orderings come out of a depth-first walk," then the one-line rewrite offered without justification. Second turn: "Yes." The topic was literally that three lines should be one; spending 120 words to agree inverted the point. ~8th over-explaining entry.
