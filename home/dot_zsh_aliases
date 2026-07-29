@@ -165,3 +165,47 @@ alias fnc-dev="$HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
 fncodex() {
   fncode "$@" && exit
 }
+
+# --- cloudlog: read a Claude Code cloud session's transcript, read-only ---
+# Attaching to a cloud session (`claude --cloud <session_id>`) is behind the
+# server-side `tengu_remote_backend` gate and is off for this account, and
+# `claude --teleport <id>` migrates the session down to a local one (switching
+# git branches to match). This hits the same endpoint teleport reads from —
+# GET /v1/code/sessions/<id>/teleport-events — without either side effect, so
+# the cloud session keeps running untouched. Headers mirror the CLI's own
+# getOAuthHeaders() plus x-organization-uuid.
+#   cloudlog <session_id>        assistant turns only (default)
+#   cloudlog <session_id> --all  every event, as raw JSON lines
+# Pairs with `claude -p "<msg>" --cloud <session_id>` to send.
+cloudlog() {
+  local sid=$1
+  if [[ -z $sid ]]; then
+    print -u2 "usage: cloudlog <session_id> [--all]"
+    return 2
+  fi
+
+  local tok=$(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json)
+  local org=$(jq -r '.oauthAccount.organizationUuid' ~/.claude.json)
+  if [[ -z $tok || $tok == null ]]; then
+    print -u2 "cloudlog: no OAuth token — run 'claude /login'"
+    return 1
+  fi
+
+  local body=$(curl -sf \
+    "https://api.anthropic.com/v1/code/sessions/${sid}/teleport-events" \
+    -H "Authorization: Bearer ${tok}" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "anthropic-client-platform: cli" \
+    -H "x-organization-uuid: ${org}") || {
+    print -u2 "cloudlog: fetch failed for ${sid}"
+    return 1
+  }
+
+  if [[ $2 == --all ]]; then
+    print -r -- $body | jq -c '.data[]'
+  else
+    print -r -- $body | jq -r '.data[]
+      | select(.event_type == "assistant")
+      | .payload.message.content[]?.text // empty'
+  fi
+}
