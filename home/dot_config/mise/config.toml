@@ -9,6 +9,9 @@ node = "lts"
 
 [settings]
 experimental = true
+# Auto-trust any mise.toml beneath these roots, so new clones and worktrees do not
+# need a manual `mise trust` before their tools resolve.
+trusted_config_paths = ["~/src", "~/.local/src"]
 
 [settings.npm]
 package_manager = "pnpm"
