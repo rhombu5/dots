@@ -306,3 +306,34 @@ class Printer extends Visitor<string> {
 ```
 
 **`noImplicitOverride` does not cover the abstract case** — it only fires when a *concrete* base member is redeclared, so a class implementing an abstract base compiles clean either way. That exemption is exactly why this is a convention rather than something the compiler will remember for you. Turn the flag on regardless; it covers the other half.
+
+## Blank lines — one between every member, one after a region opener
+
+Separate sibling declarations with exactly one blank line — between a declaration's closing `}`
+(or end) and the next member's doc comment or declaration. Applies at module, namespace, and
+class level alike: functions, methods, interfaces, classes. A `// #region` opener also gets a
+blank line before the first doc comment or member that follows it. A run of tightly-coupled
+one-line aliases may sit adjacent when splitting them would obscure the pairing.
+
+```ts
+// NO — members packed together, region opener crowded
+// #region factories
+/** A constructor signature. */
+export function ctor(instanceType: Type): CtorType { … }
+/** Reads a token back into the Type it spells. */
+export function from(token: string): Type { … }
+
+// YES — a blank after the opener and between every member
+// #region factories
+
+/** A constructor signature. */
+export function ctor(instanceType: Type): CtorType { … }
+
+/** Reads a token back into the Type it spells. */
+export function from(token: string): Type { … }
+```
+
+**Tooling note:** this is authored, not formatter-enforced — dprint's TypeScript plugin has no
+blank-line *insertion* rule (only enum `memberSpacing`, maintain-only), and Prettier likewise
+only preserves. Both maintain authored blanks, so write them once and the formatter keeps them.
+Where ESLint runs, `@stylistic/padding-line-between-statements` can enforce the member case.
