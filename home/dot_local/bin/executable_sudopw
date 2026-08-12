@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# sudopw — seed (or rotate) the local sudo password held in libsecret,
+# where `claude-askpass` looks for it first.
+#
+# Run this from a real terminal. It prompts, verifies the password
+# against sudo, and only stores it if sudo actually accepts it.
+#
+# Why not just `secret-tool store service sudo user tom`?
+#
+#   1. secret-tool reads its prompt from the controlling terminal. In a
+#      context without one -- Claude Code's `!` prefix, a pipeline, a
+#      systemd unit -- it reads EOF and silently stores an EMPTY string,
+#      exiting 0. Observed 2026-08-11. `secret-tool lookup` then also
+#      exits 0, so nothing downstream can tell "not set" from "set to
+#      nothing" except by checking the length.
+#   2. Nothing validates the value. A typo is stored just as happily as
+#      the real password, and you find out later when sudo starts
+#      failing -- from a non-interactive context, where the error is
+#      "no password was provided" rather than anything about a bad one.
+#
+# This script refuses both cases: empty input aborts, and a password
+# sudo rejects is never written.
+
+set -euo pipefail
+
+readonly SERVICE=sudo
+readonly ACCOUNT="${USER:-$(id -un)}"
+
+die() {
+    printf 'sudopw: %s\n' "$*" >&2
+    exit 1
+}
+
+if [[ ! -t 0 ]]; then
+    die "stdin is not a terminal — run this from a real terminal window,
+       not via a pipe, a script, or Claude Code's \`!\` prefix."
+fi
+
+printf 'Local password for %s (not echoed): ' "$ACCOUNT" >&2
+IFS= read -rs password
+printf '\n' >&2
+
+if [[ -z "$password" ]]; then
+    die "empty password — nothing stored."
+fi
+
+# Verify before storing. `sudo -k` first so a cached timestamp from an
+# earlier sudo in this terminal can't make a wrong password look right.
+printf 'Verifying against sudo... ' >&2
+sudo -k
+if ! printf '%s\n' "$password" | sudo -S -p '' true 2>/dev/null; then
+    printf 'rejected.\n' >&2
+    die "sudo did not accept that password — nothing stored."
+fi
+printf 'accepted.\n' >&2
+
+printf '%s' "$password" \
+    | secret-tool store \
+        --label="$(hostname -s) local password ($ACCOUNT)" \
+        service "$SERVICE" user "$ACCOUNT"
+
+# secret-tool store is silent on success, so confirm by reading it back
+# and checking it is non-empty -- the exact failure mode described above.
+stored="$(secret-tool lookup service "$SERVICE" user "$ACCOUNT" 2>/dev/null || true)"
+if [[ -z "$stored" ]]; then
+    die "readback came back empty — the keyring did not take it."
+fi
+
+printf 'sudopw: stored for %s. `sudoa` should now work unattended.\n' "$ACCOUNT" >&2
