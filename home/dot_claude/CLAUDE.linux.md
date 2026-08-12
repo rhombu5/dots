@@ -4,13 +4,13 @@
 
 The fingerprint reader prompt fires invisibly inside the tool call, and the terminal bell is silent in this setup (Ghostty). Two wrappers cover the cases:
 
-- **`sudoa`** — *unattended.* Pulls the local password from Bitwarden via `~/.local/bin/claude-askpass` and feeds it to `sudo -A`. No prompt, no notification, no swipe. Use this when running a batch where the user can't or shouldn't be at the keyboard.
+- **`sudoa`** — *unattended.* Reads the local password via `~/.local/bin/claude-askpass` and feeds it to `sudo -A`. No prompt, no notification, no swipe. Use this when running a batch where the user can't or shouldn't be at the keyboard.
 - **`sudonf`** — *interactive, with audible cue.* Plays a Critical notification + sound (so the user knows to swipe / type) and self-clears the notification when sudo returns.
 
 ### When to use which
 
-- **Default to `sudoa`** for any sudo call that doesn't need user input — system inspections, package installs/removes once decided, file writes the user has already approved, batched setup steps. Pre-req: `bwu` once per fresh login (caches the master password in libsecret); after that sudoa is silent forever.
-- **Use `sudonf`** when the user is genuinely choosing whether to authenticate — e.g. you're asking them to validate a destructive change *via the auth itself*, or `bwu` hasn't been seeded yet on this login.
+- **Default to `sudoa`** for any sudo call that doesn't need user input — system inspections, package installs/removes once decided, file writes the user has already approved, batched setup steps. Nothing to seed per login; the password lives in libsecret and survives reboots.
+- **Use `sudonf`** when the user is genuinely choosing whether to authenticate — e.g. you're asking them to validate a destructive change *via the auth itself*. Note `sudonf` still needs a controlling terminal, so it cannot work from the Bash tool at all — it is for the user's own shell, not yours.
 - **Don't mix** sudonf and sudoa in one batch. Pick one.
 
 ### `sudoa` usage
@@ -19,9 +19,24 @@ The fingerprint reader prompt fires invisibly inside the tool call, and the term
 sudoa <cmd>     # = SUDO_ASKPASS=~/.local/bin/claude-askpass sudo -A <cmd>
 ```
 
-If `claude-askpass` errors (master password not cached, vault sync stale, ambiguous Bitwarden item), sudo prints the askpass error to stderr — read it and fix the underlying issue. Common case: tell the user to run `bwu` once.
+`claude-askpass` reads libsecret (`service=sudo user=tom`) first and returns immediately on a hit. Only if that is empty does it fall back to the Bitwarden vault item `metis.rhombus.rocks` → field `tom`, backfilling libsecret on success so the vault is consulted at most once per keyring.
 
-Trust model: anyone with an unlocked vault can `sudoa`. Same surface as the Bitwarden desktop app's "Unlock with system authentication" toggle.
+The libsecret fast path exists because the Bitwarden path had a hard dependency on the self-hosted Vaultwarden, which went unreachable in June 2026 and eventually logged the CLI out entirely — taking unattended sudo down with it. See [[project-vaultwarden-server-unreachable]].
+
+If `sudoa` fails, seed or rotate the password with **`sudopw`**, run from a real terminal. It refuses non-tty stdin, refuses empty input, and verifies against `sudo -S true` before writing — plain `secret-tool store` does none of that and will silently store an empty string when it has no terminal.
+
+Trust model: anyone who can read the keyring can elevate. That was already true — libsecret also holds the Bitwarden master password, which is strictly more powerful.
+
+### Other tools that shell out to `sudo`
+
+Some programs compose a plain `sudo …` command line internally rather than accepting a password themselves. From the Bash tool there is no terminal, so those fail — often with a misleading error that points at permissions instead of auth. **Export `SUDO_ASKPASS` before invoking them**; sudo falls back to the askpass helper specifically when no terminal is available:
+
+```bash
+export SUDO_ASKPASS="$HOME/.local/bin/claude-askpass"
+hyprpm update     # otherwise dies with "Failed to write plugin state"
+```
+
+Priming the timestamp with `sudoa -v` first does *not* work as a substitute. See [[feedback-hyprpm-needs-sudo-askpass]].
 
 ### `sudonf` usage
 
