@@ -360,5 +360,9 @@ export const from = (() => {
 ```
 
 Keep the inner function **named** — stack traces and profiles still say `from`. The doc comment
-rides the exported const, so hover/intellisense is unchanged. State genuinely shared by several
-members stays a scope-level declaration, placed beside its users.
+rides the exported const, so hover/intellisense is unchanged. **The wrapper is an arrow,
+deliberately**: an arrow IIFE introduces no `this`/`arguments` boundary, so the wrapper is
+transparent to context — nothing inside can capture or shadow a `this` the enclosing scope didn't
+already have (a `function` wrapper would mint its own). The arrow wraps; the returned function is
+the one that owns a `this` if the member needs one. State genuinely shared by several members
+stays a scope-level declaration, placed beside its users.
