@@ -287,6 +287,10 @@ realpath_safe() {
     fi
 }
 
+# is_within <path> <ancestor> — true when <path> IS <ancestor> or sits under it.
+# Both sides are expected to be realpath'd already.
+is_within() { [ "$1" = "$2" ] || [[ "$1" == "$2"/* ]]; }
+
 # p10k-flavoured VCS cell. Emits three parts joined by TAB so callers can color
 # / decorate them independently:  <icons>\t<branch>\t<counts>
 #   icons  = "<host-icon> <branch-icon> "  (trailing space; concat == original)
@@ -563,17 +567,30 @@ if ! { [ "$project_dir_real" = "$NOOP_DIR_REAL" ] && (( ${#added_dirs[@]} == 0 )
     for d in "${added_dirs[@]}"; do col1_path+=("$(main_worktree_of "$d")"); done
 fi
 
-declare -a col1_short
-for p in "${col1_path[@]}"; do col1_short+=("$(abbreviate_if_templated "$(shorten "$p")")"); done
-
+# One pass per col-1 entry: canonical path, display label, and the git/PR/CI
+# annotations. `seen` is filled here so the col-2 worktree scan below can use it
+# to skip repos that already have a col-1 row; col1_real is kept so no path in
+# this script is ever realpath'd twice.
+# The main-CI fetch is the latest push-to-main run - that's the release pipeline
+# gate Tom watches after a PR merges.
 declare -A seen
-for p in "${col1_path[@]}"; do seen["$(realpath_safe "$p")"]=1; done
+declare -a col1_short col1_real col1_vcs col1_pr col1_main_ci
+for ((i=0; i<${#col1_path[@]}; i++)); do
+    col1_real[i]=$(realpath_safe "${col1_path[$i]}")
+    seen["${col1_real[i]}"]=1
+    col1_short[i]=$(abbreviate_if_templated "$(shorten "${col1_path[$i]}")")
+    refresh_pr_async      "${col1_path[$i]}"
+    refresh_main_ci_async "${col1_path[$i]}"
+    col1_pr[i]=$(read_pr_annotation           "${col1_path[$i]}")
+    col1_main_ci[i]=$(read_main_ci_annotation "${col1_path[$i]}")
+    col1_vcs[i]=$(vcs_text_for                "${col1_path[$i]}")
+done
 
 # ── Column 2: worktrees only (cwd is folded into col 1 below).
 # `seen` already contains col-1 paths (project_dir + added_dirs), which prevents
 # duplicating *main* worktrees here. Cwd is NOT added to `seen` — if cwd happens
 # to be a linked worktree, it should still appear and get its yellow saturation.
-declare -a col2_path col2_vcs col2_origin_idx
+declare -a col2_path col2_real col2_vcs col2_origin_idx
 
 for ((ridx=0; ridx<${#col1_path[@]}; ridx++)); do
     repo="${col1_path[$ridx]}"
@@ -583,6 +600,7 @@ for ((ridx=0; ridx<${#col1_path[@]}; ridx++)); do
         [ -n "${seen[$wt_real]}" ] && continue
         seen["$wt_real"]=1
         col2_path+=("$wt_path")
+        col2_real+=("$wt_real")
         col2_origin_idx+=("$ridx")
     done < <(worktrees_of "$repo")
 done
@@ -594,24 +612,16 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
     col2_vcs+=("$(vcs_text_for "${col2_path[$j]}" tree)")
 done
 
-# Pre-fetch vcs + PR for col 1 entries too (added dirs now show git status).
-# Also fetch the latest push-to-main CI state per repo - that's the release
-# pipeline gate Tom watches after a PR merges.
-declare -a col1_vcs col1_pr col1_main_ci
-for ((j=0; j<${#col1_path[@]}; j++)); do
-    refresh_pr_async      "${col1_path[$j]}"
-    refresh_main_ci_async "${col1_path[$j]}"
-    col1_pr+=("$(read_pr_annotation       "${col1_path[$j]}")")
-    col1_main_ci+=("$(read_main_ci_annotation "${col1_path[$j]}")")
-    col1_vcs+=("$(vcs_text_for "${col1_path[$j]}")")
-done
+# Canonicalise every subagent cwd once, rather than once per worktree in the
+# cell-build loop below (that nesting made it S×W realpath forks).
+declare -a sub_real
+for sc in "${SUBAGENT_CWDS[@]}"; do sub_real+=("$(realpath_safe "$sc")"); done
 
 # Which col-1 entry contains the cwd? (-1 if none)
 cwd_real=$(realpath_safe "$cwd")
 matching_idx=-1
 for ((k=0; k<${#col1_path[@]}; k++)); do
-    krp=$(realpath_safe "${col1_path[$k]}")
-    if [ "$cwd_real" = "$krp" ] || [[ "$cwd_real" == "$krp"/* ]]; then
+    if is_within "$cwd_real" "${col1_real[k]}"; then
         matching_idx=$k
         break
     fi
@@ -724,8 +734,8 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
 
     # Cyan suffix only on the matching row, when cwd is a subdir of it.
     if (( i == matching_idx )); then
-        krp=$(realpath_safe "${col1_path[$i]}")
-        if [ "$cwd_real" != "$krp" ] && [[ "$cwd_real" == "$krp"/* ]]; then
+        krp="${col1_real[i]}"
+        if [[ "$cwd_real" == "$krp"/* ]]; then
             suffix="/${cwd_real#$krp/}"
             cell+=$(printf "${bold}${C_CURRENT}%s\033[0m" "$suffix")
             cell_w=$(( cell_w + ${#suffix} ))
@@ -803,24 +813,21 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
     wt_cell_str[j]=""
     wt_cell_vw[j]=0
 
-    wt_real=$(realpath_safe "${col2_path[$j]}")
+    wt_real="${col2_real[j]}"
 
     # Subagent here? SUBAGENT_CWDS now combines /proc-walked forked claudes
     # and transcript-cwd-scanned in-process subagents, so one pass covers
     # both PR-bound (feat-foo) and isolation-spawned (agent-<id>) worktrees.
     has_subagent=0
-    for sc in "${SUBAGENT_CWDS[@]}"; do
-        sc_real=$(realpath_safe "$sc")
-        if [ "$sc_real" = "$wt_real" ] || [[ "$sc_real" == "$wt_real"/* ]]; then
+    for sc_real in "${sub_real[@]}"; do
+        if is_within "$sc_real" "$wt_real"; then
             has_subagent=1; break
         fi
     done
 
     # Main cwd here?
     has_main=0
-    if [ "$cwd_real" = "$wt_real" ] || [[ "$cwd_real" == "$wt_real"/* ]]; then
-        has_main=1
-    fi
+    is_within "$cwd_real" "$wt_real" && has_main=1
 
     # PR state pulled up early so strikethrough can wrap the whole cell.
     pr_state=""; ci_state=""; branch_ci=""; pr_ci=""; pr_num=""
