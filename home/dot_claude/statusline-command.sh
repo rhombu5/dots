@@ -85,23 +85,31 @@ fi
 # worktrees both write the worktree path as their cwd.
 SUBAGENT_FRESH_WINDOW=60
 SUBAGENT_MIDTURN_WINDOW=900
-_now=$(date +%s)
+# One clock read for the whole render: every age, elapsed-% and "now" tick
+# below is measured from this instant, so none of them can straddle a second
+# boundary relative to each other.
+NOW=$(date +%s)
 shopt -s nullglob
 for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
     [ -L "$f" ] || continue
     target=$(readlink -f "$f" 2>/dev/null)
     [ -z "$target" ] && continue
     mtime=$(stat -c %Y "$target" 2>/dev/null) || continue
-    age=$(( _now - mtime ))
+    age=$(( NOW - mtime ))
     (( age < SUBAGENT_MIDTURN_WINDOW )) || continue
     last_json=$(tail -1 "$target" 2>/dev/null)
     [ -z "$last_json" ] && continue
+    # Both signals this line carries, in one jq pass: the stop_reason that
+    # decides live-vs-idle, and the transcript's own .cwd (signal 3 below).
+    IFS=$'\t' read -r stop_reason sub_cwd < <(jq -r '
+        (if .type == "assistant" then (.message.stop_reason // "_null") else "_nonassistant" end)
+        + "\t" + (.cwd // "")
+    ' <<<"$last_json" 2>/dev/null)
     if (( age >= SUBAGENT_FRESH_WINDOW )); then
         # Idle iff last entry is an assistant message whose stop_reason is a
         # conversation-end signal. `tool_use` means the agent emitted tool
         # calls and is waiting for results - that's mid-flight, not idle.
         # null stop_reason is also live (incomplete assistant message).
-        stop_reason=$(jq -r 'if .type == "assistant" then (.message.stop_reason // "_null") else "_nonassistant" end' <<<"$last_json" 2>/dev/null)
         case "$stop_reason" in
             end_turn|stop_sequence|max_tokens) continue ;;
         esac
@@ -123,11 +131,9 @@ for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
     fi
     bash_cd=$(tail -200 "$target" 2>/dev/null \
         | jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use" and .name == "Bash") | .input.command // empty' 2>/dev/null \
-        | grep -oE 'cd[[:space:]]+["'\'']?/[^[:space:]"'\'';|&)]+' \
-        | sed -E 's/^cd[[:space:]]+["'\'']?//' \
+        | grep -oP 'cd\s+["'\'']?\K/[^\s"'\'';|&)]+' \
         | tail -1)
     [ -n "$bash_cd" ] && SUBAGENT_CWDS+=("$bash_cd")
-    sub_cwd=$(jq -r '.cwd // empty' <<<"$last_json" 2>/dev/null)
     [ -n "$sub_cwd" ] && SUBAGENT_CWDS+=("$sub_cwd")
 done
 shopt -u nullglob
@@ -180,19 +186,21 @@ USAGE_BURNDOWN_GRAPH=1
 # means a new window naturally rolls into a new file, and any file whose name's
 # epoch is in the past is stale historical data we can ignore (or archive).
 USAGE_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-statusline"
+CACHE_DIR="$HOME/.cache/claude-statusline"
+CACHE_TTL=60
+# Both directories exist after the first render, so making them once up front
+# costs one fork instead of one per log point.
+mkdir -p "$USAGE_LOG_DIR" "$CACHE_DIR" 2>/dev/null
+
 log_usage_point() {
     local scope=$1 used=$2 resets_at=$3
     [ -z "$used" ] && return
     [ -z "$resets_at" ] && return
-    mkdir -p "$USAGE_LOG_DIR" 2>/dev/null || return
-    printf '%d %s\n' "$(date +%s)" "$used" >> "$USAGE_LOG_DIR/${scope}-${resets_at}.log"
+    [ -d "$USAGE_LOG_DIR" ] || return
+    printf '%d %s\n' "$NOW" "$used" >> "$USAGE_LOG_DIR/${scope}-${resets_at}.log"
 }
 log_usage_point "5hr"  "$rl5_used" "$rl5_resets"
 log_usage_point "7day" "$rl7_used" "$rl7_resets"
-
-CACHE_DIR="$HOME/.cache/claude-statusline"
-CACHE_TTL=60
-mkdir -p "$CACHE_DIR" 2>/dev/null
 
 # ── Fable weekly limit ───────────────────────────────────────────────────────
 # The statusline payload carries only five_hour and seven_day. The per-model
@@ -215,7 +223,7 @@ OAUTH_USAGE_TTL=300
 async_refresh() {
     local cache_file=$1 ttl=$2; shift 2
     if [ -f "$cache_file" ]; then
-        (( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) < ttl )) && return
+        (( NOW - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) < ttl )) && return
     fi
     ( flock -n 200 || exit 0; "$@" "$cache_file" ) 200>"$cache_file.lock" >/dev/null 2>&1 &
     disown 2>/dev/null
@@ -324,15 +332,17 @@ is_within() { [ "$1" = "$2" ] || [[ "$1" == "$2"/* ]]; }
 vcs_text_for() {
     local d="$1" icon_mode="${2:-default}" branch
     [ -z "$d" ] && return
-    git --no-optional-locks -C "$d" rev-parse --is-inside-work-tree &>/dev/null || return
-    branch=$(git --no-optional-locks -C "$d" symbolic-ref --short HEAD 2>/dev/null) \
-        || branch=$(git --no-optional-locks -C "$d" rev-parse --short HEAD 2>/dev/null) \
+    # The flags live in one place; array expansion, so still no extra fork.
+    local -a g=(git --no-optional-locks -C "$d")
+    "${g[@]}" rev-parse --is-inside-work-tree &>/dev/null || return
+    branch=$("${g[@]}" symbolic-ref --short HEAD 2>/dev/null) \
+        || branch=$("${g[@]}" rev-parse --short HEAD 2>/dev/null) \
         || return
 
     local host_icon=$'' url
     local gh_icon=$'\uF408'    # nf-fa-github_alt (octocat) - col 1 default
     [ "$icon_mode" = "tree" ] && gh_icon=$'\uF1BB'    # nf-fa-tree - col 2 worktrees
-    url=$(git --no-optional-locks -C "$d" remote get-url origin 2>/dev/null)
+    url=$("${g[@]}" remote get-url origin 2>/dev/null)
     case "$url" in
         *github.com*) host_icon="$gh_icon" ;;
         *gitlab*)     host_icon=$'' ;;
@@ -353,16 +363,16 @@ vcs_text_for() {
             [ "$x" != " " ] && [ "$x" != "?" ] && staged=$(( staged + 1 ))
             [ "$y" != " " ] && [ "$y" != "?" ] && unstaged=$(( unstaged + 1 ))
         fi
-    done < <(git --no-optional-locks -C "$d" status --porcelain=v1 2>/dev/null)
+    done < <("${g[@]}" status --porcelain=v1 2>/dev/null)
 
     local ahead=0 behind=0 counts
-    counts=$(git --no-optional-locks -C "$d" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)
+    counts=$("${g[@]}" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)
     if [ -n "$counts" ]; then
         behind=${counts%%[[:space:]]*}
         ahead=${counts##*[[:space:]]}
     fi
     local stash
-    stash=$(git --no-optional-locks -C "$d" stash list 2>/dev/null | wc -l)
+    stash=$("${g[@]}" stash list 2>/dev/null | wc -l)
 
     local counts_part=""
     (( behind > 0 ))    && counts_part+="⇣$behind"
@@ -404,7 +414,7 @@ main_worktree_of() {
     [ -n "$first" ] && printf '%s' "$first" || printf '%s' "$d"
 }
 
-cache_key() { printf '%s' "$1" | sha256sum | head -c 16; }
+cache_key() { local h; h=$(printf '%s' "$1" | sha256sum); printf '%s' "${h:0:16}"; }
 
 # Async refresh of one worktree's PR/CI cache. Two gh calls:
 #   - `pr view` for PR meta (number, state, isDraft)
@@ -425,23 +435,18 @@ _fetch_pr() {
     fi
 }
 
-refresh_pr_async() {
-    local wt="$1"
-    [ -d "$wt" ] || return
-    async_refresh "$CACHE_DIR/wt-$(cache_key "$wt").json" "$CACHE_TTL" _fetch_pr "$wt"
-}
-
-# Read cached annotation. Output: "<pr_state> <overall_ci> <branch_ci> <pr_ci> #<num>"
+# Kick off the async refresh, then read whatever the cache currently holds —
+# one cache_key per path instead of one per refresh plus one per read.
+# Output: "<pr_state> <overall_ci> <branch_ci> <pr_ci> #<num>"
 #   pr_state    ∈ open | draft | merged | closed
 #   overall_ci  ∈ pass | fail | pending | none   (drives branch color)
 #   branch_ci   ∈ pass | fail | pending | none | -   (event=push aggregate; - when no such runs)
 #   pr_ci       ∈ pass | fail | pending | none | -   (event=pull_request aggregate)
 # Skipped runs are filtered out of every aggregate.
-read_pr_annotation() {
+pr_annotation_for() {
     local wt="$1"
-    local key
-    key=$(cache_key "$wt")
-    local cache_file="$CACHE_DIR/wt-$key.json"
+    local cache_file="$CACHE_DIR/wt-$(cache_key "$wt").json"
+    [ -d "$wt" ] && async_refresh "$cache_file" "$CACHE_TTL" _fetch_pr "$wt"
     [ -s "$cache_file" ] || return
     jq -r '
         def agg(checks):
@@ -471,7 +476,7 @@ read_pr_annotation() {
 }
 
 # Async refresh of one repo's most-recent-push-to-main CI state.
-# Separate from refresh_pr_async because it's a different gh call shape and
+# Separate from the PR fetch because it's a different gh call shape and
 # different cache key namespace (repo, not worktree).
 _fetch_main_ci() {
     local repo=$1 out=$2 output
@@ -482,19 +487,13 @@ _fetch_main_ci() {
     fi
 }
 
-refresh_main_ci_async() {
+# Same refresh-then-read shape as pr_annotation_for. Outputs pass | fail |
+# pending, or empty when no runs match (no workflow on main, or filter
+# returned nothing).
+main_ci_annotation_for() {
     local repo="$1"
-    [ -d "$repo" ] || return
-    async_refresh "$CACHE_DIR/mainci-$(cache_key "$repo").json" "$CACHE_TTL" _fetch_main_ci "$repo"
-}
-
-# Read cached main-CI state. Outputs pass | fail | pending, or empty when no
-# runs match (no workflow on main, or filter returned nothing).
-read_main_ci_annotation() {
-    local repo="$1"
-    local key
-    key=$(cache_key "$repo")
-    local cache_file="$CACHE_DIR/mainci-$key.json"
+    local cache_file="$CACHE_DIR/mainci-$(cache_key "$repo").json"
+    [ -d "$repo" ] && async_refresh "$cache_file" "$CACHE_TTL" _fetch_main_ci "$repo"
     [ -s "$cache_file" ] || return
     jq -r '
         .[0] // null |
@@ -602,11 +601,9 @@ for ((i=0; i<${#col1_path[@]}; i++)); do
     col1_real[i]=$(realpath_safe "${col1_path[$i]}")
     seen["${col1_real[i]}"]=1
     col1_short[i]=$(abbreviate_if_templated "$(shorten "${col1_path[$i]}")")
-    refresh_pr_async      "${col1_path[$i]}"
-    refresh_main_ci_async "${col1_path[$i]}"
-    col1_pr[i]=$(read_pr_annotation           "${col1_path[$i]}")
-    col1_main_ci[i]=$(read_main_ci_annotation "${col1_path[$i]}")
-    col1_vcs[i]=$(vcs_text_for                "${col1_path[$i]}")
+    col1_pr[i]=$(pr_annotation_for      "${col1_path[$i]}")
+    col1_main_ci[i]=$(main_ci_annotation_for "${col1_path[$i]}")
+    col1_vcs[i]=$(vcs_text_for               "${col1_path[$i]}")
 done
 
 # ── Column 2: worktrees only (cwd is folded into col 1 below).
@@ -630,8 +627,7 @@ done
 
 declare -a col2_pr
 for ((j=0; j<${#col2_path[@]}; j++)); do
-    refresh_pr_async "${col2_path[$j]}"
-    col2_pr+=("$(read_pr_annotation "${col2_path[$j]}")")
+    col2_pr+=("$(pr_annotation_for "${col2_path[$j]}")")
     col2_vcs+=("$(vcs_text_for "${col2_path[$j]}" tree)")
 done
 
@@ -1144,9 +1140,8 @@ compute_rate_segment() {
     SEG_TEXT=""
     [ -z "$used" ] && return
     [ -z "$resets_at" ] && return
-    local now elapsed elapsed_pct used_int divisor ratio_pct color
-    now=$(date +%s)
-    elapsed=$(( now - (resets_at - window_sec) ))
+    local elapsed elapsed_pct used_int divisor ratio_pct color
+    elapsed=$(( NOW - (resets_at - window_sec) ))
     (( elapsed < 0 ))          && elapsed=0
     (( elapsed > window_sec )) && elapsed=$window_sec
     elapsed_pct=$(( elapsed * 100 / window_sec ))
@@ -1374,9 +1369,8 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     burndown_now_cell() {
         local resets_at=$1 window_sec=$2
         [ -z "$resets_at" ] && { printf '%s' -1; return; }
-        local now elapsed dot_x
-        now=$(date +%s)
-        elapsed=$(( now - (resets_at - window_sec) ))
+        local elapsed dot_x
+        elapsed=$(( NOW - (resets_at - window_sec) ))
         if (( elapsed < 0 || elapsed >= window_sec )); then
             printf '%s' -1; return
         fi
@@ -1469,7 +1463,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     burndown_reset_label() {
         local resets_at=$1
         [ -z "$resets_at" ] && return
-        if (( resets_at - $(date +%s) < 23 * 3600 )); then
+        if (( resets_at - NOW < 23 * 3600 )); then
             date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null
         else
             date -d "@$resets_at" +"%a %-I:%M%P" 2>/dev/null
