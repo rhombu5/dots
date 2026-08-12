@@ -667,17 +667,18 @@ for ((k=0; k<${#col1_path[@]}; k++)); do
 done
 
 # Right-side stack height: row 0 packs model+effort+ctx; the rows below hold
-# either the text rate-limit rows or the 3-row braille burndown. This is the
+# either the text rate-limit rows or the braille burndown. This is the
 # MINIMUM height the layout must reach so the right side has its slots — and,
 # below, the height column A fills to before the worktree list wraps into B.
-# Graph mode (USAGE_BURNDOWN_GRAPH=1) reserves 3 rows for the plot (row 1..3);
+# Graph mode (USAGE_BURNDOWN_GRAPH=1) reserves 4 rows: 3 for the plots
+# (rows 1..3) plus 1 for the reset-time labels beneath them (row 4);
 # text mode reserves 1 row per present rate-limit window.
 right_rows=1
 if (( USAGE_BURNDOWN_GRAPH )); then
     if { [ -n "$rl5_used" ] && [ -n "$rl5_resets" ]; } \
     || { [ -n "$rl7_used" ] && [ -n "$rl7_resets" ]; } \
     || { [ -n "$rlf_used" ] && [ -n "$rlf_resets" ]; }; then
-        right_rows=4
+        right_rows=5
     fi
 else
     [ -n "$rl5_used" ] && [ -n "$rl5_resets" ] && right_rows=2
@@ -976,7 +977,7 @@ if (( colB_count > 0 )); then
     for ((k=0; k<colB_count; k++)); do
         reserve=0
         if   (( k == 0 )); then reserve=$rr_row0
-        elif (( k <= 3 )); then reserve=$rr_plot
+        elif (( k <= 4 )); then reserve=$rr_plot
         fi
         if (( colA_width + 3 + left_vw[rows + k] + SEP + reserve > TERM_WIDTH )); then
             two_col_fits=0; break
@@ -1250,11 +1251,14 @@ fi
 
 # ────────────────────────────────────────────────────────────────────────────
 # Burndown graph (USAGE_BURNDOWN_GRAPH=1): three plots, each 12 cell cols × 3
-# cell rows (= 24 × 12 dots). Single-row order is 5hr, Fable, 7day. When the
-# worktree list has already made the status area taller than 3 rows, the plots
-# column-wrap to use that height and shrink horizontally (we never ADD rows for
-# them): 2 bands of vertical room → 7day drops beneath Fable (2 cols, 25 cells);
-# 3 bands → Fable drops too (1 col, 12 cells). 5hr always anchors the top-left.
+# cell rows (= 24 × 12 dots), each band of plots followed by one label row
+# showing the plots' reset times (the wall-clock moment each x-axis ends),
+# right-justified to each plot's 12-cell column. Single-row order is 5hr,
+# Fable, 7day. When the worktree list has already made the status area taller
+# than one 4-row band, the plots column-wrap to use that height and shrink
+# horizontally (we never ADD rows for them): 2 bands of vertical room → 7day
+# drops beneath Fable (2 cols, 25 cells); 3 bands → Fable drops too (1 col,
+# 12 cells). 5hr always anchors the top-left.
 # Right-aligned. Layout math lives in the render loop near the end of this block.
 #
 # Y axis (all plots) = percent remaining (top = 100%, bottom = 0%); each dot
@@ -1295,6 +1299,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     BURNDOWN_DATA_W_DOTS=$(( BURNDOWN_W_DOTS - BURNDOWN_DATA_X_OFFSET ))    # 22
     BURNDOWN_DATA_H_DOTS=$(( BURNDOWN_H_DOTS - 1 ))                          # 11  (only the X axis dot row at y=11 is off-limits)
     BURNDOWN_PLOT_COUNT=3
+    BURNDOWN_BAND_H=$(( BURNDOWN_PLOT_H_CELLS + 1 ))   # 3 plot rows + 1 reset-label row
 
     # Axis dot bitmasks (per axis cell):
     #   left col   = bits 1 + 2 + 4 + 64 = 0x47  (⡇)
@@ -1453,11 +1458,12 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
         done
     }
 
-    # How many 3-row bands the existing layout gives us (rows 1..n-1; row 0 is
-    # the model label). We NEVER add rows for the graphs — this is purely what
-    # the worktree list already made room for. More bands ⇒ stack plots ⇒ a
-    # narrower block: 1 band = flat 3-across, 2 = two columns, 3 = one column.
-    burndown_bands=$(( (n - 1) / BURNDOWN_PLOT_H_CELLS ))
+    # How many 4-row bands (3 plot rows + 1 reset-label row) the existing layout
+    # gives us (rows 1..n-1; row 0 is the model label). We NEVER add rows for
+    # the graphs — this is purely what the worktree list already made room for.
+    # More bands ⇒ stack plots ⇒ a narrower block: 1 band = flat 3-across,
+    # 2 = two columns, 3 = one column.
+    burndown_bands=$(( (n - 1) / BURNDOWN_BAND_H ))
     (( burndown_bands < 1 )) && burndown_bands=1
     (( burndown_bands > BURNDOWN_PLOT_COUNT )) && burndown_bands=$BURNDOWN_PLOT_COUNT
 
@@ -1469,6 +1475,25 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     burndown_layer_ideal=(br5_ideal brf_ideal br7_ideal)
     burndown_layer_color=("\033[31m" "\033[33m" "\033[94m")   # 5hr red, Fable yellow, 7day blue
     burndown_layer_now=("$br5_now_cell" "$brf_now_cell" "$br7_now_cell")
+
+    # Reset-time label per plot — the wall-clock moment the plot's x-axis ends.
+    # Day-of-week is dropped when the reset is under 23 hours away (bare time
+    # is unambiguous there; the 1-hour margin under a full day keeps a
+    # nearly-day-out reset from masquerading as sooner). Same rule for all
+    # three windows — the 5hr one just always qualifies.
+    burndown_reset_label() {
+        local resets_at=$1
+        [ -z "$resets_at" ] && return
+        if (( resets_at - $(date +%s) < 23 * 3600 )); then
+            date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null
+        else
+            date -d "@$resets_at" +"%a %-I:%M%P" 2>/dev/null
+        fi
+    }
+    burndown_layer_reset=("$(burndown_reset_label "$rl5_resets")" \
+                          "$(burndown_reset_label "$rlf_resets")" \
+                          "$(burndown_reset_label "$rl7_resets")")
+
     case $burndown_bands in
         1) burndown_pb=(0 0 0); burndown_pc=(0 1 2); burndown_ncols=3 ;;  # [5hr][Fable][7day]
         2) burndown_pb=(0 0 1); burndown_pc=(0 1 1); burndown_ncols=2 ;;  # 5hr | Fable-over-7day
@@ -1476,12 +1501,24 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     esac
     burndown_total_w=$(( burndown_ncols * BURNDOWN_PLOT_W_CELLS + (burndown_ncols - 1) ))
 
-    # Walk band by band; each band's 3 cell-rows land on consecutive display
-    # rows. On each row, walk columns left→right, emitting the plot that sits at
-    # (band, col) or a blank 12-cell gap where none does (e.g. band 2 left col).
+    # Which plot (if any) sits at (band, col) in the current layout; -1 if none.
+    burndown_plot_at() {
+        local band=$1 col=$2 bp
+        for ((bp=0; bp<BURNDOWN_PLOT_COUNT; bp++)); do
+            if (( burndown_pb[bp] == band && burndown_pc[bp] == col )); then
+                printf '%s' "$bp"; return
+            fi
+        done
+        printf '%s' -1
+    }
+
+    # Walk band by band; each band's 3 plot cell-rows plus its reset-label row
+    # land on consecutive display rows. On each row, walk columns left→right,
+    # emitting the plot that sits at (band, col) or a blank 12-cell gap where
+    # none does (e.g. band 2 left col).
     for ((burndown_band=0; burndown_band<burndown_bands; burndown_band++)); do
         for ((burndown_cy=0; burndown_cy<BURNDOWN_PLOT_H_CELLS; burndown_cy++)); do
-            burndown_row=$(( 1 + burndown_band * BURNDOWN_PLOT_H_CELLS + burndown_cy ))
+            burndown_row=$(( 1 + burndown_band * BURNDOWN_BAND_H + burndown_cy ))
             burndown_target_col=$(( TERM_WIDTH - burndown_total_w ))
             burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
             (( burndown_pad < SEP )) && burndown_pad=$SEP
@@ -1493,12 +1530,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
                     burndown_str+=' '
                     burndown_vw=$(( burndown_vw + 1 ))
                 fi
-                burndown_p=-1
-                for ((bp=0; bp<BURNDOWN_PLOT_COUNT; bp++)); do
-                    if (( burndown_pb[bp] == burndown_band && burndown_pc[bp] == burndown_col )); then
-                        burndown_p=$bp; break
-                    fi
-                done
+                burndown_p=$(burndown_plot_at "$burndown_band" "$burndown_col")
                 if (( burndown_p >= 0 )); then
                     burndown_emit_plot_row "$burndown_cy" \
                         "${burndown_layer_data[burndown_p]}" "${burndown_layer_ideal[burndown_p]}" \
@@ -1513,6 +1545,34 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
             row_str[burndown_row]+=$burndown_str
             row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
         done
+
+        # Reset-label row, directly under the band's plots: each plot's reset
+        # time right-justified to its own 12-cell column, so the label sits
+        # under the plot's right edge — the x position where its window ends.
+        burndown_row=$(( 1 + burndown_band * BURNDOWN_BAND_H + BURNDOWN_PLOT_H_CELLS ))
+        burndown_target_col=$(( TERM_WIDTH - burndown_total_w ))
+        burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
+        (( burndown_pad < SEP )) && burndown_pad=$SEP
+        printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
+        burndown_vw=$burndown_pad
+        for ((burndown_col=0; burndown_col<burndown_ncols; burndown_col++)); do
+            if (( burndown_col > 0 )); then
+                burndown_str+=' '
+                burndown_vw=$(( burndown_vw + 1 ))
+            fi
+            burndown_p=$(burndown_plot_at "$burndown_band" "$burndown_col")
+            burndown_label=""
+            (( burndown_p >= 0 )) && burndown_label="${burndown_layer_reset[burndown_p]}"
+            if [ -n "$burndown_label" ]; then
+                printf -v burndown_cell '\033[2;37m%*s\033[0m' "$BURNDOWN_PLOT_W_CELLS" "$burndown_label"
+            else
+                printf -v burndown_cell '%*s' "$BURNDOWN_PLOT_W_CELLS" ""
+            fi
+            burndown_str+=$burndown_cell
+            burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
+        done
+        row_str[burndown_row]+=$burndown_str
+        row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
     done
 fi
 
