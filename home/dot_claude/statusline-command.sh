@@ -775,8 +775,7 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         # PR info is part of the status suffix - no bold.
         if [ "$pr_state" = "draft" ]; then
             # Draft: italic parens around the number carry the state -
-            # "(#274)" instead of "#274 (draft)". 4 fewer columns. Col 2 draws
-            # the same idea differently; see the col-2 PR suffix below.
+            # "(#274)" instead of "#274 (draft)". 4 fewer columns.
             happend "$i" $(( 3 + ${#pr_num} )) " \033[3m${pc}(%s)\033[0m" "$pr_num"
         else
             happend "$i" $(( 1 + ${#pr_num} )) " ${pc}%s\033[0m" "$pr_num"
@@ -898,10 +897,14 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
             [ -n "$g1" ] && wappend "$j" 1 "${c1}%s\033[0m" "$g1"
             [ -n "$g2" ] && wappend "$j" 1 "${c2}%s\033[0m" "$g2"
         fi
-        # PR # in light gray (status suffix).
+        # PR # in light gray (status suffix). Deliberately NOT shared with the
+        # col-1 PR renderer: col 1 draws one aggregate glyph *after* the number
+        # while col 2 draws the per-event cluster above *before* it, the
+        # "(state)" suffix takes a different color, and the two suppress
+        # different states (col 1 merged only; col 2 open and merged). A shared
+        # function would need five parameters and come out longer than both.
         if [ "$pr_state" = "draft" ]; then
-            # Draft: italic parens around the number carry the state -
-            # "(#274)" instead of "#274 (draft)". 4 fewer columns.
+            # Same draft treatment as col 1 — see that comment for the why.
             wappend "$j" $(( 3 + ${#pr_num} )) " \033[3m${wt_rhs_c}(%s)\033[0m" "$pr_num"
         else
             wappend "$j" $(( 1 + ${#pr_num} )) " ${wt_rhs_c}%s\033[0m" "$pr_num"
