@@ -692,6 +692,18 @@ cellcat() {
 
 append() { cellcat row_str row_vw "$@"; }
 
+# right_pad <row> <content-width>
+# Pads <row> out so <content-width> columns of content land flush against the
+# right edge, never closer than SEP to what's already on the row. The pad is
+# prefixed with a no-op ANSI reset so the TUI doesn't trim the leading run of
+# whitespace (it preserves whitespace only when something non-whitespace
+# appears earlier on the line) — e.g. row 0 when col 1 is suppressed entirely.
+right_pad() {
+    local pad=$(( TERM_WIDTH - $2 - row_vw[$1] ))
+    (( pad < SEP )) && pad=$SEP
+    append "$1" "$pad" '\033[0m%*s' "$pad" ""
+}
+
 # ── Pass 1: build each col-1 (repo header) cell — dir + optional cyan cwd
 # suffix + vcs + PR + main-CI marker — recording each cell's visible width.
 for ((i=0; i<${#col1_short[@]}; i++)); do
@@ -1072,13 +1084,7 @@ if [ -n "$model" ]; then
         ctx_color=$(ctx_color_for_tokens "$ctx_tokens")
         label_w=$(( label_w + 1 + ${#ctx_text} ))
     fi
-    target_col=$(( TERM_WIDTH - label_w ))
-    pad=$(( target_col - row_vw[0] ))
-    (( pad < SEP )) && pad=$SEP
-    # Leading \033[0m so the TUI doesn't trim the pad when row 0 has no col1
-    # content in front of it (e.g. noop suppression). Without it, the model
-    # label collapses to the left edge.
-    append 0 "$pad" '\033[0m%*s' "$pad" ""
+    right_pad 0 "$label_w"
     append 0 "${#model}" "\033[3;37m%s\033[0m" "$model"
     if [ -n "$effort" ]; then
         case "$effort" in
@@ -1173,14 +1179,7 @@ if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
         #            + " " + day(3) + " " + time(tmw)
         # Counted delimiters: 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 = 9 chars.
         local text_w=$(( rw + uw + ew + dw + tmw + 9 ))
-        local target_col pad
-        target_col=$(( TERM_WIDTH - text_w ))
-        pad=$(( target_col - row_vw[row] ))
-        (( pad < SEP )) && pad=$SEP
-        # Prefix the pad with a no-op ANSI reset so the TUI doesn't trim the
-        # leading run of whitespace (it preserves whitespace only when something
-        # non-whitespace appears earlier on the line).
-        append "$row" "$pad" '\033[0m%*s' "$pad" ""
+        right_pad "$row" "$text_w"
         append "$row" "$rw" "${color}%*s\033[0m"   "$rw" "$ratio"
         append "$row" 1 "%%"
         append "$row" 2 " ("
@@ -1463,78 +1462,75 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     esac
     burndown_total_w=$(( burndown_ncols * BURNDOWN_PLOT_W_CELLS + (burndown_ncols - 1) ))
 
-    # Which plot (if any) sits at (band, col) in the current layout; -1 if none.
-    burndown_plot_at() {
-        local band=$1 col=$2 bp
-        for ((bp=0; bp<BURNDOWN_PLOT_COUNT; bp++)); do
-            if (( burndown_pb[bp] == band && burndown_pc[bp] == col )); then
-                printf '%s' "$bp"; return
-            fi
-        done
-        printf '%s' -1
-    }
+    # Invert the layout tables once: burndown_at["<band>,<col>"] → plot index,
+    # absent where the slot is empty (e.g. band 2's left column).
+    declare -A burndown_at
+    for ((bp=0; bp<BURNDOWN_PLOT_COUNT; bp++)); do
+        burndown_at[${burndown_pb[bp]},${burndown_pc[bp]}]=$bp
+    done
 
-    # Walk band by band; each band's 3 plot cell-rows plus its reset-label row
-    # land on consecutive display rows. On each row, walk columns left→right,
-    # emitting the plot that sits at (band, col) or a blank 12-cell gap where
-    # none does (e.g. band 2 left col).
-    for ((burndown_band=0; burndown_band<burndown_bands; burndown_band++)); do
-        for ((burndown_cy=0; burndown_cy<BURNDOWN_PLOT_H_CELLS; burndown_cy++)); do
-            burndown_row=$(( 1 + burndown_band * BURNDOWN_BAND_H + burndown_cy ))
-            burndown_target_col=$(( TERM_WIDTH - burndown_total_w ))
-            burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
-            (( burndown_pad < SEP )) && burndown_pad=$SEP
-            printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
-            burndown_vw=$burndown_pad
-
-            for ((burndown_col=0; burndown_col<burndown_ncols; burndown_col++)); do
-                if (( burndown_col > 0 )); then
-                    burndown_str+=' '
-                    burndown_vw=$(( burndown_vw + 1 ))
-                fi
-                burndown_p=$(burndown_plot_at "$burndown_band" "$burndown_col")
-                if (( burndown_p >= 0 )); then
-                    burndown_emit_plot_row "$burndown_cy" \
-                        "${burndown_layer_data[burndown_p]}" "${burndown_layer_ideal[burndown_p]}" \
-                        "${burndown_layer_color[burndown_p]}" "${burndown_layer_now[burndown_p]}"
-                else
-                    printf -v burndown_blank '%*s' "$BURNDOWN_PLOT_W_CELLS" ""
-                    burndown_str+=$burndown_blank
-                fi
-                burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
-            done
-
-            row_str[burndown_row]+=$burndown_str
-            row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
-        done
-
-        # Reset-label row, directly under the band's plots: each plot's reset
-        # time right-justified to its own 12-cell column, so the label sits
-        # under the plot's right edge — the x position where its window ends.
-        burndown_row=$(( 1 + burndown_band * BURNDOWN_BAND_H + BURNDOWN_PLOT_H_CELLS ))
-        burndown_target_col=$(( TERM_WIDTH - burndown_total_w ))
-        burndown_pad=$(( burndown_target_col - row_vw[burndown_row] ))
-        (( burndown_pad < SEP )) && burndown_pad=$SEP
-        printf -v burndown_str '\033[0m%*s' "$burndown_pad" ""
-        burndown_vw=$burndown_pad
-        for ((burndown_col=0; burndown_col<burndown_ncols; burndown_col++)); do
-            if (( burndown_col > 0 )); then
+    # ── One walk shared by both row kinds in a band.
+    # burndown_walk <row> <band> <emit-fn> [emit-args…] right-aligns the block
+    # on <row>, then steps columns left→right, calling
+    #   <emit-fn> <plot-idx> [emit-args…]     (plot-idx is -1 for an empty slot)
+    # once per column. Every emitter appends exactly BURNDOWN_PLOT_W_CELLS
+    # cells to burndown_str; the walk owns the inter-column gap, the width
+    # bookkeeping and the write-back into row_str/row_vw.
+    burndown_walk() {
+        local row=$1 band=$2 emit=$3; shift 3
+        right_pad "$row" "$burndown_total_w"
+        burndown_str=""
+        burndown_vw=0
+        local col p
+        for ((col=0; col<burndown_ncols; col++)); do
+            if (( col > 0 )); then
                 burndown_str+=' '
                 burndown_vw=$(( burndown_vw + 1 ))
             fi
-            burndown_p=$(burndown_plot_at "$burndown_band" "$burndown_col")
-            burndown_label=""
-            (( burndown_p >= 0 )) && burndown_label="${burndown_layer_reset[burndown_p]}"
-            if [ -n "$burndown_label" ]; then
-                printf -v burndown_cell '\033[2;37m%*s\033[0m' "$BURNDOWN_PLOT_W_CELLS" "$burndown_label"
-            else
-                printf -v burndown_cell '%*s' "$BURNDOWN_PLOT_W_CELLS" ""
-            fi
-            burndown_str+=$burndown_cell
+            p=${burndown_at[$band,$col]:--1}
+            "$emit" "$p" "$@"
             burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
         done
-        row_str[burndown_row]+=$burndown_str
-        row_vw[burndown_row]=$(( row_vw[burndown_row] + burndown_vw ))
+        row_str[row]+=$burndown_str
+        row_vw[row]=$(( row_vw[row] + burndown_vw ))
+    }
+
+    _burndown_emit_plot() {   # <plot-idx> <cy>
+        local p=$1 cy=$2 blank
+        if (( p >= 0 )); then
+            burndown_emit_plot_row "$cy" \
+                "${burndown_layer_data[p]}" "${burndown_layer_ideal[p]}" \
+                "${burndown_layer_color[p]}" "${burndown_layer_now[p]}"
+        else
+            printf -v blank '%*s' "$BURNDOWN_PLOT_W_CELLS" ""
+            burndown_str+=$blank
+        fi
+    }
+
+    # Each plot's reset time right-justified to its own 12-cell column, so the
+    # label sits under the plot's right edge — the x position where its window
+    # ends.
+    _burndown_emit_label() {   # <plot-idx>
+        local p=$1 label="" cell
+        (( p >= 0 )) && label="${burndown_layer_reset[p]}"
+        if [ -n "$label" ]; then
+            printf -v cell '\033[2;37m%*s\033[0m' "$BURNDOWN_PLOT_W_CELLS" "$label"
+        else
+            printf -v cell '%*s' "$BURNDOWN_PLOT_W_CELLS" ""
+        fi
+        burndown_str+=$cell
+    }
+
+    # Walk band by band; each band's 3 plot cell-rows plus its reset-label row
+    # land on consecutive display rows.
+    for ((burndown_band=0; burndown_band<burndown_bands; burndown_band++)); do
+        burndown_base=$(( 1 + burndown_band * BURNDOWN_BAND_H ))
+        for ((burndown_cy=0; burndown_cy<BURNDOWN_PLOT_H_CELLS; burndown_cy++)); do
+            burndown_walk $(( burndown_base + burndown_cy )) "$burndown_band" \
+                          _burndown_emit_plot "$burndown_cy"
+        done
+        burndown_walk $(( burndown_base + BURNDOWN_PLOT_H_CELLS )) "$burndown_band" \
+                      _burndown_emit_label
     done
 fi
 
