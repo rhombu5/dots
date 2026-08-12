@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+#
+# bw-vault-backup — keep known-good copies of the Bitwarden vault caches.
+#
+# Why this exists
+# ---------------
+# Both the Bitwarden CLI and the desktop app persist their state to a
+# `data.json` written in place — truncate, then write — with no
+# temp-file + rename + fsync. A power loss mid-write therefore leaves a
+# file truncated at a filesystem block boundary. Observed on metis
+# 2026-08-10: `data.json.bak` ended at exactly 268 * 4096 bytes, cut off
+# mid-token, no trailing NULs.
+#
+# The client's own recovery makes this worse rather than better. On
+# finding unparseable JSON it renames the corrupt file to `data.json.bak`
+# and initialises a fresh empty one — so the ".bak" is the *damaged*
+# file, and writing it CLOBBERS whatever good copy was sitting there from
+# last time. After the 2026-08-10 outage the CLI was left fully
+# logged out (`bw status` -> "unauthenticated") with no recoverable
+# state, and `/home` is not covered by snapper (root config only), so
+# there was nothing to roll back to.
+#
+# What it does
+# ------------
+# On every change to either data.json, validate the new content and — if
+# it is genuinely good — file a timestamped copy. Two guards, both
+# necessary:
+#
+#   1. It must parse as JSON. Catches the truncation case directly.
+#   2. It must contain `global_account_accounts`, i.e. an actual logged-in
+#      account. This is the important one: without it, the empty stub the
+#      client writes *after* a corruption event would itself be archived,
+#      and would age out every good backup behind it. That is precisely
+#      the mistake `data.json.bak` makes.
+#
+# Identical content is not re-archived, so an app that rewrites its state
+# on a timer does not churn through the retention window.
+#
+# Restore
+# -------
+#   systemctl --user stop bw-vault-backup.path
+#   pkill -f bitwarden-desktop            # or just exit the app
+#   cp ~/.local/state/bitwarden-vault-backups/<which>/data.json.<stamp> \
+#      "<the data.json it came from>"
+#   systemctl --user start bw-vault-backup.path
+#
+# Backups hold the *encrypted* vault, which is still worth protecting:
+# the directory is 0700 and lives under XDG_STATE_HOME. Never let these
+# reach the dots repo or any sync target.
+
+set -euo pipefail
+
+readonly BACKUP_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/bitwarden-vault-backups"
+readonly KEEP=15
+
+log() { printf 'bw-vault-backup: %s\n' "$*"; }
+
+# Archive $1 (a data.json) into the subdirectory named by $2, if it looks
+# like a genuine logged-in vault and differs from the newest copy held.
+back_up_one() {
+    local source_file="$1"
+    local label="$2"
+    local dest_dir="$BACKUP_ROOT/$label"
+
+    if [[ ! -f "$source_file" ]]; then
+        return 0
+    fi
+
+    if ! jq -e 'type == "object"' "$source_file" >/dev/null 2>&1; then
+        log "$label: does not parse as JSON — refusing to archive (corrupt?)"
+        return 0
+    fi
+
+    if ! jq -e 'has("global_account_accounts")' "$source_file" >/dev/null 2>&1; then
+        log "$label: no account present — refusing to archive a logged-out stub"
+        return 0
+    fi
+
+    mkdir -p "$dest_dir"
+    chmod 0700 "$BACKUP_ROOT" "$dest_dir"
+
+    local newest
+    newest="$(find "$dest_dir" -maxdepth 1 -name 'data.json.*' -type f -printf '%T@ %p\n' 2>/dev/null \
+        | sort -rn \
+        | head -1 \
+        | cut -d' ' -f2-)"
+
+    if [[ -n "$newest" ]] && cmp -s "$source_file" "$newest"; then
+        return 0
+    fi
+
+    local stamp
+    stamp="$(date +%Y%m%dT%H%M%S)"
+
+    # Copy to a temp name in the same directory, then rename — so an
+    # interrupted backup can never leave a half-written file that looks
+    # like a valid restore point. Exactly the discipline the client omits.
+    local temp_file="$dest_dir/.data.json.$stamp.partial"
+    install -m 0600 "$source_file" "$temp_file"
+    sync "$temp_file"
+    mv "$temp_file" "$dest_dir/data.json.$stamp"
+
+    log "$label: archived data.json.$stamp ($(stat -c %s "$source_file") bytes)"
+
+    # Retention. Newest KEEP survive; the rest go.
+    find "$dest_dir" -maxdepth 1 -name 'data.json.*' -type f -printf '%T@ %p\n' 2>/dev/null \
+        | sort -rn \
+        | tail -n +$((KEEP + 1)) \
+        | cut -d' ' -f2- \
+        | while IFS= read -r stale; do
+            rm -f -- "$stale"
+            log "$label: pruned $(basename "$stale")"
+        done
+}
+
+back_up_one "$HOME/.config/Bitwarden CLI/data.json" cli
+back_up_one "$HOME/.config/Bitwarden/data.json" desktop

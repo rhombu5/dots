@@ -1,0 +1,19 @@
+[Unit]
+Description=Watch the Bitwarden vault caches for changes
+Documentation=file:%h/.local/bin/bw-vault-backup
+
+[Path]
+# PathChanged (not PathModified): fires when the file is closed after writing,
+# rather than on every individual write. Both clients rewrite data.json whole,
+# so waiting for close is what keeps us from reading a half-written file and
+# discarding it as "corrupt" — the validation in the script would reject it and
+# we would silently skip a backup we should have taken.
+PathChanged=%h/.config/Bitwarden CLI/data.json
+PathChanged=%h/.config/Bitwarden/data.json
+
+# Both paths trigger the same unit; the script decides which one actually
+# changed by comparing against what it already holds.
+Unit=bw-vault-backup.service
+
+[Install]
+WantedBy=default.target

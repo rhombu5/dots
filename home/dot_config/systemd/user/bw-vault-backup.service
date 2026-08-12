@@ -1,0 +1,18 @@
+[Unit]
+Description=Archive a known-good copy of the Bitwarden vault cache
+Documentation=file:%h/.local/bin/bw-vault-backup
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/bw-vault-backup
+
+# The script validates before it archives and refuses rather than fails, so a
+# non-zero exit here means something genuinely unexpected (jq missing, backup
+# dir unwritable). Let that surface in the journal instead of being retried.
+Restart=no
+
+# Touches only its own state directory and reads two files under ~/.config.
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+NoNewPrivileges=true
