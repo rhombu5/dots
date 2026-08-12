@@ -1,23 +1,36 @@
 #!/usr/bin/env bash
 #
-# claude-askpass — SUDO_ASKPASS helper that pulls tom's local password
-# from the Bitwarden vault. Designed to run unattended in any shell
-# context (Claude Code bash tool, cron, systemd --user services)
-# provided libsecret has the Bitwarden master password cached.
+# claude-askpass — SUDO_ASKPASS helper that supplies tom's local
+# password. Designed to run unattended in any shell context (Claude Code
+# bash tool, cron, systemd --user services).
 #
 # Usage (via the `sudoa` zsh alias defined in ~/.zsh_aliases):
 #   sudoa <cmd>     # = SUDO_ASKPASS=~/.local/bin/claude-askpass sudo -A <cmd>
 #
-# Pre-req: run `bwu` once interactively after a fresh login so the
-# Bitwarden master password is cached in libsecret. After that
-# claude-askpass runs silently forever (until the keyring is wiped or
-# the master password is rotated, both of which require another bwu).
+# Two sources, tried in order:
 #
-# Trust model: the Bitwarden `metis.rhombus.rocks` SSH-Key item carries
-# tom's local password in the `tom` custom field (alongside `luks` and
-# `root`). Anyone with an unlocked vault can use this for unattended
-# privilege elevation; that's intentional, same as the desktop app's
-# "Unlock with system authentication" toggle.
+#   1. libsecret, `service=sudo user=tom`. Requires no network and no
+#      Bitwarden login. Seed it once with:
+#          secret-tool store --label='metis local password (tom)' \
+#              service sudo user tom
+#      (secret-tool prompts on the terminal and does not echo, so the
+#      password never lands in shell history or a tool transcript.)
+#
+#   2. The Bitwarden vault — the `metis.rhombus.rocks` SSH-Key item
+#      carries the password in its `tom` custom field (alongside `luks`
+#      and `root`). On a successful read this backfills source 1, so the
+#      vault is consulted at most once per keyring.
+#
+# Source 1 exists because source 2 has a hard dependency on the
+# self-hosted Vaultwarden at hass4150.duckdns.org, which went
+# unreachable in June 2026 and eventually logged the CLI out entirely
+# (`bw status` → "unauthenticated", local cache wiped, data.json.bak
+# truncated). That took sudo down with it. Keeping a copy in libsecret
+# means a dead vault server can no longer cost us privilege elevation.
+#
+# Trust model unchanged: anyone who can read the keyring can elevate.
+# That was already true — libsecret holds the Bitwarden *master*
+# password, which is strictly more powerful than this one.
 #
 # Bail conditions (each prints to stderr; sudo forwards askpass stderr
 # to the user, so the message lands wherever the sudo invocation lives):
@@ -31,6 +44,14 @@
 set -euo pipefail
 
 err() { printf 'claude-askpass: %s\n' "$*" >&2; }
+
+# 0. Fast path — the password cached directly in libsecret. No network,
+#    no Bitwarden login, works even with the vault server down.
+cached="$(secret-tool lookup service sudo user tom 2>/dev/null || true)"
+if [[ -n "$cached" ]]; then
+    printf '%s\n' "$cached"
+    exit 0
+fi
 
 # 1. Get a usable BW_SESSION. Try cached first; if locked/empty, unlock
 #    silently using the master password from libsecret. Never prompt.
@@ -94,5 +115,12 @@ if [[ -z "$password" ]]; then
     err "matched item has no field named 'tom'"
     exit 7
 fi
+
+# 3. Backfill the libsecret fast path so the next call skips Bitwarden
+#    entirely. Best-effort: a failure here must not break this sudo.
+printf '%s' "$password" \
+    | secret-tool store \
+        --label='metis local password (tom)' \
+        service sudo user tom 2>/dev/null || true
 
 printf '%s\n' "$password"
