@@ -1,0 +1,23 @@
+[Unit]
+Description=Carla plugin host for system audio EQ
+Documentation=https://kx.studio/Applications:Carla
+# PipeWire must own the graph before Carla tries to register JACK ports.
+After=pipewire.service pipewire-pulse.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+# %h/.config/carla/eq-rack.carxp holds the saved plugin chain. Carla starts
+# with an empty rack if the file is absent, which is a passthrough — audio
+# still reaches the speakers, it just isn't processed.
+Environment=WINEPREFIX=%h/.wine
+Environment=WINEDEBUG=-all
+ExecStart=/usr/bin/carla-rack %h/.config/carla/eq-rack.carxp
+# Carla's ports appear seconds after the process does, and JACK clients never
+# auto-connect, so the graph has to be wired explicitly once it is up.
+ExecStartPost=%h/.local/bin/carla-eq-link
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
