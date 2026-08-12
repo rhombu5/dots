@@ -949,15 +949,8 @@ done
 # ── Reflow into two columns. One column-major list — repo header cells (built
 # in Pass 1) then worktree cells — split at `rows`: column A = [0, rows),
 # column B = [rows, total). See the `rows` derivation above.
-declare -a left_str left_vw
-for ((h=0; h<${#col1_cell_str[@]}; h++)); do
-    left_str+=("${col1_cell_str[$h]}")
-    left_vw+=("${col1_cell_vw[$h]}")
-done
-for ((j=0; j<${#wt_cell_str[@]}; j++)); do
-    left_str+=("${wt_cell_str[$j]}")
-    left_vw+=("${wt_cell_vw[$j]}")
-done
+left_str=("${col1_cell_str[@]}" "${wt_cell_str[@]}")
+left_vw=("${col1_cell_vw[@]}"  "${wt_cell_vw[@]}")
 
 # Column A cell width = widest cell that lands in column A (the [0, rows) slice).
 colA_width=0
