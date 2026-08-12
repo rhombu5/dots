@@ -132,27 +132,45 @@ for f in /tmp/claude-${UID}/*/*/tasks/*.output; do
 done
 shopt -u nullglob
 
-project_dir=$(jq -r '.workspace.project_dir // ""' <<<"$input")
-cwd=$(jq -r '.workspace.current_dir // .cwd // ""' <<<"$input")
-mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
-model=$(jq -r '.model.display_name // ""' <<<"$input")
-effort=$(jq -r '.effort.level // ""' <<<"$input")
-used=$(jq -r '.context_window.used_percentage // empty' <<<"$input")
-# Absolute context size for the latest turn = input + cache_creation + cache_read.
-# This is the exact quantity fnclaude's context-notice monitor watches
-# (turn.input + cacheCreation + cacheRead; see context-monitor.ts), so coloring
-# ctx% off this same number makes the color escalate on precisely the token
-# thresholds where fnc fires its <fnc-notice> compaction nudges. Falls back to
-# total_input_tokens (which mirrors the sum) if the per-field breakdown is absent.
-ctx_tokens=$(jq -r '
+# One jq pass over the payload, one scalar per line, consumed positionally —
+# the field order below and the read order that follows must stay in lockstep.
+# Every field defaults to "" rather than `empty` so an absent one still costs a
+# line and keeps the two lists aligned; downstream `[ -z … ]` tests read the
+# same either way. added_dirs is a list, so it keeps its own mapfile.
+#
+# ctx_tokens is the absolute context size for the latest turn =
+# input + cache_creation + cache_read. This is the exact quantity fnclaude's
+# context-notice monitor watches (turn.input + cacheCreation + cacheRead; see
+# context-monitor.ts), so coloring ctx% off this same number makes the color
+# escalate on precisely the token thresholds where fnc fires its <fnc-notice>
+# compaction nudges. Falls back to total_input_tokens (which mirrors the sum)
+# if the per-field breakdown is absent.
+{
+    IFS= read -r project_dir
+    IFS= read -r cwd
+    IFS= read -r model
+    IFS= read -r effort
+    IFS= read -r used
+    IFS= read -r ctx_tokens
+    IFS= read -r rl5_used
+    IFS= read -r rl5_resets
+    IFS= read -r rl7_used
+    IFS= read -r rl7_resets
+} < <(jq -r '
     (.context_window.current_usage // {}) as $u
     | (($u.input_tokens // 0) + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0)) as $sum
-    | if $sum > 0 then $sum else (.context_window.total_input_tokens // 0) end
+    | (.workspace.project_dir // ""),
+      (.workspace.current_dir // .cwd // ""),
+      (.model.display_name // ""),
+      (.effort.level // ""),
+      (.context_window.used_percentage // ""),
+      (if $sum > 0 then $sum else (.context_window.total_input_tokens // 0) end),
+      (.rate_limits.five_hour.used_percentage // ""),
+      (.rate_limits.five_hour.resets_at       // ""),
+      (.rate_limits.seven_day.used_percentage // ""),
+      (.rate_limits.seven_day.resets_at       // "")
 ' <<<"$input")
-rl5_used=$(jq   -r '.rate_limits.five_hour.used_percentage // empty' <<<"$input")
-rl5_resets=$(jq -r '.rate_limits.five_hour.resets_at       // empty' <<<"$input")
-rl7_used=$(jq   -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
-rl7_resets=$(jq -r '.rate_limits.seven_day.resets_at       // empty' <<<"$input")
+mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
 
 # Set to 0 to revert the right-side rate-limit display from the burndown
 # graph back to the text-based "ratio% (used%/elapsed%) day time" rows.
