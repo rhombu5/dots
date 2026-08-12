@@ -268,6 +268,11 @@ if [ -s "$OAUTH_USAGE_CACHE" ]; then
 fi
 log_usage_point "fable" "$rlf_used" "$rlf_resets"
 
+# Does any rate-limit window have a reset time? Adding a fourth window then
+# means adding it here rather than to every disjunction that asks.
+have_rl=0
+for _r in "$rl5_resets" "$rl7_resets" "$rlf_resets"; do [ -n "$_r" ] && have_rl=1; done
+
 shorten() { local p="$1"; printf '%s' "${p/#$HOME/\~}"; }
 
 # Read repoSettings.cloneTemplate's literal prefix (everything before {repo}) so
@@ -681,7 +686,6 @@ fi
 total_left=$(( ${#col1_path[@]} + ${#col2_path[@]} ))
 rows=$(( (total_left + 1) / 2 ))
 (( rows < right_rows )) && rows=$right_rows
-n=$rows
 
 # Right-side horizontal reservations, for the column-B fit test in the reflow
 # block: rr_row0 = the model+effort+ctx% label on row 0; rr_plot = the width the
@@ -696,14 +700,14 @@ if [ -n "$model" ]; then
     fi
 fi
 rr_plot=0
-if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
+if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     rr_plot=38    # flat burndown = 3 plots × 12 cells + 2 gaps (worst case)
 elif [ -n "$rl5_used" ] || [ -n "$rl7_used" ] || [ -n "$rlf_used" ]; then
     rr_plot=34    # widest text rate-limit row
 fi
 
 declare -a row_str row_vw col1_cell_str col1_cell_vw
-for ((i=0; i<n; i++)); do row_str[i]=""; row_vw[i]=0; done
+for ((i=0; i<rows; i++)); do row_str[i]=""; row_vw[i]=0; done
 
 # cellcat <str-array> <vw-array> <idx> <visible-width> <printf-fmt> [args…]
 # Appends formatted text to one cell of a (string, visible-width) array pair.
@@ -979,7 +983,6 @@ if (( colB_count > 0 )); then
     if (( ! two_col_fits )); then
         rows=$total_left
         (( rows < right_rows )) && rows=$right_rows
-        n=$rows
     fi
 fi
 
@@ -987,7 +990,7 @@ fi
 # follows on that row), a dim pipe divider, then the column-B cell. Column B's
 # row i holds left-list item (rows + i). Rows with no column-B content skip both
 # the padding and the divider — the pipe is purely a column-A/column-B separator.
-for ((i=0; i<n; i++)); do
+for ((i=0; i<rows; i++)); do
     bidx=$(( rows + i ))
     has_colB=0
     (( bidx < ${#left_str[@]} )) && has_colB=1
@@ -1184,19 +1187,29 @@ add_rate_row() {
     RATE_TIME+=("$(date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null)")
 }
 
-add_rate_row "5hr"   "$rl5_used" "$rl5_resets" 18000
-add_rate_row "7day"  "$rl7_used" "$rl7_resets" 604800
-add_rate_row "fable" "$rlf_used" "$rlf_resets" 604800
+# Only the text renderer reads RATE_*, so in graph mode the whole ratio
+# computation (two `date -d` forks per window) is dead work — skip it.
+if (( ! USAGE_BURNDOWN_GRAPH )); then
+    add_rate_row "5hr"   "$rl5_used" "$rl5_resets" 18000
+    add_rate_row "7day"  "$rl7_used" "$rl7_resets" 604800
+    add_rate_row "fable" "$rlf_used" "$rlf_resets" 604800
+fi
 
-if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
+if (( ${#RATE_USED[@]} > 0 )); then
     # Column widths = max across present rows. Numbers render right-justified
     # to their slot so the trailing digits stack column-true. Day is always 3
     # chars so a fixed dw=3 keeps the day column anchored regardless of input.
-    rw=0; uw=0; ew=0; tmw=0; dw=3
-    for v in "${RATE_RATIO[@]}";   do (( ${#v} > rw  )) && rw=${#v};  done
-    for v in "${RATE_USED[@]}";    do (( ${#v} > uw  )) && uw=${#v};  done
-    for v in "${RATE_ELAPSED[@]}"; do (( ${#v} > ew  )) && ew=${#v};  done
-    for v in "${RATE_TIME[@]}";    do (( ${#v} > tmw )) && tmw=${#v}; done
+    maxw() {   # maxw <out-var> [strings…] — longest string length, 0 if none
+        local -n _o=$1; shift
+        _o=0
+        local v
+        for v in "$@"; do (( ${#v} > _o )) && _o=${#v}; done
+    }
+    dw=3
+    maxw rw  "${RATE_RATIO[@]}"
+    maxw uw  "${RATE_USED[@]}"
+    maxw ew  "${RATE_ELAPSED[@]}"
+    maxw tmw "${RATE_TIME[@]}"
 
     emit_rate_row() {
         local row=$1 used=$2 elapsed=$3 ratio=$4 color=$5 day=$6 time=$7
@@ -1205,19 +1218,12 @@ if (( ! USAGE_BURNDOWN_GRAPH )) && (( ${#RATE_USED[@]} > 0 )); then
         # Counted delimiters: 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 = 9 chars.
         local text_w=$(( rw + uw + ew + dw + tmw + 9 ))
         right_pad "$row" "$text_w"
-        append "$row" "$rw" "${color}%*s\033[0m"   "$rw" "$ratio"
-        append "$row" 1 "%%"
-        append "$row" 2 " ("
-        append "$row" "$uw" "\033[2;37m%*s\033[0m" "$uw" "$used"
-        append "$row" 1 "%%"
-        append "$row" 1 "/"
-        append "$row" "$ew" "\033[2;37m%*s\033[0m" "$ew" "$elapsed"
-        append "$row" 1 "%%"
-        append "$row" 1 ")"
-        append "$row" 1 " "
-        append "$row" "$dw"  "\033[2;37m%-*s\033[0m" "$dw"  "$day"
-        append "$row" 1 " "
-        append "$row" "$tmw" "\033[2;37m%*s\033[0m" "$tmw" "$time"
+        # Each literal delimiter rides along in its neighbour's format string.
+        append "$row" $(( rw + 3 ))  "${color}%*s\033[0m%% ("       "$rw"  "$ratio"
+        append "$row" $(( uw + 2 ))  "\033[2;37m%*s\033[0m%%/"      "$uw"  "$used"
+        append "$row" $(( ew + 3 ))  "\033[2;37m%*s\033[0m%%) "     "$ew"  "$elapsed"
+        append "$row" $(( dw + 1 ))  "\033[2;37m%-*s\033[0m "       "$dw"  "$day"
+        append "$row" "$tmw"         "\033[2;37m%*s\033[0m"         "$tmw" "$time"
     }
 
     for (( j=0; j<${#RATE_USED[@]}; j++ )); do
@@ -1250,7 +1256,7 @@ fi
 # White is a dotted diagonal across the full plot (the un-elapsed future
 # included); the data line only extends to the current elapsed-x.
 # ────────────────────────────────────────────────────────────────────────────
-if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] || [ -n "$rlf_resets" ]; }; then
+if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     # Per-plot layout: 12 cells × 3 cells = 24 × 12 dots.
     #
     # Axes occupy specific dot positions, not entire cells: the Y axis is
@@ -1442,7 +1448,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     # the graphs — this is purely what the worktree list already made room for.
     # More bands ⇒ stack plots ⇒ a narrower block: 1 band = flat 3-across,
     # 2 = two columns, 3 = one column.
-    burndown_bands=$(( (n - 1) / BURNDOWN_BAND_H ))
+    burndown_bands=$(( (rows - 1) / BURNDOWN_BAND_H ))
     (( burndown_bands < 1 )) && burndown_bands=1
     (( burndown_bands > BURNDOWN_PLOT_COUNT )) && burndown_bands=$BURNDOWN_PLOT_COUNT
 
@@ -1559,7 +1565,7 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     done
 fi
 
-for ((i=0; i<n; i++)); do
+for ((i=0; i<rows; i++)); do
     (( i > 0 )) && printf "\n"
     printf '%s' "${row_str[$i]}"
 done
