@@ -516,51 +516,33 @@ main_ci_annotation_for() {
     ' "$cache_file" 2>/dev/null
 }
 
-color_for_pr() {
-    local pr="$1" dim="$2" d=""
-    [ "$dim" = "dim" ] && d="2;"
-    case "$pr" in
-        open)   printf '\033[%s37m'    "$d" ;;
-        draft)  printf '\033[2;37m'         ;;
-        merged) printf '\033[%s35m'    "$d" ;;
-        closed) printf '\033[2;31m'         ;;
-        *)      printf '\033[%s37m'    "$d" ;;
-    esac
-}
+# ── State → SGR / glyph lookups.
+# Each colour table is keyed "<state>" for the bright variant and "<state>.dim"
+# for the dim one, so a caller holding a dim-key suffix ("" or ".dim") indexes
+# both from one expression and neither table needs a wrapper function or the
+# subshell that came with it. A miss yields "" — which is what the old case
+# statements' `*)` arm emitted for CI, and is the signal callers already test.
+declare -A PR_SGR=(
+    [open]='\033[37m'      [open.dim]='\033[2;37m'
+    [draft]='\033[2;37m'   [draft.dim]='\033[2;37m'    # draft reads dim either way
+    [merged]='\033[35m'    [merged.dim]='\033[2;35m'
+    [closed]='\033[2;31m'  [closed.dim]='\033[2;31m'   # closed reads dim either way
+)
 
-color_for_ci() {
-    local ci="$1" dim="$2" d=""
-    [ "$dim" = "dim" ] && d="2;"
-    case "$ci" in
-        pass)    printf '\033[%s32m' "$d" ;;   # green
-        fail)    printf '\033[%s31m' "$d" ;;   # red
-        pending) printf '\033[%s36m' "$d" ;;   # cyan - in flight
-        none)    printf '\033[%s33m' "$d" ;;   # yellow - no checks yet
-        *)       printf ''                ;;
-    esac
-}
+declare -A CI_SGR=(
+    [pass]='\033[32m'     [pass.dim]='\033[2;32m'      # green
+    [fail]='\033[31m'     [fail.dim]='\033[2;31m'      # red
+    [pending]='\033[36m'  [pending.dim]='\033[2;36m'   # cyan - in flight
+    [none]='\033[33m'     [none.dim]='\033[2;33m'      # yellow - no checks yet
+)
 
-glyph_for_ci() {
-    case "$1" in
-        pass)    printf '✓' ;;
-        fail)    printf '✗' ;;
-        pending) printf '●' ;;
-        *)       printf ''  ;;
-    esac
-}
+declare -A CI_GLYPH=( [pass]='✓' [fail]='✗' [pending]='●' )
 
 # Hue palette: project_dir is always index 0 (yellow); added_dirs cycle through
 # indices 1..N. Worktrees in col 2 inherit their parent col-1 entry's hue, so
 # you can visually trace a worktree back to the added-dir it belongs to.
-HUE_CODES=(33 36 32 34 37)   # yellow, cyan, green, blue, white
-
-# sgr_hue <hue-idx> <dim:0|1>  →  \033[<...>m
-sgr_hue() {
-    local code="${HUE_CODES[$1]:-${HUE_CODES[0]}}"
-    if (( $2 )); then printf '\033[2;%sm' "$code"
-    else              printf '\033[%sm'   "$code"
-    fi
-}
+HUE_SGR=('\033[33m' '\033[36m' '\033[32m' '\033[34m' '\033[37m')       # yellow, cyan, green, blue, white
+HUE_SGR_DIM=('\033[2;33m' '\033[2;36m' '\033[2;32m' '\033[2;34m' '\033[2;37m')
 
 # attrs_prefix <italic:0|1> <strike:0|1> <bold:0|1>  ->  SGR prefix or empty.
 # Stacks before a color escape; \033[0m later resets all attributes.
@@ -574,11 +556,14 @@ attrs_prefix() {
     printf '\033[%sm' "${parts[*]}"
 }
 
-# Map col-1 index → hue index: project_dir stays at 0, added_dirs cycle 1..N-1.
+# hue_idx_for <out-var> <col-1 index> — project_dir stays at 0, added_dirs
+# cycle 1..N-1. Writes through a nameref rather than stdout so the per-entry
+# and per-worktree call sites don't each fork a subshell.
 hue_idx_for() {
-    local i=$1 size=${#HUE_CODES[@]}
-    (( i == 0 )) && { printf '0'; return; }
-    printf '%d' $(( (i - 1) % (size - 1) + 1 ))
+    local -n _o=$1
+    local i=$2 size=${#HUE_SGR[@]}
+    (( i == 0 )) && { _o=0; return; }
+    _o=$(( (i - 1) % (size - 1) + 1 ))
 }
 
 C_CURRENT='\033[36m'       # cyan (cwd subdir suffix on col 1 path)
@@ -744,29 +729,29 @@ right_pad() {
 
 # ── Pass 1: build each col-1 (repo header) cell — dir + optional cyan cwd
 # suffix + vcs + PR + main-CI marker — recording each cell's visible width.
+happend() { cellcat col1_cell_str col1_cell_vw "$@"; }   # <i> <visible-width> <fmt> [args…]
+
 for ((i=0; i<${#col1_short[@]}; i++)); do
-    cell=""
-    cell_w=0
-    hi=$(hue_idx_for "$i")
+    col1_cell_str[i]=""
+    col1_cell_vw[i]=0
+    hue_idx_for hi "$i"
     # Bright + bold travel together and only one item ever has them -
     # the row containing the literal cwd. Everything else is dim, not bold.
     if (( i == matching_idx )); then
-        c_dir=$(sgr_hue "$hi" 0); c_vcs=$C_BRANCH;     dimflag="";    bold='\033[1m'
+        c_dir=${HUE_SGR[$hi]};     c_vcs=$C_BRANCH;     dimkey="";     bold='\033[1m'
     else
-        c_dir=$(sgr_hue "$hi" 1); c_vcs=$C_BRANCH_DIM; dimflag="dim"; bold=""
+        c_dir=${HUE_SGR_DIM[$hi]}; c_vcs=$C_BRANCH_DIM; dimkey=".dim"; bold=""
     fi
 
     dir="${col1_short[$i]}"
-    cell+=$(printf "${bold}${c_dir}%s\033[0m" "$dir")
-    cell_w=$(( cell_w + ${#dir} ))
+    happend "$i" "${#dir}" "${bold}${c_dir}%s\033[0m" "$dir"
 
     # Cyan suffix only on the matching row, when cwd is a subdir of it.
     if (( i == matching_idx )); then
         krp="${col1_real[i]}"
         if [[ "$cwd_real" == "$krp"/* ]]; then
             suffix="/${cwd_real#$krp/}"
-            cell+=$(printf "${bold}${C_CURRENT}%s\033[0m" "$suffix")
-            cell_w=$(( cell_w + ${#suffix} ))
+            happend "$i" "${#suffix}" "${bold}${C_CURRENT}%s\033[0m" "$suffix"
         fi
     fi
 
@@ -777,8 +762,7 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         # not row identity. Only the path/cwd-suffix carry the bold.
         IFS=$'\t' read -r vt_icons vt_branch vt_counts <<<"$vt"
         vt_full="${vt_icons}${vt_branch}${vt_counts}"
-        cell+=$(printf " ${c_vcs}%s\033[0m" "$vt_full")
-        cell_w=$(( cell_w + 1 + ${#vt_full} ))
+        happend "$i" $(( 1 + ${#vt_full} )) " ${c_vcs}%s\033[0m" "$vt_full"
     fi
 
     pr="${col1_pr[$i]}"
@@ -786,27 +770,24 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
         # col1 only uses overall ci_state; branch/PR per-event states are
         # for col2's two-glyph cluster.
         read -r pr_state ci_state _branch_ci _pr_ci pr_num <<<"$pr"
-        pc=$(color_for_pr "$pr_state" "$dimflag")
+        # An unrecognised state falls back to open's colour, as before.
+        pc=${PR_SGR[$pr_state$dimkey]:-${PR_SGR[open$dimkey]}}
         # PR info is part of the status suffix - no bold.
         if [ "$pr_state" = "draft" ]; then
             # Draft: italic parens around the number carry the state -
-            # "(#274)" instead of "#274 (draft)". 4 fewer columns.
-            cell+=$(printf " \033[3m${pc}(%s)\033[0m" "$pr_num")
-            cell_w=$(( cell_w + 3 + ${#pr_num} ))
+            # "(#274)" instead of "#274 (draft)". 4 fewer columns. Col 2 draws
+            # the same idea differently; see the col-2 PR suffix below.
+            happend "$i" $(( 3 + ${#pr_num} )) " \033[3m${pc}(%s)\033[0m" "$pr_num"
         else
-            cell+=$(printf " ${pc}%s\033[0m" "$pr_num")
-            cell_w=$(( cell_w + 1 + ${#pr_num} ))
+            happend "$i" $(( 1 + ${#pr_num} )) " ${pc}%s\033[0m" "$pr_num"
             if [ "$pr_state" = "open" ]; then
-                cg=$(glyph_for_ci "$ci_state")
+                cg=${CI_GLYPH[$ci_state]}
                 if [ -n "$cg" ]; then
-                    cc=$(color_for_ci "$ci_state" "$dimflag")
-                    cell+=$(printf " ${cc}%s\033[0m" "$cg")
-                    cell_w=$(( cell_w + 2 ))
+                    happend "$i" 2 " ${CI_SGR[$ci_state$dimkey]}%s\033[0m" "$cg"
                 fi
             elif [ "$pr_state" != "merged" ]; then
                 # "(merged)" suppressed to save space - terminal state, common.
-                cell+=$(printf " \033[2m(%s)\033[0m" "$pr_state")
-                cell_w=$(( cell_w + 3 + ${#pr_state} ))
+                happend "$i" $(( 3 + ${#pr_state} )) " \033[2m(%s)\033[0m" "$pr_state"
             fi
         fi
     fi
@@ -816,15 +797,11 @@ for ((i=0; i<${#col1_short[@]}; i++)); do
     # entirely when the repo has no matching runs.
     main_ci="${col1_main_ci[$i]}"
     if [ -n "$main_ci" ]; then
-        mc=$(color_for_ci "$main_ci" "$dimflag")
+        mc=${CI_SGR[$main_ci$dimkey]}
         if [ -n "$mc" ]; then
-            cell+=$(printf " ${mc}↪\033[0m")
-            cell_w=$(( cell_w + 2 ))
+            happend "$i" 2 " ${mc}↪\033[0m"
         fi
     fi
-
-    col1_cell_str[$i]="$cell"
-    col1_cell_vw[$i]=$cell_w
 done
 
 # ── Pre-render each worktree into a standalone cell (branch + PR/CI status, no
@@ -860,16 +837,17 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
     # PR state pulled up early so strikethrough can wrap the whole cell.
     pr_state=""; ci_state=""; branch_ci=""; pr_ci=""; pr_num=""
     if [ -n "${col2_pr[$j]}" ]; then
+        # "-" (no runs for that event) is left as-is: it simply misses both
+        # lookup tables below, which is exactly what "no glyph" means. Blanking
+        # it would make the table subscript empty, which bash rejects.
         read -r pr_state ci_state branch_ci pr_ci pr_num <<<"${col2_pr[$j]}"
-        [ "$branch_ci" = "-" ] && branch_ci=""
-        [ "$pr_ci"     = "-" ] && pr_ci=""
     fi
 
-    parent_hi=$(hue_idx_for "${col2_origin_idx[$j]}")
+    hue_idx_for parent_hi "${col2_origin_idx[$j]}"
     if (( has_main )); then
-        wt_head_c=$(sgr_hue "$parent_hi" 0); wt_rhs_c=$C_BRANCH;     wt_dim=""
+        wt_head_c=${HUE_SGR[$parent_hi]};     wt_rhs_c=$C_BRANCH;     wt_dimkey=""
     else
-        wt_head_c=$(sgr_hue "$parent_hi" 1); wt_rhs_c=$C_BRANCH_DIM; wt_dim="dim"
+        wt_head_c=${HUE_SGR_DIM[$parent_hi]}; wt_rhs_c=$C_BRANCH_DIM; wt_dimkey=".dim"
     fi
     italic_flag=0; (( has_subagent ))          && italic_flag=1
     strike_flag=0; [ "$pr_state" = "merged" ] && strike_flag=1
@@ -882,12 +860,12 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
     # Branch color: overall CI state overrides the inherited repo hue when
     # there's an open PR with a known CI state. Per-event states surface as
     # the glyph cluster after the branch; the branch itself carries the
-    # aggregate signal. Saturation honors wt_dim so the existing bright/dim
+    # aggregate signal. Saturation honors wt_dimkey so the existing bright/dim
     # has_main rule still applies.
     wt_branch_c="$wt_head_c"
     if [ "$pr_state" = "open" ]; then
         case "$ci_state" in
-            pass|fail|pending|none) wt_branch_c=$(color_for_ci "$ci_state" "$wt_dim") ;;
+            pass|fail|pending|none) wt_branch_c=${CI_SGR[$ci_state$wt_dimkey]} ;;
         esac
     fi
     if [ -n "${col2_vcs[$j]}" ]; then
@@ -913,17 +891,8 @@ for ((j=0; j<${#col2_path[@]}; j++)); do
         #   fail → ✗ (red)
         # Squeezed: only glyphs that have a state are drawn (no blank-slot
         # padding), so a lone ✓/✗/● is 1 cell and both present are 2 adjacent.
-        g1=""; c1=""; g2=""; c2=""
-        case "$branch_ci" in
-            pass)    g1="✓"; c1=$(color_for_ci pass    "$wt_dim") ;;
-            fail)    g1="✗"; c1=$(color_for_ci fail    "$wt_dim") ;;
-            pending) g1="●"; c1=$(color_for_ci pending "$wt_dim") ;;
-        esac
-        case "$pr_ci" in
-            pass)    g2="✓"; c2=$(color_for_ci pass    "$wt_dim") ;;
-            fail)    g2="✗"; c2=$(color_for_ci fail    "$wt_dim") ;;
-            pending) g2="●"; c2=$(color_for_ci pending "$wt_dim") ;;
-        esac
+        g1=${CI_GLYPH[$branch_ci]}; c1=${CI_SGR[$branch_ci$wt_dimkey]}
+        g2=${CI_GLYPH[$pr_ci]};     c2=${CI_SGR[$pr_ci$wt_dimkey]}
         if [ -n "$g1" ] || [ -n "$g2" ]; then
             wappend "$j" 1 " "
             [ -n "$g1" ] && wappend "$j" 1 "${c1}%s\033[0m" "$g1"
