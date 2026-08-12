@@ -189,32 +189,38 @@ mkdir -p "$CACHE_DIR" 2>/dev/null
 OAUTH_USAGE_CACHE="$CACHE_DIR/oauth-usage.json"
 OAUTH_USAGE_TTL=300
 
-refresh_oauth_usage_async() {
-    local age lock_file="$OAUTH_USAGE_CACHE.lock"
-    if [ -f "$OAUTH_USAGE_CACHE" ]; then
-        age=$(( $(date +%s) - $(stat -c %Y "$OAUTH_USAGE_CACHE" 2>/dev/null || echo 0) ))
-        (( age < OAUTH_USAGE_TTL )) && return
+# async_refresh <cache-file> <ttl> <producer-fn> [args…]
+# The shared scaffold behind every cached fetch in this script: return
+# immediately when the cache is younger than <ttl>, else run
+# `<producer-fn> [args…] <cache-file>` in a backgrounded, flock-guarded
+# subshell. The render path never blocks on it — it only ever reads the file.
+async_refresh() {
+    local cache_file=$1 ttl=$2; shift 2
+    if [ -f "$cache_file" ]; then
+        (( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) < ttl )) && return
     fi
-    (
-        flock -n 200 || exit 0
-        token=$(jq -r '.claudeAiOauth.accessToken // empty' "$HOME/.claude/.credentials.json" 2>/dev/null)
-        [ -z "$token" ] && exit 0
-        # On failure (expired token, offline), touch the cache instead of
-        # overwriting it: the last good body stays readable and the mtime bump
-        # backs the retry off by one TTL rather than refetching every render.
-        if body=$(curl -sf --max-time 5 \
-                    -H "Authorization: Bearer $token" \
-                    -H "Content-Type: application/json" \
-                    -H "anthropic-beta: oauth-2025-04-20" \
-                    https://api.anthropic.com/api/oauth/usage); then
-            printf '%s\n' "$body" > "$OAUTH_USAGE_CACHE"
-        else
-            touch "$OAUTH_USAGE_CACHE"
-        fi
-    ) 200>"$lock_file" >/dev/null 2>&1 &
+    ( flock -n 200 || exit 0; "$@" "$cache_file" ) 200>"$cache_file.lock" >/dev/null 2>&1 &
     disown 2>/dev/null
 }
-refresh_oauth_usage_async
+
+_fetch_oauth() {
+    local out=$1 token body
+    token=$(jq -r '.claudeAiOauth.accessToken // empty' "$HOME/.claude/.credentials.json" 2>/dev/null)
+    [ -z "$token" ] && return
+    # On failure (expired token, offline), touch the cache instead of
+    # overwriting it: the last good body stays readable and the mtime bump
+    # backs the retry off by one TTL rather than refetching every render.
+    if body=$(curl -sf --max-time 5 \
+                -H "Authorization: Bearer $token" \
+                -H "Content-Type: application/json" \
+                -H "anthropic-beta: oauth-2025-04-20" \
+                https://api.anthropic.com/api/oauth/usage); then
+        printf '%s\n' "$body" > "$out"
+    else
+        touch "$out"
+    fi
+}
+async_refresh "$OAUTH_USAGE_CACHE" "$OAUTH_USAGE_TTL" _fetch_oauth
 
 # .percent is already 0-100 (same scale as used_percentage); .resets_at is ISO
 # 8601, converted here to the epoch seconds every downstream window calculation
@@ -379,32 +385,23 @@ cache_key() { printf '%s' "$1" | sha256sum | head -c 16; }
 # The event field is only on `pr checks`, not on view's statusCheckRollup;
 # we need it to split the aggregate into branch-commit (event=push) vs
 # PR-open (event=pull_request) CI states.
+_fetch_pr() {
+    local wt=$1 out=$2 pr_meta checks
+    pr_meta=$(cd "$wt" && gh pr view --json number,state,isDraft 2>/dev/null)
+    if [ -n "$pr_meta" ]; then
+        checks=$(cd "$wt" && gh pr checks --json bucket,event 2>/dev/null)
+        [ -z "$checks" ] && checks='[]'
+        jq -n --argjson pr "$pr_meta" --argjson checks "$checks" \
+            '{pr: $pr, checks: $checks}' > "$out"
+    else
+        printf '{}\n' > "$out"
+    fi
+}
+
 refresh_pr_async() {
     local wt="$1"
     [ -d "$wt" ] || return
-    local key cache_file lock_file age
-    key=$(cache_key "$wt")
-    cache_file="$CACHE_DIR/wt-$key.json"
-    lock_file="$cache_file.lock"
-
-    if [ -f "$cache_file" ]; then
-        age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
-        (( age < CACHE_TTL )) && return
-    fi
-
-    (
-        flock -n 200 || exit 0
-        pr_meta=$(cd "$wt" && gh pr view --json number,state,isDraft 2>/dev/null)
-        if [ -n "$pr_meta" ]; then
-            checks=$(cd "$wt" && gh pr checks --json bucket,event 2>/dev/null)
-            [ -z "$checks" ] && checks='[]'
-            jq -n --argjson pr "$pr_meta" --argjson checks "$checks" \
-                '{pr: $pr, checks: $checks}' > "$cache_file"
-        else
-            printf '{}\n' > "$cache_file"
-        fi
-    ) 200>"$lock_file" >/dev/null 2>&1 &
-    disown 2>/dev/null
+    async_refresh "$CACHE_DIR/wt-$(cache_key "$wt").json" "$CACHE_TTL" _fetch_pr "$wt"
 }
 
 # Read cached annotation. Output: "<pr_state> <overall_ci> <branch_ci> <pr_ci> #<num>"
@@ -449,28 +446,19 @@ read_pr_annotation() {
 # Async refresh of one repo's most-recent-push-to-main CI state.
 # Separate from refresh_pr_async because it's a different gh call shape and
 # different cache key namespace (repo, not worktree).
+_fetch_main_ci() {
+    local repo=$1 out=$2 output
+    if output=$(cd "$repo" && gh run list --branch main --event push --limit 1 --json status,conclusion 2>/dev/null); then
+        printf '%s\n' "$output" > "$out"
+    else
+        printf '[]\n' > "$out"
+    fi
+}
+
 refresh_main_ci_async() {
     local repo="$1"
     [ -d "$repo" ] || return
-    local key cache_file lock_file age
-    key=$(cache_key "$repo")
-    cache_file="$CACHE_DIR/mainci-$key.json"
-    lock_file="$cache_file.lock"
-
-    if [ -f "$cache_file" ]; then
-        age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
-        (( age < CACHE_TTL )) && return
-    fi
-
-    (
-        flock -n 200 || exit 0
-        if output=$(cd "$repo" && gh run list --branch main --event push --limit 1 --json status,conclusion 2>/dev/null); then
-            printf '%s\n' "$output" > "$cache_file"
-        else
-            printf '[]\n' > "$cache_file"
-        fi
-    ) 200>"$lock_file" >/dev/null 2>&1 &
-    disown 2>/dev/null
+    async_refresh "$CACHE_DIR/mainci-$(cache_key "$repo").json" "$CACHE_TTL" _fetch_main_ci "$repo"
 }
 
 # Read cached main-CI state. Outputs pass | fail | pending, or empty when no
