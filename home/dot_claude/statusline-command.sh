@@ -31,27 +31,37 @@ TERM_WIDTH=$(( TERM_WIDTH - 4 ))
 SEP=2
 
 # ── Subagent detection: find descendant `claude` processes and their cwds.
+# The whole process table is read once here, into a parent map, a child-list
+# map and a comm map. Walking it in-process replaces what used to be two `ps`
+# forks per ancestor plus a `pgrep` and a `ps` per descendant. comm is the last
+# field, so `read` hands it the rest of the line — names with spaces stay whole.
+declare -A PROC_PPID PROC_KIDS PROC_COMM
+while read -r _pid _ppid _comm; do
+    PROC_PPID[$_pid]=$_ppid
+    PROC_COMM[$_pid]=$_comm
+    PROC_KIDS[$_ppid]+="$_pid "
+done < <(ps -eo pid=,ppid=,comm= 2>/dev/null)
+
 detect_claude_root_pid() {
     local p="$PPID"
     while [ -n "$p" ] && [ "$p" != "1" ]; do
-        local pcomm
-        pcomm=$(ps -o comm= -p "$p" 2>/dev/null | tr -d ' ')
-        if [ "$pcomm" = "claude" ]; then
+        if [ "${PROC_COMM[$p]}" = "claude" ]; then
             printf '%s' "$p"; return
         fi
-        p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+        p="${PROC_PPID[$p]}"
     done
 }
 
 descendants_of() {
     local root="$1"
     [ -z "$root" ] && return
-    local queue=("$root") pid kids k
+    local queue=("$root") pid k
     while (( ${#queue[@]} > 0 )); do
         pid="${queue[0]}"; queue=("${queue[@]:1}")
-        mapfile -t kids < <(pgrep -P "$pid" 2>/dev/null)
-        for k in "${kids[@]}"; do
-            [ -n "$k" ] && queue+=("$k") && printf '%s\n' "$k"
+        # Unquoted on purpose: the child list is a space-separated string.
+        for k in ${PROC_KIDS[$pid]}; do
+            queue+=("$k")
+            printf '%s\n' "$k"
         done
     done
 }
@@ -61,8 +71,7 @@ claude_root=$(detect_claude_root_pid)
 if [ -n "$claude_root" ]; then
     while IFS= read -r pid; do
         [ -z "$pid" ] && continue
-        pcomm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
-        if [ "$pcomm" = "claude" ]; then
+        if [ "${PROC_COMM[$pid]}" = "claude" ]; then
             cwd_link=$(readlink "/proc/$pid/cwd" 2>/dev/null)
             [ -n "$cwd_link" ] && SUBAGENT_CWDS+=("$cwd_link")
         fi
