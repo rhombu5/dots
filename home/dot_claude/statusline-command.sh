@@ -362,17 +362,18 @@ vcs_text_for() {
     local icons_part="$host_icon $branch_icon "    # trailing space so concat == original
     local branch_part="$branch"
 
-    local staged=0 unstaged=0 untracked=0 line
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        if [ "${line:0:2}" = "??" ]; then
-            untracked=$(( untracked + 1 ))
-        else
-            local x="${line:0:1}" y="${line:1:1}"
-            [ "$x" != " " ] && [ "$x" != "?" ] && staged=$(( staged + 1 ))
-            [ "$y" != " " ] && [ "$y" != "?" ] && unstaged=$(( unstaged + 1 ))
-        fi
-    done < <("${g[@]}" status --porcelain=v1 2>/dev/null)
+    # Three integers out of the porcelain, counted in one awk pass. END always
+    # fires, so a failed git call still yields "0 0 0".
+    local staged unstaged untracked
+    read -r staged unstaged untracked < <("${g[@]}" status --porcelain=v1 2>/dev/null | awk '
+        /^$/    { next }
+        /^\?\?/ { u++; next }
+        {
+            x = substr($0, 1, 1); y = substr($0, 2, 1)
+            if (x != " " && x != "?") s++
+            if (y != " " && y != "?") m++
+        }
+        END { print s+0, m+0, u+0 }')
 
     local ahead=0 behind=0 counts
     counts=$("${g[@]}" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)
