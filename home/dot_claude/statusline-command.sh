@@ -689,11 +689,20 @@ fi
 declare -a row_str row_vw col1_cell_str col1_cell_vw
 for ((i=0; i<n; i++)); do row_str[i]=""; row_vw[i]=0; done
 
-append() {
-    local i=$1 w=$2; shift 2
-    row_str[i]+=$(printf "$@")
-    row_vw[i]=$(( row_vw[i] + w ))
+# cellcat <str-array> <vw-array> <idx> <visible-width> <printf-fmt> [args…]
+# Appends formatted text to one cell of a (string, visible-width) array pair.
+# printf -v keeps this fork-free; no format string in this script contains a
+# newline, so it is byte-equivalent to the `$(printf …)` form it replaces.
+cellcat() {
+    local -n _s=$1 _w=$2
+    local i=$3 vw=$4; shift 4
+    local t
+    printf -v t "$@"
+    _s[i]+=$t
+    _w[i]=$(( ${_w[i]:-0} + vw ))
 }
+
+append() { cellcat row_str row_vw "$@"; }
 
 # ── Pass 1: build each col-1 (repo header) cell — dir + optional cyan cwd
 # suffix + vcs + PR + main-CI marker — recording each cell's visible width.
@@ -789,11 +798,7 @@ done
 #   Italic     — set when an active subagent is in this worktree.
 #   Strike     — set when the PR is merged (the "(merged)" label is then dropped).
 declare -a wt_cell_str wt_cell_vw
-wappend() {  # wappend <j> <visible-width> <printf-fmt> [args…] → append to worktree cell j
-    local j=$1 w=$2; shift 2
-    wt_cell_str[j]+=$(printf "$@")
-    wt_cell_vw[j]=$(( ${wt_cell_vw[j]:-0} + w ))
-}
+wappend() { cellcat wt_cell_str wt_cell_vw "$@"; }   # <j> <visible-width> <fmt> [args…]
 for ((j=0; j<${#col2_path[@]}; j++)); do
     wt_cell_str[j]=""
     wt_cell_vw[j]=0
