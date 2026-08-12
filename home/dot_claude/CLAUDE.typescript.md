@@ -337,3 +337,28 @@ export function from(token: string): Type { … }
 blank-line *insertion* rule (only enum `memberSpacing`, maintain-only), and Prettier likewise
 only preserves. Both maintain authored blanks, so write them once and the formatter keeps them.
 Where ESLint runs, `@stylistic/padding-line-between-statements` can enforce the member case.
+
+## Single-consumer state — close over it, don't sibling it
+
+When module/namespace state is read by exactly one function, the function owns it: wrap the pair
+in an IIFE that declares the state and returns the function. A sibling `const` leaks the state to
+every other member of the scope and can orphan when its function moves.
+
+```ts
+// NO — the memo is visible to every sibling in the scope
+export function from(token: string): Type { /* … reads parsed … */ }
+const parsed = new Map<string, Type>();
+
+// YES — the memo lives inside the only function that reads it
+export const from = (() => {
+  /** Every token already read, so a repeated request skips the lexer. */
+  const parsed = new Map<string, Type>();
+  return function from(token: string): Type {
+    /* … */
+  };
+})();
+```
+
+Keep the inner function **named** — stack traces and profiles still say `from`. The doc comment
+rides the exported const, so hover/intellisense is unchanged. State genuinely shared by several
+members stays a scope-level declaration, placed beside its users.
