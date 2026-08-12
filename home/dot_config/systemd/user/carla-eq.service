@@ -12,6 +12,10 @@ Type=simple
 # still reaches the speakers, it just isn't processed.
 Environment=WINEPREFIX=%h/.wine
 Environment=WINEDEBUG=-all
+# Stop PipeWire auto-connecting Carla's outputs to the default sink. With the
+# EQ sink set as default that would route Carla straight back into its own
+# input. carla-eq-link also cuts the loop defensively, in case this is ignored.
+Environment=PIPEWIRE_PROPS={ node.autoconnect = false }
 ExecStart=/usr/bin/carla-rack %h/.config/carla/eq-rack.carxp
 # Carla's ports appear seconds after the process does, and JACK clients never
 # auto-connect, so the graph has to be wired explicitly once it is up.

@@ -40,6 +40,38 @@ link() {
     fi
 }
 
+# PipeWire auto-connects a JACK client to the default sink AND the default
+# source. Both are wrong here: the output lands back on the sink feeding Carla
+# (a feedback loop), and the default source — a microphone — gets mixed into
+# playback. Neither is enumerable by name in advance, so strip every link on
+# Carla's ports first and rebuild only the ones we want.
+strip_foreign() {
+    # Cut anything feeding Carla's inputs that is not the EQ sink's monitor.
+    pw-link -l 2>/dev/null | awk -v carla="${CARLA}" -v keep="${SINK_MONITOR}" '
+        /^[^ ]/ { port = $0; next }
+        /\|<-/  {
+            src = $2
+            if (port ~ "^" carla ":audio-in" && src !~ "^" keep ":")
+                print src, port
+        }
+    ' | while read -r src dst; do
+        pw-link -d "$src" "$dst" 2>/dev/null && echo "cut input  $src -> $dst"
+    done
+
+    # Cut anything leaving Carla that is not the real output device.
+    pw-link -l 2>/dev/null | awk -v carla="${CARLA}" -v keep="${OUT_DEVICE}" '
+        /^[^ ]/ { port = $0; next }
+        /\|->/  {
+            dst = $2
+            if (port ~ "^" carla ":audio-out" && dst !~ "^" keep ":")
+                print port, dst
+        }
+    ' | while read -r src dst; do
+        pw-link -d "$src" "$dst" 2>/dev/null && echo "cut output $src -> $dst"
+    done
+}
+strip_foreign
+
 rc=0
 link "${SINK_MONITOR}:monitor_FL" "${CARLA}:audio-in1"  || rc=1
 link "${SINK_MONITOR}:monitor_FR" "${CARLA}:audio-in2"  || rc=1
