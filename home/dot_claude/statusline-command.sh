@@ -281,22 +281,6 @@ realpath_safe() {
     fi
 }
 
-repo_root_of() {
-    local d="$1"
-    if [ -z "$d" ] || [ ! -d "$d" ]; then printf '%s' "$d"; return; fi
-    local root
-    root=$(git --no-optional-locks -C "$d" rev-parse --show-toplevel 2>/dev/null) || { printf '%s' "$d"; return; }
-    printf '%s' "$root"
-}
-
-git_branch_of() {
-    local d="$1"
-    [ -z "$d" ] && return
-    git --no-optional-locks -C "$d" rev-parse --is-inside-work-tree &>/dev/null || return
-    git --no-optional-locks -C "$d" symbolic-ref --short HEAD 2>/dev/null \
-        || git --no-optional-locks -C "$d" rev-parse --short HEAD 2>/dev/null
-}
-
 # p10k-flavoured VCS cell. Emits three parts joined by TAB so callers can color
 # / decorate them independently:  <icons>\t<branch>\t<counts>
 #   icons  = "<host-icon> <branch-icon> "  (trailing space; concat == original)
@@ -574,7 +558,6 @@ hue_idx_for() {
 }
 
 C_CURRENT='\033[36m'       # cyan (cwd subdir suffix on col 1 path)
-C_CURRENT_DIM='\033[2;36m' # dim cyan
 C_BRANCH='\033[38;5;252m'  # very light gray (col 1 vcs + col 2 status suffix)
 C_BRANCH_DIM='\033[38;5;245m'  # medium gray
 C_SEP='\033[2;37m'         # dim white (column separator pipe)
@@ -616,27 +599,7 @@ for ((ridx=0; ridx<${#col1_path[@]}; ridx++)); do
     done < <(worktrees_of "$repo")
 done
 
-relative_to_repo() {
-    # Find the col-1 repo that contains this path; emit path relative to it.
-    # Falls back to ~-shortened absolute if no col-1 repo is an ancestor.
-    local wt="$1" wt_real repo repo_real
-    wt_real=$(realpath_safe "$wt")
-    for repo in "${col1_path[@]}"; do
-        repo_real=$(realpath_safe "$repo")
-        if [ "$wt_real" = "$repo_real" ]; then
-            printf '.'
-            return
-        fi
-        if [[ "$wt_real" == "$repo_real"/* ]]; then
-            printf './%s' "${wt_real#$repo_real/}"
-            return
-        fi
-    done
-    shorten "$wt"
-}
-
-declare -a col2_short col2_pr
-for p in "${col2_path[@]}"; do col2_short+=("$(relative_to_repo "$p")"); done
+declare -a col2_pr
 for ((j=0; j<${#col2_path[@]}; j++)); do
     refresh_pr_async "${col2_path[$j]}"
     col2_pr+=("$(read_pr_annotation "${col2_path[$j]}")")
@@ -1148,7 +1111,7 @@ fi
 #
 # Segments build their plain (uncolored) text first so the combined width is known
 # for right-alignment, then each one is re-emitted as colored pieces via append.
-SEG_TEXT=""; SEG_LABEL=""; SEG_USED=0; SEG_ELAPSED=0; SEG_RATIO=0; SEG_COLOR=""
+SEG_TEXT=""; SEG_USED=0; SEG_ELAPSED=0; SEG_RATIO=0; SEG_COLOR=""
 compute_rate_segment() {
     local label=$1 used=$2 resets_at=$3 window_sec=$4
     SEG_TEXT=""
@@ -1169,7 +1132,6 @@ compute_rate_segment() {
     elif (( ratio_pct >=  90 )); then color="\033[33m"
     else                             color="\033[32m"
     fi
-    SEG_LABEL=$label
     SEG_USED=$used_int
     SEG_ELAPSED=$elapsed_pct
     SEG_RATIO=$ratio_pct
