@@ -1493,6 +1493,13 @@ if (( USAGE_BURNDOWN_GRAPH )) && { [ -n "$rl5_resets" ] || [ -n "$rl7_resets" ] 
     burndown_layer_reset=("$(burndown_reset_label "$rl5_resets")" \
                           "$(burndown_reset_label "$rlf_resets")" \
                           "$(burndown_reset_label "$rl7_resets")")
+    # When Fable and 7day format to the same label the pair is redundant —
+    # keep only the last-rendered one (7day sits right of / below Fable in
+    # every layout).
+    if [ -n "${burndown_layer_reset[1]}" ] \
+       && [ "${burndown_layer_reset[1]}" = "${burndown_layer_reset[2]}" ]; then
+        burndown_layer_reset[1]=""
+    fi
 
     case $burndown_bands in
         1) burndown_pb=(0 0 0); burndown_pc=(0 1 2); burndown_ncols=3 ;;  # [5hr][Fable][7day]
