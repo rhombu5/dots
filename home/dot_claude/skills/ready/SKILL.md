@@ -31,11 +31,12 @@ Verify the session's load-bearing state survives a compact, a restart, AND a reb
 - **Task list**: current, statuses honest, every scoped work item's substance recoverable from
   its description or a file it points to (a task whose meaning lives only in conversation
   context is volatile — fix it now).
-- **Requirements / rulings / decisions**: every one landed in repo files or decision records —
-  committed, or at minimum on-disk in a real worktree. Flag uncommitted deltas.
-- **Volatile-only artifacts**: anything load-bearing that exists ONLY under `/tmp`, a
-  scratchpad, or conversation context gets flagged with where it should move — `/tmp` is a
-  tmpfs and dies with the machine.
+- **Requirements / rulings / decisions**: every one landed in repo files or decision records
+  on real disk. VOLATILE means `/tmp`-class storage: tmpfs scratchpads, session temp dirs,
+  conversation context — anything that dies with the machine or the session. On-disk but
+  uncommitted is NOT volatile (that's /done's concern, not this one's).
+- **Volatile-only artifacts**: anything load-bearing that exists ONLY in `/tmp`, a scratchpad,
+  or conversation context gets flagged with where it must move.
 
 Fix silently what is mechanical (writing the missing file, adding the missing task); SURFACE
 what needs the owner (uncommitted work in his worktree, a ruling that should become a decision
