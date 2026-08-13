@@ -1207,8 +1207,9 @@ fi
 # ────────────────────────────────────────────────────────────────────────────
 # Burndown graph (USAGE_BURNDOWN_GRAPH=1): three plots, each 12 cell cols × 3
 # cell rows (= 24 × 12 dots), each band of plots followed by one label row
-# showing the plots' reset times (the wall-clock moment each x-axis ends),
-# right-justified to each plot's 12-cell column. Single-row order is 5hr,
+# showing how long each plot's window has left to run — the distance to the
+# wall-clock moment its x-axis ends — right-justified to each plot's 12-cell
+# column so the label lands under that edge. Single-row order is 5hr,
 # Fable, 7day. When the worktree list has already made the status area taller
 # than one 4-row band, the plots column-wrap to use that height and shrink
 # horizontally (we never ADD rows for them): 2 bands of vertical room → 7day
@@ -1430,30 +1431,53 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     burndown_layer_color=("\033[31m" "\033[33m" "\033[94m")   # 5hr red, Fable yellow, 7day blue
     burndown_layer_now=("$br5_now_cell" "$brf_now_cell" "$br7_now_cell")
 
-    # Reset-time label per plot — the wall-clock moment the plot's x-axis ends.
-    # Day-of-week is dropped when the reset is under 23 hours away (bare time
-    # is unambiguous there; the 1-hour margin under a full day keeps a
-    # nearly-day-out reset from masquerading as sooner). Same rule for all
-    # three windows — the 5hr one just always qualifies.
-    burndown_reset_label() {
-        local resets_at=$1
+    # Reset labels. Both forms lead with the time left in the window — the
+    # number that actually answers "how much runway do I have" — and both fit
+    # the plot's 12 cells at their widest, so the label row never overflows the
+    # column it belongs to.
+    #
+    # Short-window form: "<H:MM left> <wall-clock reset>", e.g. "4:32 10:29pm".
+    # Widest is "4:59 12:59pm" = 12. The absolute time is worth carrying here
+    # because a reset a few hours out is something you plan around.
+    burndown_label_clock() {
+        local resets_at=$1 remain
         [ -z "$resets_at" ] && return
-        if (( resets_at - NOW < 23 * 3600 )); then
-            date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null
-        else
-            date -d "@$resets_at" +"%a %-I:%M%P" 2>/dev/null
-        fi
+        remain=$(( resets_at - NOW ))
+        (( remain < 0 )) && remain=0
+        printf '%d:%02d %s' \
+               $(( remain / 3600 )) $(( remain % 3600 / 60 )) \
+               "$(date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null)"
     }
-    burndown_layer_reset=("$(burndown_reset_label "$rl5_resets")" \
-                          "$(burndown_reset_label "$rlf_resets")" \
-                          "$(burndown_reset_label "$rl7_resets")")
-    # When Fable and 7day format to the same label the pair is redundant —
-    # keep only the last-rendered one (7day sits right of / below Fable in
-    # every layout).
-    if [ -n "${burndown_layer_reset[1]}" ] \
-       && [ "${burndown_layer_reset[1]}" = "${burndown_layer_reset[2]}" ]; then
-        burndown_layer_reset[1]=""
-    fi
+
+    # Long-window form: "<N>day[s] <HH:MM>", e.g. "4days 13:23" (widest
+    # "6days 23:59" = 11). Countdown only — a wall-clock moment most of a week
+    # out tells you nothing, and appending it would blow past 12 cells. Under a
+    # day the days field is dropped and the bare "HH:MM" remains, which still
+    # reads as the same leading time-left field.
+    burndown_label_countdown() {
+        local resets_at=$1 remain days
+        [ -z "$resets_at" ] && return
+        remain=$(( resets_at - NOW ))
+        (( remain < 0 )) && remain=0
+        days=$(( remain / 86400 ))
+        remain=$(( remain % 86400 ))
+        if (( days > 0 )); then
+            local plural=s
+            (( days == 1 )) && plural=""
+            printf '%dday%s ' "$days" "$plural"
+        fi
+        printf '%02d:%02d' $(( remain / 3600 )) $(( remain % 3600 / 60 ))
+    }
+
+    burndown_layer_reset=("$(burndown_label_clock     "$rl5_resets")" \
+                          "$(burndown_label_countdown "$rlf_resets")" \
+                          "$(burndown_label_countdown "$rl7_resets")")
+    # Fable and 7day are the same weekly window — the OAuth endpoint just
+    # jitters resets_at a second either side of the boundary — so one countdown
+    # serves both, and it goes under Fable: the middle plot in the flat layout,
+    # and the middle one when they stack too. 7day keeps its own label only as
+    # the fallback for before the async Fable fetch has landed.
+    [ -n "${burndown_layer_reset[1]}" ] && burndown_layer_reset[2]=""
 
     case $burndown_bands in
         1) burndown_pb=(0 0 0); burndown_pc=(0 1 2); burndown_ncols=3 ;;  # [5hr][Fable][7day]
@@ -1507,12 +1531,16 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
         fi
     }
 
-    # Each plot's reset time right-justified to its own 12-cell column, so the
-    # label sits under the plot's right edge — the x position where its window
-    # ends.
+    # Each plot's reset label right-justified to its own 12-cell column, so it
+    # ends under the plot's right edge — the x position where its window ends.
+    # The formatters are built to fit, but a label is truncated rather than
+    # allowed to overflow: the walk credits every column exactly
+    # BURNDOWN_PLOT_W_CELLS, so one extra character would shift the whole
+    # right-aligned block.
     _burndown_emit_label() {   # <plot-idx>
         local p=$1 label="" cell
         (( p >= 0 )) && label="${burndown_layer_reset[p]}"
+        (( ${#label} > BURNDOWN_PLOT_W_CELLS )) && label=${label:0:BURNDOWN_PLOT_W_CELLS}
         if [ -n "$label" ]; then
             printf -v cell '\033[2;37m%*s\033[0m' "$BURNDOWN_PLOT_W_CELLS" "$label"
         else
