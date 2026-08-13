@@ -1,9 +1,13 @@
 ---
 name: ready
-description: Readiness checkpoint before a pause, compact, or handoff. Asks two questions and demands plain verdicts — (1) is anything we discussed missing an explicit owner "yes" while neither ruled out nor tracked on the todo list, and (2) do the task list and every requirement/ruling exist in non-volatile files? Use when the user invokes /ready or asks "are we ready / did I miss anything / is everything captured".
+description: Readiness checkpoint before a pause, compact, or handoff. Asks two questions and demands plain verdicts — (1) is anything we discussed missing an explicit owner "yes" while neither ruled out nor tracked on the todo list, and (2) do the task list and every requirement/ruling exist in non-volatile files? Runs ONLY when the user literally types /ready, or as the gate inside a user-typed /go — never self-invoked; natural-language questions ("are we ready", "did I miss anything") do NOT trigger it.
 ---
 
 # ready — two questions, two plain verdicts
+
+> **Typed-invocation only.** This skill runs solely when the owner literally types `/ready` (or
+> as the gate inside a `/go` the owner typed). Never self-invoke it; a natural-language "are we
+> ready?" gets an ordinary answer, not this ceremony.
 
 A checkpoint, not a cleanup. Answer BOTH questions, and **lead with the verdict word for each**
 — `1: NO GAPS` / `1: GAPS — <n>` and `2: YES` / `2: NO — <what's volatile>` — before any

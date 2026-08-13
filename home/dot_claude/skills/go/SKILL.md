@@ -1,9 +1,13 @@
 ---
 name: go
-description: Execution greenlight. Runs the /ready checkpoint first; ANY non-clean verdict ends the skill immediately (present the findings, start nothing). On clean, standing execution orders activate — optimize hard for ASAP via parallelism (never via design shortcuts), use ultracode where appropriate, use Fable only when justified — and work proceeds through the outstanding queue. Arguments passed with /go are overriding rules layered on top for that run. Use when the user types /go.
+description: Execution greenlight. Runs the /ready checkpoint first; ANY non-clean verdict ends the skill immediately (present the findings, start nothing). On clean, standing execution orders activate — optimize hard for ASAP via parallelism (never via design shortcuts), use ultracode where appropriate, use Fable only when justified — and work proceeds through the outstanding queue. Arguments passed with /go are overriding rules layered on top for that run. Runs ONLY when the user literally types /go — never self-invoked, never re-run in a loop, never inferred from "proceed"-style language.
 ---
 
 # go — checkpoint, then execute
+
+> **Typed-invocation only.** This skill runs solely when the owner literally types `/go`. Never
+> self-invoke it, never re-run it in a loop, and never treat "proceed"-style language as an
+> invocation. When a greenlight seems warranted, say so and let the owner type it.
 
 ## Step 1 — /ready, as a hard gate
 
