@@ -31,6 +31,13 @@ wherever code makes it checkable. Additionally:
 
 Exactly one item. Present it, stop, wait for the answer. The next `/question` gets the next item.
 
+## An unanswered item gates the queue
+
+If `/question` arrives while the previously presented item is still awaiting the owner's explicit
+response, do NOT advance. Re-present the pending question in one or two compact lines and require
+an answer before surfacing anything new. An explicit "skip" or "defer" counts as a response and
+releases the queue; silence or an unrelated reply does not.
+
 ## Nothing pending?
 
 Say so in one line and stop — don't invent a question.
