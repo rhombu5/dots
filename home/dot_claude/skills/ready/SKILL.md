@@ -1,0 +1,54 @@
+---
+name: ready
+description: Readiness checkpoint before a pause, compact, or handoff. Asks two questions and demands plain verdicts — (1) is anything we discussed missing an explicit owner "yes" while neither ruled out nor tracked on the todo list, and (2) do the task list and every requirement/ruling exist in non-volatile files? Use when the user invokes /ready or asks "are we ready / did I miss anything / is everything captured".
+---
+
+# ready — two questions, two plain verdicts
+
+A checkpoint, not a cleanup. Answer BOTH questions, and **lead with the verdict word for each**
+— `1: NO GAPS` / `1: GAPS — <n>` and `2: YES` / `2: NO — <what's volatile>` — before any
+supporting detail. A buried verdict fails the skill's whole purpose.
+
+## Question 1 — undecided, unruled, untracked
+
+Sweep the conversation (the whole session, not just the recent stretch) for anything **discussed
+at substantive length** that is ALL THREE of:
+
+- never got the owner's **explicit** yes (an implied yes, a principle that merely leans that
+  way, or the owner's own proposal left unconfirmed all count as NOT yes — list them),
+- not otherwise ruled out or dissolved (a thread that ended because its premise died is dead,
+  not pending),
+- absent from the todo list AND from any durable record that commits someone to act.
+
+For each hit, name it, say what one word from the owner resolves it, and either add the task on
+the spot (when tracking is the gap) or list it (when the owner's word is the gap). Distinguish
+the two — don't ask for words where a task was the missing thing.
+
+## Question 2 — non-volatile capture
+
+Verify the session's load-bearing state survives a compact, a restart, AND a reboot:
+
+- **Task list**: current, statuses honest, every scoped work item's substance recoverable from
+  its description or a file it points to (a task whose meaning lives only in conversation
+  context is volatile — fix it now).
+- **Requirements / rulings / decisions**: every one landed in repo files or decision records —
+  committed, or at minimum on-disk in a real worktree. Flag uncommitted deltas.
+- **Volatile-only artifacts**: anything load-bearing that exists ONLY under `/tmp`, a
+  scratchpad, or conversation context gets flagged with where it should move — `/tmp` is a
+  tmpfs and dies with the machine.
+
+Fix silently what is mechanical (writing the missing file, adding the missing task); SURFACE
+what needs the owner (uncommitted work in his worktree, a ruling that should become a decision
+record).
+
+## Output shape
+
+```
+1: GAPS — 2
+   - <thing> — needs your word: <the one-worder>
+   - <thing> — was untracked; task #N created
+2: NO — 1 volatile
+   - <ruling/file> lives only in scratchpad — moved to <repo path> / needs commit in <worktree>
+```
+
+Then stop. This skill reports readiness; it does not start new work.
