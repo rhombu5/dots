@@ -38,6 +38,10 @@ response, do NOT advance. Re-present the pending question in one or two compact 
 an answer before surfacing anything new. An explicit "skip" or "defer" counts as a response and
 releases the queue; silence or an unrelated reply does not.
 
+An item that has DISSOLVED since it was presented — mooted by a later ruling, superseded by the
+discussion it sparked, or otherwise no longer a decision anyone needs to make — is an implicit
+no-op: it never gates. Note the dissolution in one line and advance.
+
 ## Nothing pending?
 
 Say so in one line and stop — don't invent a question.
