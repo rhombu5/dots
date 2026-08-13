@@ -366,3 +366,30 @@ transparent to context — nothing inside can capture or shadow a `this` the enc
 already have (a `function` wrapper would mint its own). The arrow wraps; the returned function is
 the one that owns a `this` if the member needs one. State genuinely shared by several members
 stays a scope-level declaration, placed beside its users.
+
+## Variance — annotate `in`/`out` where the role is definite
+
+Every type parameter on a generic interface / type alias whose variance role is definite gets the
+explicit modifier: `in` where the type is consumed (parameter positions), `out` where it is
+produced (return/read positions), `in out` when it genuinely flows both ways. Leave a parameter
+bare only when its variance is truly mixed or undecided.
+
+```ts
+// NO — variance left for the reader (and the checker) to re-derive
+interface Func<Args extends readonly any[], Return> {
+  (...args: Args): Return;
+}
+
+// YES — the flow direction is declared
+interface Func<in Args extends readonly any[] = any[], out Return = any> {
+  (...args: Args): Return;
+}
+interface Ctor<in Args extends readonly any[] = any[], out Instance = any> {
+  new(...args: Args): Instance;
+}
+```
+
+Three payoffs: the declaration *documents* which way values flow; TS **enforces** an annotated
+variance (a member that violates it errors at the declaration, not at some distant use); and the
+checker skips structural variance measurement for annotated params. This is declaration-site
+style — call sites are unaffected.
