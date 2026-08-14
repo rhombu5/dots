@@ -3,26 +3,26 @@
 #
 # Go's cache has no size cap. It evicts only entries unused for 5+ days, and
 # checks at most once a day -- which a workload that recompiles the same module
-# many times a day defeats completely. Transformer work on std@fnioc wrote about
-# 40 GB/day into it and filled a 476 GB disk with three days' accumulation, none
-# of it old enough for Go's own trim to touch a single file.
+# many times a day defeats completely. Transformer work on std@fnioc once wrote
+# about 40 GB/day into it and filled a 476 GB disk within days, none of it old
+# enough for Go's own trim to touch a single file.
 #
-# Removing an entry is safe in itself: Go treats a missing entry as a cache miss
-# and recompiles that one unit. There is no index to corrupt. The hazard is
-# purely timing -- pruning underneath a running build makes it recompile work it
-# had already cached. So this refuses to run whenever a build might be in
-# flight, and overrides that refusal only where the alternative is the build
-# dying on ENOSPC, which is worse than the build being slow.
+# Removing an entry is safe in itself: Go treats a missing entry as a cache
+# miss and recompiles that one unit. There is no index to corrupt. The one
+# real hazard is interrupting a build that is actively compiling, so this
+# refuses to run at all while a Go toolchain process is alive. It does NOT
+# skip based on how recently the cache was last written to -- under a
+# continuous stream of builds the cache is written to constantly, and a guard
+# keyed on that would never fire.
 
 set -euo pipefail
 
 CACHE="${GOCACHE:-$HOME/.cache/go-build}"
 [ -d "$CACHE" ] || exit 0
 
-# Available GB on the filesystem holding the cache.
-avail_gb() {
-  df -BG --output=avail "$CACHE" | tail -1 | tr -dc '0-9'
-}
+BASE_AGE_MIN=240   # 4h baseline age prune -- tight enough to survive a busy fan-out day
+CAP_BYTES=$((40 * 1024 * 1024 * 1024))  # size-cap backstop
+FLOOR_AGE_MIN=60    # never touch anything newer than this, baseline or backstop
 
 # Anything that could be compiling Go right now. `compile`, `link` and `asm` are
 # the toolchain workers the go driver spawns; matching only `go` would miss a
@@ -40,48 +40,41 @@ build_in_flight() {
     pgrep -x asm >/dev/null 2>&1
 }
 
-# A write in the last 30 minutes means a build just finished, so its working set
-# is still the hot one and the next build will very likely reuse it. Skip this
-# tick rather than race the build that is probably about to start.
-written_recently() {
-  [ -n "$(find "$CACHE" -type f -mmin -30 -print -quit 2>/dev/null)" ]
+if build_in_flight; then
+  echo "skip: build in flight"
+  exit 0
+fi
+
+cache_size_bytes() {
+  du -sb "$CACHE" 2>/dev/null | awk '{ print $1 }'
 }
-
-avail=$(avail_gb)
-
-# The 24h default keeps a full day's working set, which is the whole reason the
-# cache is worth having. The tighter tiers engage only under real pressure,
-# trading hit rate for headroom exactly when that trade is the right one.
-if [ "$avail" -lt 10 ]; then
-  tier=critical
-  age=(-mmin +360)
-elif [ "$avail" -lt 40 ]; then
-  tier=pressure
-  age=(-mmin +360)
-else
-  tier=normal
-  age=(-mtime +0)
-fi
-
-# The one case that outranks never-interrupt-a-build.
-if [ "$tier" != critical ]; then
-  if build_in_flight; then
-    echo "skip: build in flight"
-    exit 0
-  fi
-  if written_recently; then
-    echo "skip: cache written <30m ago"
-    exit 0
-  fi
-fi
 
 # -printf ahead of -delete so find reports each file's size as it removes it:
 # one tree walk, instead of a du before and a du after.
-freed=$(find "$CACHE" -type f "${age[@]}" ! -name trim.txt ! -name README \
-  -printf '%s\n' -delete 2>/dev/null | awk '{ s += $1 } END { print s + 0 }')
+prune_older_than() {
+  find "$CACHE" -type f -mmin "+$1" ! -name trim.txt ! -name README \
+    -printf '%s\n' -delete 2>/dev/null | awk '{ s += $1 } END { print s + 0 }'
+}
+
+freed=$(prune_older_than "$BASE_AGE_MIN")
 find "$CACHE" -mindepth 1 -type d -empty -delete 2>/dev/null || true
 
-printf 'tier=%s freed=%sGB avail_before=%sGB\n' \
-  "$tier" \
+# Backstop: the 4h baseline is a no-op most ticks. If a wide-enough fan-out of
+# builds still leaves the cache oversized, prune progressively younger --
+# halving the age window each pass -- until it's back under the cap or the
+# floor is reached. The floor exists because anything newer than an hour is
+# plausibly still part of some build's working set.
+age=$BASE_AGE_MIN
+size=$(cache_size_bytes)
+while [ "${size:-0}" -gt "$CAP_BYTES" ] && [ "$age" -gt "$FLOOR_AGE_MIN" ]; do
+  age=$(( age / 2 ))
+  [ "$age" -lt "$FLOOR_AGE_MIN" ] && age=$FLOOR_AGE_MIN
+  extra=$(prune_older_than "$age")
+  freed=$(( freed + extra ))
+  find "$CACHE" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+  size=$(cache_size_bytes)
+done
+
+printf 'freed=%sGB size_after=%sGB\n' \
   "$(awk -v b="$freed" 'BEGIN { printf "%.1f", b / 1073741824 }')" \
-  "$avail"
+  "$(awk -v b="${size:-0}" 'BEGIN { printf "%.1f", b / 1073741824 }')"
