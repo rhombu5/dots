@@ -1,17 +1,25 @@
 ---
-name: question
-description: Surfaces the single most pressing open question or discussion item the session is holding for the owner, presented /explain-style. Triggered by /question, and by the owner saying "ask me a question" (or a close variant).
+name: askme
+description: Surfaces the single most pressing open question or discussion item the session is holding for the owner, presented /explain-style. Triggered by /askme (an optional argument names the subject scope), and by the owner saying "ask me a question" (or a close variant).
 ---
 
-# Question — what do you need from me?
+# Askme — what do you need from me?
 
 Pick the **one** most pressing open question, pending decision, or discussion item currently
 waiting on the owner, and present it.
 
+## The argument is the subject scope
+
+Text passed with `/askme <scope>` narrows the field: rank and pick only among open items within
+that subject (e.g. `/askme the current target` considers only items about the declared target).
+No argument means the whole session's open items are in play. If nothing is pending **within the
+given scope**, say so in one line — don't widen the scope silently and don't invent a question.
+
 ## Picking the item
 
 Scan everything the session is holding open — the task list, findings/decision files, anything
-mentally parked for "when the owner's back" — and rank:
+mentally parked for "when the owner's back" — filtered to the subject scope when one was given,
+and rank:
 
 1. **Blocking beats important** — an item actively stalling in-flight work outranks everything else.
 2. **Leverage breaks ties** — the answer that unblocks the most downstream work wins.
@@ -29,11 +37,11 @@ wherever code makes it checkable. Additionally:
 
 ## One per invocation
 
-Exactly one item. Present it, stop, wait for the answer. The next `/question` gets the next item.
+Exactly one item. Present it, stop, wait for the answer. The next `/askme` gets the next item.
 
 ## An unanswered item gates the queue
 
-If `/question` arrives while the previously presented item is still awaiting the owner's explicit
+If `/askme` arrives while the previously presented item is still awaiting the owner's explicit
 response, do NOT advance. Re-present the pending question in one or two compact lines and require
 an answer before surfacing anything new. An explicit "skip" or "defer" counts as a response and
 releases the queue; silence or an unrelated reply does not.
