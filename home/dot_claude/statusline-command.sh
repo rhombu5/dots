@@ -1431,10 +1431,8 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     burndown_layer_color=("\033[31m" "\033[33m" "\033[94m")   # 5hr red, Fable yellow, 7day blue
     burndown_layer_now=("$br5_now_cell" "$brf_now_cell" "$br7_now_cell")
 
-    # Reset labels. Both forms lead with the time left in the window — the
-    # number that actually answers "how much runway do I have" — and both fit
-    # the plot's 12 cells at their widest, so the label row never overflows the
-    # column it belongs to.
+    # Reset labels. Three forms, every one fitting the plot's 12 cells at its
+    # widest so the label row never overflows the column it belongs to.
     #
     # Short-window form: "<H:MM left> <wall-clock reset>", e.g. "4:32 10:29pm".
     # Widest is "4:59 12:59pm" = 12. The absolute time is worth carrying here
@@ -1469,15 +1467,28 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
         printf '%02d:%02d' $(( remain / 3600 )) $(( remain % 3600 / 60 ))
     }
 
+    # Reset-moment form: "<day> <wall-clock>", e.g. "Wed 10:00pm" (widest
+    # "Wed 12:59pm" = 11). The day is dropped under 23 hours out, where a bare
+    # time is unambiguous (the 1-hour margin under a full day keeps a
+    # nearly-day-out reset from masquerading as sooner).
+    burndown_label_daytime() {
+        local resets_at=$1
+        [ -z "$resets_at" ] && return
+        if (( resets_at - NOW < 23 * 3600 )); then
+            date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null
+        else
+            date -d "@$resets_at" +"%a %-I:%M%P" 2>/dev/null
+        fi
+    }
+
+    # Fable and 7day are the same weekly window (the OAuth endpoint just
+    # jitters resets_at a second either side of the boundary), so the two
+    # labels split the work instead of repeating it: Fable carries the
+    # countdown, 7day carries the reset moment — together "how much runway"
+    # and "until when", with no duplicate.
     burndown_layer_reset=("$(burndown_label_clock     "$rl5_resets")" \
                           "$(burndown_label_countdown "$rlf_resets")" \
-                          "$(burndown_label_countdown "$rl7_resets")")
-    # Fable and 7day are the same weekly window — the OAuth endpoint just
-    # jitters resets_at a second either side of the boundary — so one countdown
-    # serves both, and it goes under Fable: the middle plot in the flat layout,
-    # and the middle one when they stack too. 7day keeps its own label only as
-    # the fallback for before the async Fable fetch has landed.
-    [ -n "${burndown_layer_reset[1]}" ] && burndown_layer_reset[2]=""
+                          "$(burndown_label_daytime   "$rl7_resets")")
 
     case $burndown_bands in
         1) burndown_pb=(0 0 0); burndown_pc=(0 1 2); burndown_ncols=3 ;;  # [5hr][Fable][7day]
