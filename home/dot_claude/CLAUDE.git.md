@@ -66,6 +66,15 @@ Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden De
 
 When the hook fires, it reports the templated path back in `hookSpecificOutput.worktreePath`. **Use that returned value** — don't recompute, because the template might reference placeholders (`{host-short}`, `{repo-dir}`, `{clone-path}`) that aren't trivially derivable in all environments. For manual creation, **always use `$(git rev-parse --show-toplevel)+<name>`** — never bare `$(pwd)`, because if a previous command in the same Bash chain cd'd into a subdirectory (`packages/foo`), `$(pwd)` evaluates to that subdirectory and the worktree lands *nested inside the workspace* (seen in practice: ended up at `<clone>/packages/renderer+fix-foo`, which then collided with the npm workspace glob). `git rev-parse --show-toplevel` always returns the repo root regardless of cwd. If `{host-short}` or other placeholders are in the template, ask before assuming.
 
+**`--show-toplevel` is itself wrong when the current directory is already a worktree** — it returns the *worktree's* root, so the new worktree lands at `<clone>+<current-workspace>+<name>` (seen in practice from a worktree-homed session: `…+chore-singular-death+feat-getservice-value-overload`). From inside a worktree, derive the *main checkout* instead:
+
+```sh
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+git worktree add -b <branch> "${main}+<workspace-name>" origin/<base>
+```
+
+`--git-common-dir` always points at the main checkout's `.git`, from any worktree; its parent is the clone path the template expects.
+
 If you find yourself reaching for `git worktree add <unrelated-path>`, stop and ask: *"Is this a worktree the user expected at the templated location?"* If yes, switch to a templated path. If genuinely no (some specific reason for a one-off path), say so out loud and let the user push back.
 
 ## Worktree mechanics

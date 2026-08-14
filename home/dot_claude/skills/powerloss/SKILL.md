@@ -18,6 +18,12 @@ and never make an agent start over before proving its context is unrecoverable.*
   radius, not the loss. **Zero visible subagents after a session resume is the normal state**, even
   when several were mid-flight: a resume rebuilds the conversation, it never respawns workers. Say
   so up front — the owner seeing an empty agent list will reasonably ask where everyone went.
+- **A `/compact` is the soft variant of this assessment** — subagents CAN survive one, but every
+  label about them goes stale: `ListAgents` may show a raw id with no name and a reset "started"
+  clock, the teammate roster lists long-dead lanes as running, and `TaskStop <name>` can resolve to
+  a different agent than the one still executing. Identify a surviving subagent by READING its
+  transcript (`tasks/<id>.output` → dispatch prompt + recent tool targets), never by its name,
+  description, or start time — and stop it by raw agent id when it must die.
 - `git ls-remote origin <each-lane-branch> <base-branch>` — the objective record of what reached
   origin before the cut. A missing lane branch means that lane never pushed, not that its work is
   gone.
