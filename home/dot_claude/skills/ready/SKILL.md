@@ -10,8 +10,9 @@ description: Readiness checkpoint before a pause, compact, or handoff. Asks two 
 > ready?" gets an ordinary answer, not this ceremony.
 
 A checkpoint, not a cleanup. Answer BOTH questions, and **lead with the verdict word for each**
-— `1: NO GAPS` / `1: GAPS — <n>` and `2: YES` / `2: NO — <what's volatile>` — before any
-supporting detail. A buried verdict fails the skill's whole purpose.
+— `1: NO GAPS` / `1: GAPS — <n>` and `2: DURABLE` / `2: VOLATILE — <n>` — before any supporting
+detail. Verdict words must be SELF-DESCRIBING: a bare YES/NO that only makes sense if the reader
+remembers which question it answers fails the skill's whole purpose, same as a buried verdict.
 
 ## Question 1 — undecided, unruled, untracked
 
@@ -52,8 +53,11 @@ record).
 1: GAPS — 2
    - <thing> — needs your word: <the one-worder>
    - <thing> — was untracked; task #N created
-2: NO — 1 volatile
+2: VOLATILE — 1
    - <ruling/file> lives only in scratchpad — moved to <repo path> / needs commit in <worktree>
 ```
+
+Clean run: `1: NO GAPS` and `2: DURABLE — survives compact, restart, and reboot`, each with at
+most one supporting line.
 
 Then stop. This skill reports readiness; it does not start new work.
