@@ -2,6 +2,15 @@
 Description=Archive a known-good copy of the Bitwarden vault cache
 Documentation=file:%h/.local/bin/bw-vault-backup
 
+# Triggered by bw-vault-backup.path on every close-after-write of either
+# data.json. The desktop app rewrites its file once a minute and in quick
+# bursts at boot/resume; the default start limit (5 starts / 10s) reads such
+# a burst as a crash loop, fails the service, and takes the .path unit down
+# with 'unit-start-limit-hit' — leaving the vault unwatched until a manual
+# reset-failed (observed 2026-08-14). A oneshot that validates and exits
+# cannot crash-loop, so the limiter protects nothing here. Disable it.
+StartLimitIntervalSec=0
+
 [Service]
 Type=oneshot
 ExecStart=%h/.local/bin/bw-vault-backup
