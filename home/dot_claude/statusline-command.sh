@@ -692,7 +692,7 @@ if [ -n "$model" ]; then
 fi
 rr_plot=0
 if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
-    rr_plot=38    # flat burndown = 3 plots × 12 cells + 2 gaps (worst case)
+    rr_plot=39    # flat burndown = 3 plots × 12 cells + 2 gaps + 1 label-overhang cell
 elif [ -n "$rl5_used" ] || [ -n "$rl7_used" ] || [ -n "$rlf_used" ]; then
     rr_plot=34    # widest text rate-limit row
 fi
@@ -1434,26 +1434,30 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     # Reset labels. Three forms, every one fitting the plot's 12 cells at its
     # widest so the label row never overflows the column it belongs to.
     #
-    # Short-window form: "<H:MM left> <wall-clock reset>", e.g. "4:32 10:29pm".
-    # Widest is "4:59 12:59pm" = 12. The absolute time is worth carrying here
-    # because a reset a few hours out is something you plan around.
+    # Short-window form: "<-H:MM left> <wall-clock reset>", e.g. "-4:32 10:29pm"
+    # — the leading hyphen marks the field as a countdown. Widest is
+    # "-4:59 12:59pm" = 13, one past the plot width; the label row's column-0
+    # slot absorbs that by borrowing a cell from the leading pad (see the
+    # label-walk call site). The absolute time is worth carrying here because
+    # a reset a few hours out is something you plan around.
     burndown_label_clock() {
         local resets_at=$1 remain
         [ -z "$resets_at" ] && return
         remain=$(( resets_at - NOW ))
         (( remain < 0 )) && remain=0
-        printf '%d:%02d %s' \
+        printf -- '-%d:%02d %s' \
                $(( remain / 3600 )) $(( remain % 3600 / 60 )) \
                "$(date -d "@$resets_at" +"%-I:%M%P" 2>/dev/null)"
     }
 
-    # Long-window form: "<N>day[s] <HH:MM>", e.g. "4days 13:23" (widest
-    # "6days 23:59" = 11). Countdown only — a wall-clock moment most of a week
-    # out tells you nothing, and appending it would blow past 12 cells. Under a
-    # day the days field is dropped and the bare "HH:MM" remains, which still
-    # reads as the same leading time-left field.
+    # Long-window form: "-<N>day[s] <HH:MM>", e.g. "-4days 13:23" (widest
+    # "-6days 23:59" = 12), hyphen marking the countdown as above. Countdown
+    # only — a wall-clock moment most of a week out tells you nothing, and
+    # appending it would blow past 12 cells. Under a day the days field is
+    # dropped and "-HH:MM" remains, which still reads as the same leading
+    # time-left field.
     burndown_label_countdown() {
-        local resets_at=$1 remain days
+        local resets_at=$1 remain days lead=""
         [ -z "$resets_at" ] && return
         remain=$(( resets_at - NOW ))
         (( remain < 0 )) && remain=0
@@ -1462,9 +1466,9 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
         if (( days > 0 )); then
             local plural=s
             (( days == 1 )) && plural=""
-            printf '%dday%s ' "$days" "$plural"
+            printf -v lead '%dday%s ' "$days" "$plural"
         fi
-        printf '%02d:%02d' $(( remain / 3600 )) $(( remain % 3600 / 60 ))
+        printf -- '-%s%02d:%02d' "$lead" $(( remain / 3600 )) $(( remain % 3600 / 60 ))
     }
 
     # Reset-moment form: "<day> <wall-clock>", e.g. "Wed 10:00pm" (widest
@@ -1505,29 +1509,26 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     done
 
     # ── One walk shared by both row kinds in a band.
-    # burndown_walk <row> <band> <emit-fn> [emit-args…] right-aligns the block
-    # on <row>, then steps columns left→right, calling
+    # burndown_walk <row> <band> <block-w> <emit-fn> [emit-args…] right-aligns
+    # a <block-w>-wide block on <row>, then steps columns left→right, calling
     #   <emit-fn> <plot-idx> [emit-args…]     (plot-idx is -1 for an empty slot)
-    # once per column. Every emitter appends exactly BURNDOWN_PLOT_W_CELLS
-    # cells to burndown_str; the walk owns the inter-column gap, the width
-    # bookkeeping and the write-back into row_str/row_vw.
+    # once per column; emitters may also read the walk's `col`. Every emitter
+    # appends BURNDOWN_PLOT_W_CELLS cells to burndown_str — except the label
+    # row's column 0, whose excess is what <block-w> carries beyond
+    # burndown_total_w. The walk owns the inter-column gap and the write-back
+    # into row_str/row_vw.
     burndown_walk() {
-        local row=$1 band=$2 emit=$3; shift 3
-        right_pad "$row" "$burndown_total_w"
+        local row=$1 band=$2 block_w=$3 emit=$4; shift 4
+        right_pad "$row" "$block_w"
         burndown_str=""
-        burndown_vw=0
         local col p
         for ((col=0; col<burndown_ncols; col++)); do
-            if (( col > 0 )); then
-                burndown_str+=' '
-                burndown_vw=$(( burndown_vw + 1 ))
-            fi
+            (( col > 0 )) && burndown_str+=' '
             p=${burndown_at[$band,$col]:--1}
             "$emit" "$p" "$@"
-            burndown_vw=$(( burndown_vw + BURNDOWN_PLOT_W_CELLS ))
         done
         row_str[row]+=$burndown_str
-        row_vw[row]=$(( row_vw[row] + burndown_vw ))
+        row_vw[row]=$(( row_vw[row] + block_w ))
     }
 
     _burndown_emit_plot() {   # <plot-idx> <cy>
@@ -1544,14 +1545,14 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
 
     # Each plot's reset label right-justified to its own 12-cell column, so it
     # ends under the plot's right edge — the x position where its window ends.
-    # The formatters are built to fit, but a label is truncated rather than
-    # allowed to overflow: the walk credits every column exactly
-    # BURNDOWN_PLOT_W_CELLS, so one extra character would shift the whole
-    # right-aligned block.
-    _burndown_emit_label() {   # <plot-idx>
+    # Column 0 alone may exceed the plot width (the widest 5hr form is 13):
+    # its excess is pre-added to the walk's block width, so it spills into the
+    # leading pad on its left instead of shifting its neighbours. Any other
+    # column still truncates rather than misaligning the row.
+    _burndown_emit_label() {   # <plot-idx>  (reads the walk's `col`)
         local p=$1 label="" cell
         (( p >= 0 )) && label="${burndown_layer_reset[p]}"
-        (( ${#label} > BURNDOWN_PLOT_W_CELLS )) && label=${label:0:BURNDOWN_PLOT_W_CELLS}
+        (( col > 0 && ${#label} > BURNDOWN_PLOT_W_CELLS )) && label=${label:0:BURNDOWN_PLOT_W_CELLS}
         if [ -n "$label" ]; then
             printf -v cell '\033[2;37m%*s\033[0m' "$BURNDOWN_PLOT_W_CELLS" "$label"
         else
@@ -1566,10 +1567,19 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
         burndown_base=$(( 1 + burndown_band * BURNDOWN_BAND_H ))
         for ((burndown_cy=0; burndown_cy<BURNDOWN_PLOT_H_CELLS; burndown_cy++)); do
             burndown_walk $(( burndown_base + burndown_cy )) "$burndown_band" \
-                          _burndown_emit_plot "$burndown_cy"
+                          "$burndown_total_w" _burndown_emit_plot "$burndown_cy"
         done
+        # Label row: widen the block by however far this band's column-0 label
+        # runs past its plot, so the overhang borrows from the leading pad.
+        burndown_lblw=$burndown_total_w
+        burndown_p0=${burndown_at[$burndown_band,0]:--1}
+        if (( burndown_p0 >= 0 )); then
+            burndown_l0=${burndown_layer_reset[burndown_p0]}
+            (( ${#burndown_l0} > BURNDOWN_PLOT_W_CELLS )) && \
+                burndown_lblw=$(( burndown_total_w + ${#burndown_l0} - BURNDOWN_PLOT_W_CELLS ))
+        fi
         burndown_walk $(( burndown_base + BURNDOWN_PLOT_H_CELLS )) "$burndown_band" \
-                      _burndown_emit_label
+                      "$burndown_lblw" _burndown_emit_label
     done
 fi
 
