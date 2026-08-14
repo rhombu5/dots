@@ -36,6 +36,13 @@
 # Identical content is not re-archived, so an app that rewrites its state
 # on a timer does not churn through the retention window.
 #
+# A content hash of the last processing outcome (under `.state/`) makes
+# repeat sightings of the same bytes a silent no-op. The desktop app
+# rewrites an unchanged data.json once a minute; without the gate every
+# rewrite costs a jq parse and — worse — every *refusal* repeats in the
+# journal once a minute for as long as the condition holds. With it, each
+# distinct content is validated and logged exactly once.
+#
 # Restore
 # -------
 #   systemctl --user stop bw-vault-backup.path
@@ -55,6 +62,23 @@ readonly KEEP=15
 
 log() { printf 'bw-vault-backup: %s\n' "$*"; }
 
+# Path of the per-label marker holding the hash of the last content this
+# script fully processed — archived, skipped as identical, or refused.
+seen_file() { printf '%s/.state/%s.last-seen' "$BACKUP_ROOT" "$1"; }
+
+# Record that $2 is the content hash just processed for label $1, so the
+# next sighting of the same bytes exits silently at the top of
+# back_up_one. Written only *after* the outcome, never before — a failed
+# archive must stay retryable on the next trigger.
+remember() {
+    local label="$1"
+    local content_hash="$2"
+
+    mkdir -p "$BACKUP_ROOT/.state"
+    chmod 0700 "$BACKUP_ROOT" "$BACKUP_ROOT/.state"
+    printf '%s\n' "$content_hash" >"$(seen_file "$label")"
+}
+
 # Archive $1 (a data.json) into the subdirectory named by $2, if it looks
 # like a genuine logged-in vault and differs from the newest copy held.
 back_up_one() {
@@ -66,13 +90,23 @@ back_up_one() {
         return 0
     fi
 
+    local seen content_hash
+    seen="$(seen_file "$label")"
+    content_hash="$(b2sum "$source_file" | cut -d' ' -f1)"
+
+    if [[ -f "$seen" ]] && [[ "$(<"$seen")" == "$content_hash" ]]; then
+        return 0
+    fi
+
     if ! jq -e 'type == "object"' "$source_file" >/dev/null 2>&1; then
         log "$label: does not parse as JSON — refusing to archive (corrupt?)"
+        remember "$label" "$content_hash"
         return 0
     fi
 
     if ! jq -e 'has("global_account_accounts")' "$source_file" >/dev/null 2>&1; then
         log "$label: no account present — refusing to archive a logged-out stub"
+        remember "$label" "$content_hash"
         return 0
     fi
 
@@ -86,6 +120,7 @@ back_up_one() {
         | cut -d' ' -f2-)"
 
     if [[ -n "$newest" ]] && cmp -s "$source_file" "$newest"; then
+        remember "$label" "$content_hash"
         return 0
     fi
 
@@ -101,6 +136,7 @@ back_up_one() {
     mv "$temp_file" "$dest_dir/data.json.$stamp"
 
     log "$label: archived data.json.$stamp ($(stat -c %s "$source_file") bytes)"
+    remember "$label" "$content_hash"
 
     # Retention. Newest KEEP survive; the rest go.
     find "$dest_dir" -maxdepth 1 -name 'data.json.*' -type f -printf '%T@ %p\n' 2>/dev/null \
