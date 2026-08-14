@@ -15,7 +15,9 @@ and never make an agent start over before proving its context is unrecoverable.*
 ## Phase 0 — Assess, read-only
 
 - `ListAgents` — expect in-process subagents gone and peer sessions offline; that's the blast
-  radius, not the loss.
+  radius, not the loss. **Zero visible subagents after a session resume is the normal state**, even
+  when several were mid-flight: a resume rebuilds the conversation, it never respawns workers. Say
+  so up front — the owner seeing an empty agent list will reasonably ask where everyone went.
 - `git ls-remote origin <each-lane-branch> <base-branch>` — the objective record of what reached
   origin before the cut. A missing lane branch means that lane never pushed, not that its work is
   gone.
@@ -82,12 +84,18 @@ Stop at the first rung that works; each rung down loses a little context and cos
    item** — mail queued pre-crash may have died unread, so never assume a pre-crash instruction
    arrived. Add "distrust any remembered gate results — re-run everything before reporting" and
    demand a one-line resumption confirm.
-2. **Delivery ≠ revival.** A send landing in the inbox does not prove a dead in-process agent
-   wakes. Arm a deadman timer (~10 min background sleep); no confirmation → rung 3.
-3. **Fresh spawns under the SAME names** (latest-wins takes the name over): brief each to read its
-   predecessor's transcript (the first message is the full brief; the rest is progress and
-   findings), treat the worktree's dirty state as ground truth, and continue — never redo work
-   the tree already holds.
+2. **Delivery ≠ revival — and for in-process agents, expect NO revival.** A send landing in the
+   inbox proves only that the roster graft worked; a dead in-process agent has no live backend to
+   drain its inbox, so rung 1 is a cheap long-shot, not a plan. Arm a short deadman (~10 min
+   background sleep) but don't sit on it — the moment there's no plausible revival mechanism (no
+   confirmations, agents absent from `ListAgents`), go to rung 3 without waiting out the timer.
+3. **Fresh successor spawns.** Brief each to read its predecessor's transcript (the first message
+   is the full brief — "follow it as your own"; the rest is progress and findings), treat the
+   worktree's dirty state as ground truth, continue — never redo work the tree already holds —
+   and confirm takeover in one line BEFORE starting the long work. Include any ledger item issued
+   after the original brief: it won't be in the transcript. **Naming**: the grafted roster still
+   holds the dead agents' names, so same-name spawns get deduped to suffixed names (`<name>-2`) —
+   fine; re-point task ownership to the successor names and address them by those from then on.
 
 ## Phase 5 — Re-arm and report
 
