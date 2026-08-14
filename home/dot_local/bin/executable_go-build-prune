@@ -9,11 +9,11 @@
 #
 # Removing an entry is safe in itself: Go treats a missing entry as a cache
 # miss and recompiles that one unit. There is no index to corrupt. The one
-# real hazard is interrupting a build that is actively compiling, so this
-# refuses to run at all while a Go toolchain process is alive. It does NOT
-# skip based on how recently the cache was last written to -- under a
-# continuous stream of builds the cache is written to constantly, and a guard
-# keyed on that would never fire.
+# real hazard is interrupting a build that is actively compiling, so below
+# the size cap this refuses to run at all while a Go toolchain process is
+# alive. It does NOT skip based on how recently the cache was last written to
+# -- under a continuous stream of builds the cache is written to constantly,
+# and a guard keyed on that would never fire.
 
 set -euo pipefail
 
@@ -40,14 +40,20 @@ build_in_flight() {
     pgrep -x asm >/dev/null 2>&1
 }
 
-if build_in_flight; then
-  echo "skip: build in flight"
-  exit 0
-fi
-
 cache_size_bytes() {
   du -sb "$CACHE" 2>/dev/null | awk '{ print $1 }'
 }
+
+# Below the cap, never interrupt a live build. At or above it, age-pruning old
+# objects is safe alongside a live compile -- the same trade the old avail-
+# based system made for its emergency tier, re-keyed to the cache's own size
+# instead of free disk space (df-reported free space didn't track the
+# pressure that mattered here; the cache's own size does).
+size=$(cache_size_bytes)
+if [ "${size:-0}" -lt "$CAP_BYTES" ] && build_in_flight; then
+  echo "skip: build in flight"
+  exit 0
+fi
 
 # -printf ahead of -delete so find reports each file's size as it removes it:
 # one tree walk, instead of a du before and a du after.
