@@ -111,6 +111,12 @@ the repo or task store. It must carry:
   running the aliveness checks and rebuilding what failed.
 - **Owner rulings of this session** — the do-not-re-ask list, each in one line, deferrals
   included.
+- **Open items awaiting the owner** — every unanswered question, undecided fork, and
+  unconfirmed work request still pending at compose time. The clean sweep guarantees each one
+  already lives in a tracked task or durable record — this section is the roster POINTING at
+  them (one line each, task # or record path), plus the task-store id as queue of record, so
+  the successor re-surfaces them (`/askme`) instead of rediscovering them. Empty is a valid
+  state; say so explicitly rather than omitting the section.
 - **Queue** — what runs next and its go-signal.
 - **Protocol reminders** — only the ones a fresh session gets wrong without them.
 

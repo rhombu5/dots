@@ -25,6 +25,10 @@ at substantive length** that is ALL THREE of:
   not pending),
 - absent from the todo list AND from any durable record that commits someone to act.
 
+The substantive-length filter guards against noise, never against the owner: an owner work
+request (however brief the aside that carried it), a question put TO the owner that he never
+answered, and an issue he raised and left open ALL qualify regardless of length.
+
 For each hit, name it, say what one word from the owner resolves it, and either add the task on
 the spot (when tracking is the gap) or list it (when the owner's word is the gap). Distinguish
 the two — don't ask for words where a task was the missing thing.
