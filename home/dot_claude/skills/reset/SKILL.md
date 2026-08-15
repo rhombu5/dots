@@ -1,17 +1,23 @@
 ---
 name: reset
-description: Session-boundary ritual before a /clear (or compact) — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time, until a sweep comes back fully clear; only then write the burn-after-reading handoff and put its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
+description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
 ---
 
-# reset — sweep until clear, then hand off
+# reset — sweep until clear, judge the timing, then hand off
 
 > **Typed-invocation only.** Runs solely when the owner literally types `/reset`. Never
 > self-invoke; when context is filling up or the owner mentions clearing/compacting, the move is
 > a ONE-LINE reminder to run `/reset` — not running it unbidden.
 
 The successor session starts with NOTHING but the system prompt, CLAUDE.md files, the memory
-index, and whatever the owner pastes. This skill's job is making that enough — and it does not
-write the handoff until the sweep is genuinely clear.
+index, and whatever the owner pastes. This skill's job is making that enough — and picking the
+moment where the handoff describes the cleanest possible board.
+
+## The argument is the current context percentage — required
+
+`/reset <n>` where `<n>` is the context usage the owner reads from his UI. It is the safety
+budget for the timing judgment below. If it is missing, ask for it in one line before anything
+else — do not guess it and do not skip the timing judgment for lack of it.
 
 ## Step 1 — the gate loop: sweep → autofix → dialog → re-sweep
 
@@ -28,7 +34,23 @@ Run the `/ready` skill's sweep (both questions, verdicts first). Then resolve wh
   loop only exits when a FULL sweep comes back `1: NO GAPS` and `2: DURABLE` with nothing fixed
   or asked that round.
 
-## Step 2 — the handoff file (only after a clear sweep)
+## Step 2 — timing judgment: hand off now, or wait for a cleaner board
+
+A boundary minutes away from a naturally cleaner board (a lane's report or merge imminent, a gate
+run finishing, one in-flight review about to close) is worth waiting for — a handoff describing
+"merged" beats one describing "mid-review". The context % is the budget for that patience:
+
+- **≥ ~85%** — no deferral. Hand off immediately; a cleaner board is not worth an overflow.
+- **~70–85%** — defer only for events expected within a few turns (an imminent lane report, one
+  merge), and only ONE such event; when it lands, run a delta sweep and hand off.
+- **< ~70%** — free to wait for a natural seam, still naming a concrete trigger.
+
+Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger
+("after PR #N merges", "when lane X's report arrives"). The owner's "now" overrides any deferral.
+While deferred, the cleared gate state stands; on the trigger, re-run a quick delta sweep (new
+state only), then proceed.
+
+## Step 3 — the handoff file
 
 Write a **burn-after-reading** handoff. Path: reuse the session's established handoff file if one
 exists (e.g. `~/di.handoff.md`); otherwise `~/<short-topic>.handoff.md`. Match `/compact`-summary
@@ -48,20 +70,22 @@ the repo or task store. It must carry:
 - **Queue** — what runs next and its go-signal.
 - **Protocol reminders** — only the ones a fresh session gets wrong without them.
 
-## Step 3 — clipboard
+## Step 4 — clipboard
 
 Copy the handoff's **@-mention path** (e.g. `@/home/tom/di.handoff.md`) to the clipboard via
 `fnc_copy_to_clipboard`, so the owner's first paste in the fresh session pulls the file in. If
 the fnclaude tool is unavailable, say so and print the @path to copy by hand.
 
-## Step 4 — one verdict line
+## Step 5 — one verdict line
 
-End with exactly:
+End the invocation with exactly one of:
 
 - `RESET-READY — handoff on clipboard; clear when you like.`
+- `RESET-DEFERRED — waiting for <trigger> (context <n>%, safe); handoff follows on it.`
 
-There is no other terminal state: the Step-1 loop holds the skill in dialog until clear, so by
-this line the boundary is safe. Then stop — no new work after the verdict.
+A deferred run ends with RESET-READY when the trigger lands and Steps 3–4 complete. There is no
+blocked state: the Step-1 loop holds in dialog until clear. After the verdict, stop — no new
+work.
 
 ## Clear vs compact
 
