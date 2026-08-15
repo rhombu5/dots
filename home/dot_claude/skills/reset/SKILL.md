@@ -96,16 +96,18 @@ Copy the handoff's **@-mention path** (e.g. `@/home/tom/di.handoff.md`) to the c
 `fnc_copy_to_clipboard`, so the owner's first paste in the fresh session pulls the file in. If
 the fnclaude tool is unavailable, say so and print the @path to copy by hand.
 
-## Step 5 — one verdict line
+## Step 5 — one verdict line, unmistakable
 
-End the invocation with exactly one of:
+End the invocation with exactly one of these, on its own line, as the LAST line of the message:
 
-- `RESET-READY — handoff on clipboard; clear when you like.`
-- `RESET-DEFERRED — waiting for <trigger> (context <n>%, safe); handoff follows on it.`
+- `***CLEAR NOW*** — handoff on clipboard; paste it as your first message after clearing.`
+- `RESET-DEFERRED — do NOT clear yet; waiting for <trigger> (context <n>%, safe). ***CLEAR NOW*** follows when it lands.`
 
-A deferred run ends with RESET-READY when the trigger lands and Steps 3–4 complete. There is no
-blocked state: the Step-1 loop holds in dialog until clear. After the verdict, stop — no new
-work.
+`***CLEAR NOW***` is reserved: it appears ONLY as the terminal verdict of a clean-sweep compose,
+never in explanation, examples, or partial states — so seeing it means exactly one thing. A
+deferred run ends with the `***CLEAR NOW***` line when the trigger lands and Steps 3–4 complete.
+There is no blocked state: the Step-1 loop holds in dialog until clear. After the verdict, stop —
+no new work.
 
 ## Clear vs compact
 
