@@ -93,10 +93,13 @@ the repo or task store. It must carry:
 - **Header**: BURN AFTER READING — absorb, then `rm`. Session-home path and its live quirks
   (stale worktree, isolation-hook workarounds, path traps) stated as standing facts.
 - **Board**: current tips/state, what landed this session, gate status.
-- **In-flight work with IDENTIFIERS.** Background processes are EXPECTED to survive a clear
-  (proven through /compact; monitors by their own until-session-end contract) but the
-  conversation about them does not — so name every live agent/lane (name + task # + branch +
-  worktree path), every background task and monitor (task id + what it watches), every
+- **In-flight work with IDENTIFIERS.** Background processes SURVIVE a clear — proven per class
+  (2026-08-15 /clear experiment): background shells keep running and stay addressable by their
+  pre-clear task ids; persistent monitors keep running AND their notifications deliver into the
+  post-clear session; teammates keep running with two-way stale-name `SendMessage` and `TaskStop`
+  intact, though `ListAgents` no longer lists them — an empty roster is NOT evidence of death.
+  The CONVERSATION about them does not survive — so name every live agent/lane (name + task # +
+  branch + worktree path), every background task and monitor (task id + what it watches), every
   reservation (§ numbers, branch names, file locks), and what the successor does when each one
   reports, wedges, or dies. Point at `/powerloss` for identify-by-transcript discipline.
 - **VERIFY-AND-REBUILD instructions, per background resource.** For each live monitor, shell,
