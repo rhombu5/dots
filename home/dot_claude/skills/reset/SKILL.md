@@ -20,9 +20,11 @@ budget for the timing judgment below. If it is missing, ask for it in one line b
 else — do not guess it and do not skip the timing judgment for lack of it.
 
 **Re-invocation during a deferral is a context update, not a restart.** Re-run only the timing
-judgment against the new number: a now-tight budget cancels the deferral (delta sweep → compose
-→ verdict immediately); otherwise re-affirm the deferral and its trigger in one line and keep
-waiting. The Step-1 gate does not re-run — the trigger's delta sweep already owns new state.
+judgment against the new number, using the same Step-2 bands. Context always grows between
+updates — mere consumption within the same band re-affirms the deferral in one line. The
+deferral cancels (delta sweep → compose → verdict immediately) only when the new number crosses
+into the no-deferral band, or the awaited event's expected remaining cost no longer fits under
+that ceiling. The Step-1 gate does not re-run — the trigger's delta sweep already owns new state.
 
 ## Step 1 — the gate loop: sweep → autofix → dialog → re-sweep
 
