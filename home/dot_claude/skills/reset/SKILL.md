@@ -56,12 +56,19 @@ were made before it was dispatched; its defects get fixed, not adjudicated). On 
 sweep (the event's commits, § entries, task motion, anything its report surfaced). Then:
 
 - delta clean → proceed to the handoff;
-- delta finds an autofixable → fix it, proceed;
+- delta finds an autofixable → fix it, re-sweep, proceed;
 - delta finds an owner-word item and the owner responds → dialog as usual;
 - delta finds an owner-word item and the owner is away → HOLD (deferred idling is nearly free)
-  until he returns or the context ceiling nears — at the ceiling, hand off anyway with the item
-  carried loudly at the top of the handoff's open-items section. That safety valve is the ONLY
-  path by which a handoff ships with an open owner word.
+  until he returns or the context ceiling nears. At the ceiling, CONVERT the item into a
+  FIRST-ON-OWNER'S-RETURN task carrying its full substance and the exact one-word question —
+  tracked-with-substance is precisely what /ready's own untracked test accepts as resolved — then
+  re-sweep and proceed. The ruling is still owed, but it is owed from a durable record, not from
+  a dying conversation.
+
+**Hard invariant: the handoff is only ever composed immediately after a sweep that came back
+clean, with no work in between.** Whatever path led there — straight through, deferral, dialog,
+or ceiling-conversion — the compose-and-clipboard step follows a clean sweep in the same breath,
+so the owner can clear on the verdict line without re-checking anything.
 
 ## Step 3 — the handoff file
 
