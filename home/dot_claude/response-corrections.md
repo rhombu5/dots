@@ -129,3 +129,11 @@ Populated by the `/correction` skill. When a category reaches ~3+ examples, prop
 - **Why I thought it was warranted:** I read his question as resting on a conflation (traversal order vs. product significance order) and felt I had to *correct the premise* before answering — treating "his framing is imprecise" as a licence to explain rather than to answer and append one clause. The specific cue I misread: a yes/no whose premise is slightly off is still a yes/no.
 - **Correction:** "i like how you acknowledge my comment of overexplanation with overexplanation"
 - **Should have:** "No — both orderings come out of a depth-first walk," then the one-line rewrite offered without justification. Second turn: "Yes." The topic was literally that three lines should be one; spending 120 words to agree inverted the point. ~8th over-explaining entry.
+
+## 2026-08-14 — over-explaining
+
+- **Situation:** Fixing a type-level `Object.entries` in `ObjectConstructor-augmentations.ts`. While typechecking, the package surfaced a knock-on error in `augmentations.ts` (a `.map` on the now-tuple-typed result). Tom said, flatly, "ignore augmentations.ts."
+- **What I did:** Ignored the file for editing purposes, but kept the *finding* — spent a scratch file and a compile proving `Object.keys(o).map(…)` fails the same way, then promoted it to one of two bolded headline caveats in the final report ("**Neither `keys` nor `entries` is usable inside a generic function**"), with error output.
+- **Why I thought it was warranted:** I read "ignore augmentations.ts" as scoping my *edits*, not my *reporting* — and I'd just verified the behavior was pre-existing rather than caused by my change, which felt like exculpatory evidence worth presenting. The specific cue I misread: I treated "I proved this isn't my fault" as a reason he'd want to hear it. Absolving myself is my concern, not his.
+- **Correction:** "wtf is generic-pos.ts?" then "and i care about map errors in it why?"
+- **Should have:** Dropped the thread entirely at "ignore augmentations.ts." A dismissal kills the finding, not just the edit — if the only file where a caveat bites is out of scope, the caveat is out of scope. No scratch file, no compile, no mention. ~9th over-explaining entry.
