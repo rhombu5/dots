@@ -47,10 +47,14 @@ A boundary minutes away from a naturally cleaner board (a lane's report or merge
 run finishing, one in-flight review about to close) is worth waiting for — a handoff describing
 "merged" beats one describing "mid-review". The context % is the budget for that patience:
 
-- **≥ ~85%** — no deferral. Hand off immediately; a cleaner board is not worth an overflow.
-- **~70–85%** — defer only for events expected within a few turns (an imminent lane report, one
-  merge), and only ONE such event; when it lands, run a delta sweep and hand off.
-- **< ~70%** — free to wait for a natural seam, still naming a concrete trigger.
+The bands assume a 1M-token window, where even 10% is serious headroom; the top band exists to
+stay clear of wherever auto-compact trips — an auto-compact firing mid-deferral destroys exactly
+what this ritual protects — not because tokens are about to run out:
+
+- **≥ ~93%** — no deferral. Compose immediately.
+- **~85–93%** — defer only for events expected within a few turns (an imminent lane report, one
+  merge), and only ONE such event; when it lands, run the delta sweep and hand off.
+- **< ~85%** — free to wait for a natural seam, still naming a concrete trigger.
 
 Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger
 ("after PR #N merges", "when lane X's report arrives"). The owner's "now" overrides any deferral.
