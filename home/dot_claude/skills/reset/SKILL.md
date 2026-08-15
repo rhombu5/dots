@@ -47,8 +47,21 @@ run finishing, one in-flight review about to close) is worth waiting for — a h
 
 Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger
 ("after PR #N merges", "when lane X's report arrives"). The owner's "now" overrides any deferral.
-While deferred, the cleared gate state stands; on the trigger, re-run a quick delta sweep (new
-state only), then proceed.
+
+**The deferred event WILL dirty the early sweep — that is expected and planned for.** The Step-1
+sweep still runs up front because its dialog needs the owner AT THE KEYBOARD: harvest his words
+while he is present, since the deferred event's own products rarely need new ones (its rulings
+were made before it was dispatched; its defects get fixed, not adjudicated). On the trigger, a
+**delta sweep is mandatory** — both /ready questions, scoped to state created since the early
+sweep (the event's commits, § entries, task motion, anything its report surfaced). Then:
+
+- delta clean → proceed to the handoff;
+- delta finds an autofixable → fix it, proceed;
+- delta finds an owner-word item and the owner responds → dialog as usual;
+- delta finds an owner-word item and the owner is away → HOLD (deferred idling is nearly free)
+  until he returns or the context ceiling nears — at the ceiling, hand off anyway with the item
+  carried loudly at the top of the handoff's open-items section. That safety valve is the ONLY
+  path by which a handoff ships with an open owner word.
 
 ## Step 3 — the handoff file
 
