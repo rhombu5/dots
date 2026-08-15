@@ -93,11 +93,19 @@ the repo or task store. It must carry:
 - **Header**: BURN AFTER READING — absorb, then `rm`. Session-home path and its live quirks
   (stale worktree, isolation-hook workarounds, path traps) stated as standing facts.
 - **Board**: current tips/state, what landed this session, gate status.
-- **In-flight work with IDENTIFIERS.** Background processes SURVIVE a clear but the conversation
-  about them does not — so name every live agent/lane (name + task # + branch + worktree path),
-  every background task and monitor (task id + what it watches + where its script lives), every
+- **In-flight work with IDENTIFIERS.** Background processes are EXPECTED to survive a clear
+  (proven through /compact; monitors by their own until-session-end contract) but the
+  conversation about them does not — so name every live agent/lane (name + task # + branch +
+  worktree path), every background task and monitor (task id + what it watches), every
   reservation (§ numbers, branch names, file locks), and what the successor does when each one
   reports, wedges, or dies. Point at `/powerloss` for identify-by-transcript discipline.
+- **VERIFY-AND-REBUILD instructions, per background resource.** For each live monitor, shell,
+  and agent: a concrete aliveness check (the output file that should be growing, the notification
+  that should arrive, the process/worktree evidence to look for) and a rebuild recipe if it is
+  dead. A recipe must not depend on tmpfs: scratchpad script paths may be cited for convenience,
+  but the recipe carries the script's ESSENCE inline (what it watches, its emit conditions, its
+  wedge timeout) so the successor can rewrite it after a reboot. The successor's first act is
+  running the aliveness checks and rebuilding what failed.
 - **Owner rulings of this session** — the do-not-re-ask list, each in one line, deferrals
   included.
 - **Queue** — what runs next and its go-signal.
