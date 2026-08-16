@@ -6,6 +6,8 @@ node = "lts"
 "npm:@openai/codex" = "latest"
 "npm:@typescript/native-preview" = "beta"
 "npm:tree-sitter-cli" = "latest"
+"pipx:homeassistant-cli" = "latest"
+uv = "latest"
 
 [settings]
 experimental = true
@@ -15,3 +17,6 @@ trusted_config_paths = ["~/src", "~/.local/src"]
 
 [settings.npm]
 package_manager = "pnpm"
+
+[settings.pipx]
+uvx = true
