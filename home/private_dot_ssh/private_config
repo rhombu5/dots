@@ -3,6 +3,17 @@ Host callisto
     HostName callisto.rhombus.rocks
     User thoma
 
+# Home Assistant Pi: 'hass' = SSH add-on (container), 'hassos' = HAOS host.
+Host hass
+    HostName homeassistant.local
+    User root
+    Port 22
+
+Host hassos
+    HostName homeassistant.local
+    User root
+    Port 22222
+
 # AUR uses a single shared user 'aur'; account is identified by SSH key.
 Host aur.archlinux.org
     User aur
