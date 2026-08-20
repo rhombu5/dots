@@ -62,6 +62,18 @@ Log: `~/.claude/response-corrections.md`. When there are ~3+ examples, I propose
 
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`), the context-specific `CLAUDE.<context>.md` siblings indexed below, and any `CLAUDE.<context>.local.md` per-machine overrides alongside them.
 
+## Reading my modality
+
+How to weigh my phrasing when capturing requirements or deciding what's been ruled:
+
+- **"it could …"** (and kin — "we could …", "maybe …", "alternatively …") — a proposal seeking
+  feedback, or a seed idea for a brainstorm. Never capture it as a decision.
+- **Affirmative verbs** — "it will …", "it should …", "X is …" — read as prescriptions/requirements.
+- **"e.g."** reads as "for example" — illustrative, not exhaustive; the example itself is not
+  prescribed, only the thing it illustrates.
+- **"i.e."** reads as "in other words" — a restatement of the same content, never additional
+  content.
+
 ## Terminology
 
 Terms I've coined — resolve them without asking:
