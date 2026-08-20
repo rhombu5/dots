@@ -48,22 +48,24 @@ carries the full field reference):
 1. **Create a launch-template routine**: `enabled: true`, `run_once_at` parked in the FAR future
    (create demands a schedule; a parked one never self-fires — never use a near-term time for
    "immediate", it races the manual/API fire into a duplicate run). Session context: the repo as
-   a git source, an environment with the network the toolchain needs, and a **CCR-servable
-   model** — `claude-fable-5` is NOT servable there (crashes "Claude Code execution failed" at
-   startup, zero turns, seconds after "process started"); `claude-sonnet-5` and `claude-opus-5`
-   are the working tiers. If the work doc mandates a model the platform can't serve, that is a
-   named deviation for the owner, not a silent substitution. The prompt must be fully
-   self-contained (zero context travels) and name the branch AND pushed SHA — the checkout
-   defaults to the default branch.
+   a git source, an environment with the network the toolchain needs, and any model tier —
+   fable/opus/sonnet are all servable there (verified 2026-08-20). **The event message MUST
+   carry `"role": "user"`**: `events[].data.message = {content, role} — omitting `role` is
+   accepted SILENTLY by the create API and then kills Claude Code at session startup
+   (`error_during_execution`, `turns=0`, a generic "execution failed" with no pointer to the
+   cause; it looks exactly like a model or environment problem and cost a three-model bisect to
+   isolate). The prompt must be fully self-contained (zero context travels) and name the branch
+   AND pushed SHA — the checkout defaults to the default branch.
 2. **Fire it** with `{action: "run", trigger_id}` — the response carries the `session_id`
    immediately; hand the owner `https://claude.ai/code/session_<id>` right away.
 3. **Verify startup before trusting it** (~1–2 min after the fire): `list_runs` +
    `get_run_log`. A startup crash still shows `status: active` with an idle worker — the log's
    `result: error_during_execution … turns=0` is the truth. Silence is not success.
 4. A **paused routine refuses `run`** — the template stays enabled; the parked schedule is what
-   makes that safe. To isolate a config failure from a model failure, fire a cheap sonnet canary
-   routine with a trivial prompt: if the canary survives the same environment, the model (or the
-   diff between configs) is the culprit.
+   makes that safe. When a run crashes at startup, bisect with a canary routine (trivial prompt,
+   ~15s per fire): flip ONE variable per fire against a known-good config, and finish with the
+   negative control that re-adds the suspected bug — the create API validates almost nothing, so
+   a startup crash is usually a silently-accepted malformed field, not the model or environment.
 
 Bake the cloud environment's realities into the routine's prompt:
 
