@@ -39,8 +39,33 @@ present the blocker — never dispatch an agent against a tip that doesn't hold 
 
 ## Step 4 — dispatch to the cloud
 
-Launch the orchestrator with `Agent(isolation: "remote", …)`, briefed to check out the pushed
-branch at the named SHA. Bake the cloud environment's realities into the brief:
+**Never use `Agent(isolation: "remote")` — it silently falls back to a LOCAL agent** when remote
+isolation is unavailable (observed 2026-08-20: the "remote" dispatch produced a `local_agent` in
+an `agent-<id>` worktree, discovered only because the owner noticed local activity). The real
+cloud path is the **routines API** (`RemoteTrigger`, loaded via ToolSearch; the `/schedule` skill
+carries the full field reference):
+
+1. **Create a launch-template routine**: `enabled: true`, `run_once_at` parked in the FAR future
+   (create demands a schedule; a parked one never self-fires — never use a near-term time for
+   "immediate", it races the manual/API fire into a duplicate run). Session context: the repo as
+   a git source, an environment with the network the toolchain needs, and a **CCR-servable
+   model** — `claude-fable-5` is NOT servable there (crashes "Claude Code execution failed" at
+   startup, zero turns, seconds after "process started"); `claude-sonnet-5` and `claude-opus-5`
+   are the working tiers. If the work doc mandates a model the platform can't serve, that is a
+   named deviation for the owner, not a silent substitution. The prompt must be fully
+   self-contained (zero context travels) and name the branch AND pushed SHA — the checkout
+   defaults to the default branch.
+2. **Fire it** with `{action: "run", trigger_id}` — the response carries the `session_id`
+   immediately; hand the owner `https://claude.ai/code/session_<id>` right away.
+3. **Verify startup before trusting it** (~1–2 min after the fire): `list_runs` +
+   `get_run_log`. A startup crash still shows `status: active` with an idle worker — the log's
+   `result: error_during_execution … turns=0` is the truth. Silence is not success.
+4. A **paused routine refuses `run`** — the template stays enabled; the parked schedule is what
+   makes that safe. To isolate a config failure from a model failure, fire a cheap sonnet canary
+   routine with a trivial prompt: if the canary survives the same environment, the model (or the
+   diff between configs) is the culprit.
+
+Bake the cloud environment's realities into the routine's prompt:
 
 - **No user skills or user CLAUDE.md travel** — `/go`, `/ready`, and the owner's global rules do
   not exist there. Whatever gap-handling, halting rules, and conventions the run must honor have
@@ -53,9 +78,10 @@ branch at the named SHA. Bake the cloud environment's realities into the brief:
   slow first gates as wedges.
 
 Then arm a LOCAL Monitor on the pushed branch (tip movement per event, wedge alert on prolonged
-silence, poll-failure announcements — the standing Monitor rules apply). Remote availability is
-gated: if the dispatch is refused, fall back to presenting the blocker — do not silently run the
-work locally instead; local execution is what `/go` is for.
+silence, poll-failure announcements — the standing Monitor rules apply); `list_runs`/
+`get_run_log` are the run-side observability to pair with it. If the routines API itself is
+unavailable, present the blocker — do not silently run the work locally instead; local execution
+is what `/go` is for.
 
 ## Arguments override
 
