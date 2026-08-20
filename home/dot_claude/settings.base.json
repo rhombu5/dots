@@ -44,8 +44,9 @@
   "autoScrollEnabled": true,
   "teammateMode": "auto",
   "remoteControlAtStartup": true,
-  "inputNeededNotifEnabled": true,
+  "inputNeededNotifEnabled": false,
   "agentPushNotifEnabled": false,
+  "preferredNotifChannel": "ghostty",
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
   "repoSettings": {
