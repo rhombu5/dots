@@ -1,6 +1,6 @@
 ---
 name: ready
-description: Readiness checkpoint before a pause, compact, or handoff. Asks two questions and demands plain verdicts — (1) is anything we discussed missing an explicit owner "yes" while neither ruled out nor tracked on the todo list, and (2) do the task list and every requirement/ruling exist in non-volatile files? Runs ONLY when the user literally types /ready, or as the gate inside a user-typed /go — never self-invoked; natural-language questions ("are we ready", "did I miss anything") do NOT trigger it.
+description: Readiness checkpoint before a pause, compact, or handoff. Asks two questions and demands plain verdicts — (1) is anything we discussed missing an explicit owner "yes" while neither ruled out nor tracked on the todo list, and (2) is the task list durable and every requirement/ruling either already implemented or captured in non-volatile files? Runs ONLY when the user literally types /ready, or as the gate inside a user-typed /go — never self-invoked; natural-language questions ("are we ready", "did I miss anything") do NOT trigger it.
 ---
 
 # ready — two questions, two plain verdicts
@@ -40,10 +40,14 @@ Verify the session's load-bearing state survives a compact, a restart, AND a reb
 - **Task list**: current, statuses honest, every scoped work item's substance recoverable from
   its description or a file it points to (a task whose meaning lives only in conversation
   context is volatile — fix it now).
-- **Requirements / rulings / decisions**: every one landed in repo files or decision records
-  on real disk. VOLATILE means `/tmp`-class storage: tmpfs scratchpads, session temp dirs,
-  conversation context — anything that dies with the machine or the session. On-disk but
-  uncommitted is NOT volatile (that's /done's concern, not this one's).
+- **Requirements / rulings / decisions**: every one is EITHER already **implemented** — the
+  code, config, or file it asked for exists on disk and nothing further is owed — OR landed in
+  repo files or decision records on real disk. Implemented counts as durable in its own right:
+  a requirement whose entire content is now the artifact itself does not also need writing
+  down. Only one that is neither built nor recorded is a gap. VOLATILE means `/tmp`-class
+  storage: tmpfs scratchpads, session temp dirs, conversation context — anything that dies with
+  the machine or the session. On-disk but uncommitted is NOT volatile (that's /done's concern,
+  not this one's).
 - **Volatile-only artifacts**: anything load-bearing that exists ONLY in `/tmp`, a scratchpad,
   or conversation context gets flagged with where it must move.
 
@@ -62,6 +66,7 @@ record).
 ```
 
 Clean run: `1: NO GAPS` and `2: DURABLE — survives compact, restart, and reboot`, each with at
-most one supporting line.
+most one supporting line. A requirement that is durable *because it is already built* is clean
+— don't list it, and don't manufacture a record for it.
 
 Then stop. This skill reports readiness; it does not start new work.
