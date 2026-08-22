@@ -451,3 +451,113 @@ function getIds(items: Iterable<Item>): ReadonlySet<string> {
 ```
 
 On the input side: prefer `Iterable<T>` over `T[]` or a concrete container class, a structural shape over a class — never demand more capability than the body uses. On the output side: never launder a capable value through a weaker return type — `ReadonlySet<T>` not `Iterable<T>` when a `Set` is returned, `IteratorObject<T>` not a hand-waved `Iterable<T>` for an iterator-helper chain, `Generator<T>` only when the function itself is a generator. A caller loses `.has`/`.size`/helper methods the value genuinely carries the moment the signature under-declares it.
+
+## Iterator chains over loops
+
+Prefer an iterator-helper chain — `Iterator.from(x).map(...).filter(...).find(...)`, `.toArray()`, or a `new Set(...)`/`new Map(...)` wrapping one — over a hand-rolled `for` loop with an accumulator or an early return, whenever the logic maps cleanly onto the chain. Laziness survives the rewrite: `.find` still short-circuits, `.map` over a generator stays unevaluated until something consumes it.
+
+```ts
+// NO
+function activeIds(items: Item[]): Set<string> {
+  const out = new Set<string>();
+  for (const item of items) {
+    if (item.active) {
+      out.add(item.id);
+    }
+  }
+  return out;
+}
+
+// YES
+function activeIds(items: Iterable<Item>): ReadonlySet<string> {
+  return new Set(
+    Iterator.from(items)
+      .filter(item => item.active)
+      .map(item => item.id),
+  );
+}
+```
+
+When the per-element logic is fat enough to clutter the chain, extract it to a small named function and keep the chain thin — `.filter(isActive).map(toId)` reads better than an inline multi-line predicate wedged between `.filter(` and `)`. A loop stays the right call where the chain would contort to fit: interleaved mutation, accumulation across multiple collections at once, or a body that doesn't reduce to map/filter/find/reduce shape.
+
+This composes with the Generators section above: a generator is still the right *producer* for yield-shaped output. This rule governs the *consumer* side — once something is iterable, prefer transforming and consuming it through a chain rather than a loop.
+
+## Ternaries stay single-line; multiline literals chop fully
+
+Two related rules.
+
+**A conditional expression that would span multiple lines is not written as a ternary.** Restructure as a guard `if`/`return`, or name the operands so the ternary fits on one line. A ternary that's outgrown one line is a sign the branches deserve statements, not an excuse to hard-wrap the `?`/`:`.
+
+```ts
+// NO — multiline ternary, true-arm is a cramped two-prop object
+function toResult(isValid: boolean, input: Input): Result {
+  return isValid
+    ? { status: "ok", value: computeValue(input), timestamp: Date.now() }
+    : { status: "error", value: undefined };
+}
+
+// YES — guard-return, each literal fully chopped
+function toResult(isValid: boolean, input: Input): Result {
+  if (!isValid) {
+    return {
+      status: "error",
+      value: undefined,
+    };
+  }
+  return {
+    status: "ok",
+    value: computeValue(input),
+    timestamp: Date.now(),
+  };
+}
+```
+
+**An object literal that goes multiline is fully chopped** — exactly one property per line, never two crammed onto one to save a line.
+
+```ts
+// NO — two props sharing a line
+const opts = {
+  scope: "singleton", tags: ["a", "b"],
+  lazy: true,
+};
+
+// YES
+const opts = {
+  scope: "singleton",
+  tags: ["a", "b"],
+  lazy: true,
+};
+```
+
+Single-line ternaries and single-line literals are both still fine — these rules only fire once the construct has already decided to span multiple lines.
+
+## DRY is a trade, not a rule
+
+Repetition is not itself a defect. Weigh a shared abstraction against what it removes on **total understanding cost**, not on how many times something repeats: a shared name and an indirection at every call site are a cost the abstraction has to repay, not a free win. When the reference costs about as many characters — and as much "what is this again?" — as the duplication it replaces, it's a loser: a vocabulary item invented for a problem that didn't exist.
+
+```ts
+// NO — a base pulled out for two implementors, each already trivial
+interface ElementBase {
+  element: Widget;
+}
+interface Anchor extends ElementBase {
+  href: string;
+}
+interface Trigger extends ElementBase {
+  onFire: Func<[], void>;
+}
+
+// YES — the member written directly in both; two spellings beat a third concept
+interface Anchor {
+  element: Widget;
+  href: string;
+}
+interface Trigger {
+  element: Widget;
+  onFire: Func<[], void>;
+}
+```
+
+`ElementBase` here saves one line of duplication and costs a name every future reader of either interface has to look up to know what `element` even is. Two plain spellings are cheaper to read than one base plus two extensions.
+
+Judge case by case — a genuinely shared, non-trivial shape (several fields, an invariant that must stay in lockstep, three-plus implementors) earns the abstraction easily; a one- or two-field shape used twice usually doesn't. When in doubt, prefer inlining a base back into its implementors over inventing one preemptively: collapsing two inlined copies into a shared type later is a mechanical merge, while un-inlining a bad abstraction means first proving every use site actually agrees.
