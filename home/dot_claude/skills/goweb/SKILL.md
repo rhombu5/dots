@@ -1,6 +1,6 @@
 ---
 name: goweb
-description: Execution greenlight, cloud edition. Identical to /go — the /ready checkpoint runs LOCALLY first and ANY non-clean verdict ends the skill immediately — except that on clean, execution is dispatched to a CLOUD agent instead of running locally. Before launch it ensures everything the run needs is committed AND pushed, since the cloud agent sees only origin. Standing orders are /go's (ASAP via parallelism, ultracode where appropriate, Fable only when justified); arguments passed with /goweb are overriding rules layered on top for that run. Runs ONLY when the owner literally types /goweb — never self-invoked, never re-run in a loop, never inferred from "proceed"-style language.
+description: Execution greenlight, cloud edition. Identical to /go — the /ready checkpoint runs LOCALLY first and ANY non-clean verdict ends the skill immediately — except that on clean, execution is dispatched to a CLOUD agent instead of running locally. Before launch it VERIFIES (never recalls) that the pushed tip is identical to the local tree, since the cloud agent sees the pushed tip and nothing else. Standing orders are /go's (ASAP via parallelism, ultracode where appropriate, Fable only when justified); arguments passed with /goweb are overriding rules layered on top for that run. Runs ONLY when the owner literally types /goweb — never self-invoked, never re-run in a loop, never inferred from "proceed"-style language.
 ---
 
 # goweb — checkpoint locally, execute in the cloud
@@ -17,15 +17,20 @@ findings and stop — no push, no dispatch, no new work started.
 
 ## Step 2 — ensure pushed (only on clean)
 
-The cloud agent sees only what is on origin. Before dispatching:
+The cloud agent sees the pushed tip and nothing else.
 
-- Commit anything uncommitted that the run needs (the work docs, the task list, the tree state
-  the run's own procedure expects) — `--no-verify` is acceptable for a savepoint-class commit.
-- Push the branch. Verify the pushed tip (`git ls-remote`) is the commit the run should start
-  from, and name that SHA in the dispatch.
+**Verify the tip IS your tree — never recall that it is.** `git status --porcelain` and
+`git log @{u}..` must both come back empty; commit and push until they do (`--no-verify` is fine
+for a savepoint-class commit), then name that SHA in the dispatch. The invariant is the whole
+point: untracked files, unstaged hunks, and forgotten savepoints are all just "tree ≠ tip", and
+none of them survive an empty porcelain — whereas a memory of having committed everything
+survives all three. (`git add -p` never offers untracked files, so that memory is routinely
+wrong.)
 
-If pushing is impossible (no remote, rejected push that can't be resolved mechanically), stop and
-present the blocker — never dispatch an agent against a tip that doesn't hold the work.
+Whatever you knowingly leave outside that tip — gitignored files, credentials, another repo — is
+out of the run's reach: scope the brief around it, or stop. If pushing is impossible (no remote,
+rejected push that can't be resolved mechanically), present the blocker — never dispatch an
+agent against a tip that doesn't hold the work.
 
 ## Step 3 — standing orders (same as /go)
 
