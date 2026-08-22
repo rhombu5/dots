@@ -86,7 +86,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 
 - [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), Bitwarden / `bw` / `secret-tool` / keyring access (you can unlock the vault yourself — never ask the user), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 - [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
-- [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md) — all-languages code style: the reader-frames budget, name-as-zeroth-doc, what-not-how naming.
+- [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md) — all-languages code style: the reader-frames budget, what-not-how naming, one-sentence doc comments, accept-permissive/return-expressive, single-use-helper and DRY trade rules, ternary/literal shape.
 - [`CLAUDE.typescript.md`](CLAUDE.typescript.md) — TypeScript style — array type syntax, interface and file naming, and more.
 - [`CLAUDE.print.md`](CLAUDE.print.md) — printing: driving the HP network laser (`hp_m252dw`) via `lp`/CUPS, the Canon photo printer (incomplete stub), and booklet printing — including the rule that a markdown prints as a folded booklet by default, the imposition pipeline, duplex/fold settings, and wrap-around cover pages.
 - [`CLAUDE.go.md`](CLAUDE.go.md) — Go toolchain pinning via mise, the ambient-`GOROOT` version-split failure mode, `GOTMPDIR`/`GOCACHE` placement rules, and the fresh-worktree `mise trust` gotcha.
