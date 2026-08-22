@@ -86,6 +86,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 
 - [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), Bitwarden / `bw` / `secret-tool` / keyring access (you can unlock the vault yourself — never ask the user), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
 - [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
+- [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md) — all-languages code style: the reader-frames budget, name-as-zeroth-doc, what-not-how naming.
 - [`CLAUDE.typescript.md`](CLAUDE.typescript.md) — TypeScript style — array type syntax, interface and file naming, and more.
 - [`CLAUDE.print.md`](CLAUDE.print.md) — printing: driving the HP network laser (`hp_m252dw`) via `lp`/CUPS, the Canon photo printer (incomplete stub), and booklet printing — including the rule that a markdown prints as a folded booklet by default, the imposition pipeline, duplex/fold settings, and wrap-around cover pages.
 - [`CLAUDE.go.md`](CLAUDE.go.md) — Go toolchain pinning via mise, the ambient-`GOROOT` version-split failure mode, `GOTMPDIR`/`GOCACHE` placement rules, and the fresh-worktree `mise trust` gotcha.
@@ -97,6 +98,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 |---|---|
 | You're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git`/`gh`/`git worktree`/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
 | You're about to touch `/etc/`, `/usr/`, `sudo`, `pacman`/`yay`, `systemctl`, `chezmoi`, Bitwarden/`bw`/`secret-tool`, or do any of the other Arch/Linux-flavored work named in the index above | [`CLAUDE.linux.md`](CLAUDE.linux.md) |
+| You're about to edit source code in ANY language (`Edit`/`Write`/`MultiEdit`/`NotebookEdit` on a code file) | [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md) |
 | You're about to edit a TypeScript/TSX file (`.ts`/`.tsx`) — `Edit`/`Write`/`MultiEdit`/`NotebookEdit` | [`CLAUDE.typescript.md`](CLAUDE.typescript.md) |
 | You're about to print or drive CUPS (`lp`/`lpr`/`lpstat`/`lpoptions`/`cancel`), or the user asks to print a document — especially a markdown or PDF (which prints as a folded booklet by default) | [`CLAUDE.print.md`](CLAUDE.print.md) |
 | You're about to edit a `.go` file, run any `go` command (`build`/`test`/`vet`/`mod`), pin Go in a project's `mise.toml`, or debug a Go toolchain/version/cache error | [`CLAUDE.go.md`](CLAUDE.go.md) |
