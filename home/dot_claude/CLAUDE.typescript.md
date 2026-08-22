@@ -393,3 +393,43 @@ Three payoffs: the declaration *documents* which way values flow; TS **enforces*
 variance (a member that violates it errors at the declaration, not at some distant use); and the
 checker skips structural variance measurement for annotated params. This is declaration-site
 style — call sites are unaffected.
+
+## Doc comments — one sentence is the norm, not a floor
+
+A single sentence covers nearly every doc comment: a noun phrase naming the thing, often with a
+short gloss. Never restate what the name, type, parameter order, or overloads already say — the
+signature is part of the documentation. A fact lives at one declaration only: something already
+documented at its owning declaration is never restated where that declaration is used — link to it
+or say nothing. Proximity counts too — a neighbor's doc counts as already-read. Every sentence has
+to pass "what does the reader DO with this?" — vague meta-description that informs no call gets
+deleted, not reworded. Prefer concrete wording over clever abstraction; if a reviewer would call it
+word soup, rewrite with concrete cases or delete it.
+
+```ts
+// NO — restates the param, narrates the object form, says nothing the signature doesn't
+/**
+ * Creates a Type node.
+ * @param name - the type's name
+ * @remarks Accepts a string for the shorthand form, or an object for the full form —
+ * the object form takes the node's fields directly.
+ */
+function typefor(name: string | { name: string; strict?: boolean }): Type { … }
+
+// YES — one sentence; the signature carries the rest
+/** Names a type by its declared identifier. */
+function typefor(name: string | { name: string; strict?: boolean }): Type { … }
+```
+
+Extra lines beyond the sentence are earned only by an `@example`, an `@throws`, or one fact not
+derivable from the signature, the code below, or a neighbor's doc — not by hedging or restating.
+
+A full paragraph is justified case-by-case, when the member is the single designated home of
+several independent, interacting, caller-tripping facts — a factory that canonicalizes its inputs
+in three observable ways, a matcher whose semantics are four negatives a reader will otherwise
+assume. Don't blanket-compress those down to a sentence; the paragraph is what's earned there.
+
+Reference-sized content — a grammar, a wire format — outgrows doc comments entirely: extract it to
+a spec doc and leave a one-line pointer.
+
+A comment already sitting in the codebase is not precedent for this style — it may simply not have
+been reviewed yet.
