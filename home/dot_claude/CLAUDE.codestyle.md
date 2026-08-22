@@ -1,7 +1,7 @@
 # Code style — all languages
 
 Principles that apply to every language. Language-specific style lives in its own sibling
-(`CLAUDE.typescript.md`, `CLAUDE.go.md`); where a specific file elaborates one of these, the
+(`CLAUDE.codestyle.ts.md`; per-language leaves are minted lazily); where a specific file elaborates one of these, the
 specific file wins on mechanics.
 
 ## The budget is reader frames, not characters
