@@ -404,3 +404,7 @@ A fat per-element body stays inline as a multi-statement arrow, even where it cl
 This composes with the Generators section above: a generator is still the right *producer* for yield-shaped output. This rule governs the *consumer* side — once something is iterable, prefer transforming and consuming it through a chain rather than a loop.
 
 Pass a function reference point-free — `.every(Type.isOptional)`, `.map(Type.from)` — instead of wrapping it in a lambda, whenever the callback's arity and `this`-freedom allow it. Wrap only when something forces it: overload resolution that needs the call-site's own argument type to pick a signature (`Object.freeze`'s overloads are the canonical forced-wrap — a bare reference collapses to the wrong one), or a function that depends on a `this` the chain doesn't supply.
+
+## Namespace members — always reference qualified
+
+Reference a namespace's exported members through the namespace qualifier even from inside the namespace itself: `Type.adopt(...)`, `CallSite.constant(...)` — never the bare `adopt(...)` the scope would permit. The call site then reads identically everywhere, inside and out. Non-exported namespace-local helpers stay bare — they have no qualified spelling.
