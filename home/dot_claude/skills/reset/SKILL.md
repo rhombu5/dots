@@ -1,6 +1,6 @@
 ---
 name: reset
-description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
+description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, and the invocation itself is a soft nudge toward handing off now) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
 ---
 
 # reset — sweep until clear, judge the timing, then hand off
@@ -47,6 +47,13 @@ A boundary minutes away from a naturally cleaner board (a lane's report or merge
 run finishing, one in-flight review about to close) is worth waiting for — a handoff describing
 "merged" beats one describing "mid-review". The context % is the budget for that patience:
 
+**Read the invocation itself as a soft nudge toward now.** The owner typed `/reset`, so some
+part of him already wants the boundary — let that tip a close call toward composing rather than
+waiting. It is a thumb on the scale, not a veto: a genuinely imminent event that genuinely
+improves the board still wins the argument. What the nudge settles is the ties — a seam that is
+only plausible, a wait that would tidy the handoff's prose more than its substance. And a low
+context % is permission to wait, never by itself a reason to.
+
 The bands assume a 1M-token window (even 10% is serious headroom) and that auto-compact fires
 around 99–100% — an auto-compact mid-ritual destroys exactly what this ritual protects, so the
 budget must cover the DEFERRED EVENT'S own consumption (a lane report plus its review can be
@@ -56,7 +63,8 @@ several percent) plus the delta sweep and compose (~2%), keeping the projected t
 - **~90–95%** — defer only for events expected within a few turns (an imminent lane report, one
   merge), and only ONE such event — and only if its expected consumption keeps the projected
   total under ~97%; when it lands, run the delta sweep and hand off.
-- **< ~90%** — free to wait for a natural seam, still naming a concrete trigger.
+- **< ~90%** — free to wait for a natural seam, still naming a concrete trigger; with no seam
+  worth naming, the nudge carries and you hand off now.
 
 Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger
 ("after PR #N merges", "when lane X's report arrives"). The owner's "now" overrides any deferral.
