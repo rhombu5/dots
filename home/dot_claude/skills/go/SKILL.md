@@ -12,8 +12,16 @@ description: Execution greenlight. Runs the /ready checkpoint first; ANY non-cle
 ## Step 1 — /ready, as a hard gate
 
 Run the `/ready` skill in full, verdicts first. If EITHER verdict is not clean (`1: GAPS` or
-`2: NO`), **THE SKILL ENDS HERE**: present /ready's findings and stop — no execution mode, no
-new work started. Clean means exactly `1: NO GAPS` and `2: YES`.
+`2: VOLATILE`), **THE SKILL ENDS HERE**: present /ready's findings and stop — no execution
+mode, no new work started. Clean means exactly `1: NO GAPS` and `2: DURABLE`.
+
+**If the pass applied any autofix, re-run /ready.** /ready silently fixes what is mechanical —
+writing a missing file, adding a missing task — and those fixes change the very state the
+verdict describes. The gate must clear against what exists *after* the fixes, not against the
+state that prompted them, and a fix can surface a fresh gap of its own (a task added with no
+durable description, a file written somewhere volatile). Keep re-running until a pass makes no
+fixes; that pass's verdicts are the ones the gate reads. If two consecutive passes both fix and
+still don't converge, stop — that non-convergence is itself the finding to present.
 
 ## Step 2 — standing orders (activate only on clean)
 
