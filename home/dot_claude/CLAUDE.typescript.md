@@ -452,6 +452,33 @@ function getIds(items: Iterable<Item>): ReadonlySet<string> {
 
 On the input side: prefer `Iterable<T>` over `T[]` or a concrete container class, a structural shape over a class — never demand more capability than the body uses. On the output side: never launder a capable value through a weaker return type — `ReadonlySet<T>` not `Iterable<T>` when a `Set` is returned, `IteratorObject<T>` not a hand-waved `Iterable<T>` for an iterator-helper chain, `Generator<T>` only when the function itself is a generator. A caller loses `.has`/`.size`/helper methods the value genuinely carries the moment the signature under-declares it.
 
+## Single-use helpers — earn extraction with reuse or a compressing name
+
+Extracting a function or method used at exactly one call site is the exception, not a default move. Inline the logic at its one call site — even a fat multi-statement arrow inside an iterator chain — unless the extraction is earned: by actual reuse elsewhere, or, rarely, by a name that genuinely compresses understanding of an otherwise-opaque block. "The chain looks cleaner with it pulled out" is not one of those reasons.
+
+```ts
+// NO — a private method that exists only to tidy one .map(...)
+class Report {
+  #summarize(row: Row): Summary {
+    return { id: row.id, total: row.items.reduce((n, i) => n + i.qty, 0) };
+  }
+
+  build(rows: Row[]): Summary[] {
+    return rows.map(row => this.#summarize(row));
+  }
+}
+
+// YES — read exactly once, right here; the arrow stays inline
+class Report {
+  build(rows: Row[]): Summary[] {
+    return rows.map(row => ({
+      id: row.id,
+      total: row.items.reduce((n, i) => n + i.qty, 0),
+    }));
+  }
+}
+```
+
 ## Iterator chains over loops
 
 Prefer an iterator-helper chain — `Iterator.from(x).map(...).filter(...).find(...)`, `.toArray()`, or a `new Set(...)`/`new Map(...)` wrapping one — over a hand-rolled `for` loop with an accumulator or an early return, whenever the logic maps cleanly onto the chain. Laziness survives the rewrite: `.find` still short-circuits, `.map` over a generator stays unevaluated until something consumes it.
@@ -478,7 +505,7 @@ function activeIds(items: Iterable<Item>): ReadonlySet<string> {
 }
 ```
 
-When the per-element logic is fat enough to clutter the chain, extract it to a small named function and keep the chain thin — `.filter(isActive).map(toId)` reads better than an inline multi-line predicate wedged between `.filter(` and `)`. A loop stays the right call where the chain would contort to fit: interleaved mutation, accumulation across multiple collections at once, or a body that doesn't reduce to map/filter/find/reduce shape.
+A fat per-element body stays inline as a multi-statement arrow, even where it clutters the chain — single-use helpers are rarely justified (see Single-use helpers above). Reach for a named function only when the logic is reused elsewhere, or its name genuinely compresses understanding of an otherwise-opaque block — never merely to keep the chain visually thin. A loop stays the right call where the chain would contort to fit: interleaved mutation, accumulation across multiple collections at once, or a body that doesn't reduce to map/filter/find/reduce shape.
 
 This composes with the Generators section above: a generator is still the right *producer* for yield-shaped output. This rule governs the *consumer* side — once something is iterable, prefer transforming and consuming it through a chain rather than a loop.
 

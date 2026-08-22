@@ -161,6 +161,43 @@ Everything else applies: `repository:` scalars, `labels:`, and `rulesets:` (all 
 
 > **Self-cleanup directive (Claude):** if you ever notice that `arch-setup` is no longer at `github.com:fnrhombus/arch-setup` (e.g. the remote has been moved to `rhombu5/arch-setup`, or the local checkout's `git remote -v` reflects the move), delete *both* the preceding paragraph about the misplacement *and* this directive itself in the same commit. Goal: this whole call-out evaporates the moment it's no longer true.
 
+## Never remove a worktree before its PR is merged
+
+**A worktree lives until its PR merges. Merged is the trigger for removal — nothing else is.** Not
+"the work is finished", not "the branch is pushed", not "the gates are green", not a tidy-up
+request phrased generally ("clean up your workspaces"). If the PR is still open — draft or
+otherwise — the worktree stays.
+
+The reason is visibility, not safety: **an existing worktree is what surfaces the branch's status
+in the Claude Code statusbar.** Removing it early doesn't lose work (the branch is pushed), but it
+blinds me to the in-flight state of everything I'm waiting on. A "clean up" instruction means the
+*merged* ones; ask if you think it meant more.
+
+Corollary for stacked PRs: keep every worktree in the stack until the whole stack has landed. The
+children are exactly the ones whose status is worth watching while the base is in review.
+
+## Deleting a base branch closes every PR that targets it
+
+**Never pass `--delete-branch` when merging a PR that other PRs are based on.** GitHub closes any
+PR whose base branch is deleted — it does not retarget them. Observed 2026-08-15 merging a
+10-deep stack: `gh pr merge <base> --merge --delete-branch` silently closed five child PRs, and
+they could not be reopened (`Could not open the pull request`) until the base branch was restored
+on origin.
+
+Recovery, if it happens: the merged branch's tip is the **second parent** of the merge commit —
+`git log origin/main --merges -1 --format='%P' | awk '{print $2}'` — so
+`git push origin <sha>:refs/heads/<branch>` restores it, after which `gh pr reopen` and
+`gh pr edit --base main` work. Note `--delete-branch` also deletes the *local* branch, so the
+reflog may be the only other copy.
+
+Merge a stack **bottom-up without `--delete-branch`**, retarget each child to `main` with
+`gh pr edit --base main` as its parent lands, and delete the branches at the end.
+
+**Squash-merge does not work for a stack.** Squashing the base puts a new commit on `main` that
+is absent from every child's ancestry, so each child re-presents the base's entire diff or
+conflicts outright. Use merge commits for stacked PRs even where the repo convention is squash;
+the convention assumes independent PRs.
+
 ## After merging a PR — always clean up the branch and worktree
 
 The moment a PR I opened reaches merged state — whether the merge happened via `gh pr merge`, the GitHub web UI, an auto-merge that resolved while we waited, or any other path — **delete the branch and (if one exists) the worktree without asking.** Don't surface this as a confirm-then-do; just do it. The session should never end with a stale just-merged branch and a worktree directory I have to remember to clean up myself, and I shouldn't have to approve the same three-step cleanup every time.
