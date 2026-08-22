@@ -509,6 +509,8 @@ A fat per-element body stays inline as a multi-statement arrow, even where it cl
 
 This composes with the Generators section above: a generator is still the right *producer* for yield-shaped output. This rule governs the *consumer* side — once something is iterable, prefer transforming and consuming it through a chain rather than a loop.
 
+Pass a function reference point-free — `.every(Type.isOptional)`, `.map(Type.from)` — instead of wrapping it in a lambda, whenever the callback's arity and `this`-freedom allow it. Wrap only when something forces it: overload resolution that needs the call-site's own argument type to pick a signature (`Object.freeze`'s overloads are the canonical forced-wrap — a bare reference collapses to the wrong one), or a function that depends on a `this` the chain doesn't supply.
+
 ## Ternaries stay single-line; multiline literals chop fully
 
 Two related rules.
@@ -558,6 +560,8 @@ const opts = {
 
 Single-line ternaries and single-line literals are both still fine — these rules only fire once the construct has already decided to span multiple lines.
 
+Only the shortest object literals stay inline. A literal that contains a call expression, or holds more than a couple of tiny members, goes fully chopped — one property per line — even when it's the sole expression body of an arrow.
+
 ## DRY is a trade, not a rule
 
 Repetition is not itself a defect. Weigh a shared abstraction against what it removes on **total understanding cost**, not on how many times something repeats: a shared name and an indirection at every call site are a cost the abstraction has to repay, not a free win. When the reference costs about as many characters — and as much "what is this again?" — as the duplication it replaces, it's a loser: a vocabulary item invented for a problem that didn't exist.
@@ -588,3 +592,48 @@ interface Trigger {
 `ElementBase` here saves one line of duplication and costs a name every future reader of either interface has to look up to know what `element` even is. Two plain spellings are cheaper to read than one base plus two extensions.
 
 Judge case by case — a genuinely shared, non-trivial shape (several fields, an invariant that must stay in lockstep, three-plus implementors) earns the abstraction easily; a one- or two-field shape used twice usually doesn't. When in doubt, prefer inlining a base back into its implementors over inventing one preemptively: collapsing two inlined copies into a shared type later is a mechanical merge, while un-inlining a bad abstraction means first proving every use site actually agrees.
+
+## Names say what, never how — keep the reader in their frame
+
+A member's name has to say WHAT it does — verb and object together — so a reader at the call site never has to open the callee's source to find out. A human reader's mental call stack doesn't restore the way an interpreter's frames do: drop into a function to recover missing context, and the place you meant to return to isn't popped back onto a stack — it's just gone. The name is the only thing standing between the reader and that detour, so it has to state the reality of what the member does. Rarely, if ever, how.
+
+Every method name pairs an explicit verb with its object. A bare noun or an elliptical verb names nothing:
+
+```ts
+// NO — bare noun / elliptical verb; the call site names nothing
+class Resolver {
+  #planFor(node: Node): Plan { … }
+  #failure(node: Node): boolean { … }
+
+  resolve(node: Node): Plan {
+    if (this.#failure(node)) {
+      throw new Error("cycle");
+    }
+    return this.#planFor(node);
+  }
+}
+
+// YES — verb + object; the call site reads as a sentence
+class Resolver {
+  #getPlanFor(node: Node): Plan { … }
+  #detectFailure(node: Node): boolean { … }
+
+  resolve(node: Node): Plan {
+    if (this.#detectFailure(node)) {
+      throw new Error("cycle");
+    }
+    return this.#getPlanFor(node);
+  }
+}
+```
+
+The same rule covers a field that holds a device, not just a method that performs an action — name the field for the mechanism it is, not a generic one-word label:
+
+```ts
+// NO — the field name gives no context clues; the reader must go look
+if (this.#visiting(x)) { … }
+
+// YES — the field names the mechanism; the reader can correctly guess the
+// whole thing (a cycle-detection guard) without leaving this function
+if (this.#cycleGuard.visiting(x)) { … }
+```
