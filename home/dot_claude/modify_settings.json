@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # chezmoi modify_ script: emits the desired ~/.claude/settings.json.
-# Starts from the stable base snapshot and overrides only the churny,
-# TUI-written "unstable" keys with whatever the live file currently holds.
+# Starts from the LIVE file's key order and overwrites each stable key's
+# value from the base snapshot; the churny, TUI-written "unstable" keys keep
+# whatever the live file currently holds. Building on live's order (rather
+# than base's) is deliberate: the TUI rewrites settings.json with its own key
+# order, and a pure reorder used to read as chezmoi drift and wedge the
+# repo's pre-commit `chezmoi verify` hook. Values are still base-authoritative.
 # Any other key present live but absent from base is assumed volatile too
 # (e.g. a new app-written flag) and passed through as-is, with a
 # non-blocking warning to stderr so it's visible instead of silent.
@@ -12,7 +16,7 @@ base="${HOME}/.claude/settings.base.json"
 live_json="$(cat)"
 [[ -n "$live_json" ]] || live_json='{}'
 
-unstable_keys='["model","effortLevel","verbose","autoScrollEnabled","askUserQuestionTimeout","awaySummaryEnabled"]'
+unstable_keys='["model","effortLevel","modelSettings","verbose","autoScrollEnabled","askUserQuestionTimeout","awaySummaryEnabled"]'
 
 passthrough_keys="$(jq -n -r --slurpfile base "$base" --argjson live "$live_json" --argjson unstable "$unstable_keys" '
     ($base[0]) as $b
@@ -31,9 +35,14 @@ jq -n --indent 2 \
   '
     ($base[0]) as $b
     | $live as $l
-    | (reduce $unstable[] as $k (
-        $b;
-        if ($l | has($k)) and ($l[$k] != null) then .[$k] = $l[$k] else . end
-      )) as $merged
-    | $merged + ($l | with_entries(select(.key as $k | ($b | has($k)) | not)))
+    | reduce ($b | keys_unsorted[]) as $k (
+        $l;
+        if ($unstable | index($k)) then
+          # volatile: keep whatever live holds; fall back to base only if live lacks it
+          (if ($l | has($k)) and ($l[$k] != null) then . else .[$k] = $b[$k] end)
+        else
+          # stable: base is authoritative for the value, live keeps the position
+          .[$k] = $b[$k]
+        end
+      )
   '
