@@ -338,7 +338,11 @@ export const from = (() => {
 })();
 ```
 
-Keep the inner function **named** — stack traces and profiles still say `from`. The doc comment
+Keep the inner function **named** — stack traces and profiles still say `from`. When the
+function carries **overloads**, write it as a full `function` declaration inside the IIFE —
+overload signatures, then the implementation — and `return from;` on its own line: the const's
+type is inferred from the declaration, so the overload faces survive without re-spelling them in
+an annotation, which a returned function *expression* would force. The doc comment
 rides the exported const, so hover/intellisense is unchanged. **The wrapper is an arrow,
 deliberately**: an arrow IIFE introduces no `this`/`arguments` boundary, so the wrapper is
 transparent to context — nothing inside can capture or shadow a `this` the enclosing scope didn't
