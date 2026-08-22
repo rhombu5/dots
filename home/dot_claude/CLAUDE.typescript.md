@@ -433,3 +433,21 @@ a spec doc and leave a one-line pointer.
 
 A comment already sitting in the codebase is not precedent for this style — it may simply not have
 been reviewed yet.
+
+## Accept permissive, return expressive
+
+Postel's law, typed: parameters take the **widest honest type** the body actually needs; returns declare the **narrowest concrete truth** about the value actually produced.
+
+```ts
+// NO — demands a concrete array; return type hides the Set actually built
+function getIds(items: string[]): Iterable<string> {
+  return new Set(items);
+}
+
+// YES — accepts anything iterable; return type keeps the Set's own capabilities
+function getIds(items: Iterable<Item>): ReadonlySet<string> {
+  return new Set(Iterator.from(items).map(item => item.id));
+}
+```
+
+On the input side: prefer `Iterable<T>` over `T[]` or a concrete container class, a structural shape over a class — never demand more capability than the body uses. On the output side: never launder a capable value through a weaker return type — `ReadonlySet<T>` not `Iterable<T>` when a `Set` is returned, `IteratorObject<T>` not a hand-waved `Iterable<T>` for an iterator-helper chain, `Generator<T>` only when the function itself is a generator. A caller loses `.has`/`.size`/helper methods the value genuinely carries the moment the signature under-declares it.
