@@ -104,6 +104,11 @@ to pass "what does the reader DO with this?" — vague meta-description that inf
 deleted, not reworded. Prefer concrete wording over clever abstraction; if a reviewer would call it
 word soup, rewrite with concrete cases or delete it.
 
+**GOSPEL: a doc comment describes ONLY the thing it is attached to** — never how other stuff
+works: no explaining another member's behavior, a sibling's mechanism, or the surrounding
+system. If that context matters, it lives on the declaration that owns it and gets a link at
+most.
+
 ```ts
 // NO — restates the param, narrates the object form, says nothing the signature doesn't
 /**
