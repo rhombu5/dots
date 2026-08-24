@@ -9,6 +9,8 @@ Prefer the bracket form over the generic form:
 
 The bracket form is house style for both readonly and mutable arrays. Apply it consistently — new code, edits, and reviews.
 
+**Project config wins when it disagrees.** This is a default for projects with no configured opinion. Where a project's own style tooling (e.g. dprint, an ESLint `array-type` rule) takes a stance on array-type syntax, follow that config instead.
+
 ## File naming — dominant-export files take the export's name
 
 When a `.ts` file has one **dominant** exported declaration — a type (`class`, `interface`,
@@ -48,6 +50,18 @@ The discriminator is **dominance**, not export count. `ServiceManifest.ts` expor
 PascalCase, not kebab-case; treating a co-export as an automatic exemption was the old (wrong)
 reading of this rule.
 
+**Exception — an interface and its sole implementer may share a file, named after the interface.** When exactly one class implements a given interface, the two may live together; the file takes the *interface's* name even though the class is where the logic sits.
+
+```ts
+// YES — IClock.ts
+export interface IClock {
+  now(): number;
+}
+export class SystemClock implements IClock {
+  now(): number { … }
+}
+```
+
 ## Interface naming — `I`-prefix service interfaces, not DTOs
 
 A **service** interface — one describing behavior, a contract with methods that something implements — gets an `I` prefix. A **DTO** interface — a plain data shape, a bag of fields with no behavior — does not.
@@ -71,33 +85,57 @@ interface User {
 
 The discriminator is behavior vs. data: if the interface is something you *implement* (methods, a capability), prefix it; if it's just the *shape* of a value passed around, leave it bare.
 
-## No lambda types — always `Func`
+## No lambda types — always `Func`, `Ctor`, `AbstractCtor`
 
-**Never write a bare arrow/lambda function *type*.** Use `Func<Args, Return>` from
-`@rhombus-toolkit/func` instead — every time, no exceptions.
+**Never write a bare arrow/lambda function type, constructor type, or abstract-constructor
+type.** Use `Func<Args, Return, This?>`, `Ctor<Args, Instance>`, and
+`AbstractCtor<Args, Instance>` instead — every time, no exceptions.
 
 ```ts
 // NO
 type Factory = (...args: any[]) => unknown;
 function signature(): (value: Ctor, ctx: ClassDecoratorContext) => void { … }
 options: { readFile?: (path: string) => string | undefined }
+type Build = new (...args: any[]) => Widget;
+type BuildAbstract = abstract new (...args: any[]) => Widget;
 
 // YES
 type Factory = Func<any[], unknown>;
 function signature(): Func<[Ctor, ClassDecoratorContext], void> { … }
 options: { readFile?: Func<[string], string | undefined> }
+type Build = Ctor<any[], Widget>;
+type BuildAbstract = AbstractCtor<any[], Widget>;
 ```
 
-`Func<in Args extends readonly any[] = any[], out Return = any> = (...args: Args) => Return`.
-So a 0-arg `() => string` is `Func<[], string>`, a `(a: A) => B` is `Func<[A], B>`, a rest
-`(...xs: any[]) => I` is `Func<any[], I>`. (Sibling specializations exist: `AsyncFunc`,
-`Action` = `Func<Args, void>` — prefer `Func` unless told otherwise.)
+```ts
+type Func<in Args extends readonly any[] = any[], out Return = any, in This = void> =
+  (this: This, ...args: Args) => Return;
+type Ctor<in Args extends readonly any[] = any[], out Instance = any> =
+  new (...args: Args) => Instance;
+type AbstractCtor<in Args extends readonly any[] = any[], out Instance = any> =
+  abstract new (...args: Args) => Instance;
+```
 
-**Scope of "type":** this is about function *types* — type-alias RHS, parameter/return/property
-type annotations, type arguments. It does NOT touch arrow function *values/expressions*
-(`(x) => x + 1`, `.map(p => …)`), interface/object *method signatures* (`foo(x): T`), or arrow
-syntax inside doc comments / error-message strings. Add `import type { Func } from
-"@rhombus-toolkit/func"` to any file that needs it.
+So a 0-arg `() => string` is `Func<[], string>`, a `(a: A) => B` is `Func<[A], B>`, a rest
+`(...xs: any[]) => I` is `Func<any[], I>`. The 3rd parameter is only needed when the function
+must run bound to a specific `this` — the default, `void`, means "unbound, don't rely on
+`this`." A concrete constructor type is `Ctor<[A, B], Instance>`; an abstract one (mixins, a
+class decorator applied to an `abstract class`) is `AbstractCtor<[A, B], Instance>`.
+
+**`Func`, `Ctor`, and `AbstractCtor` usage is required.** Two more specializations exist for
+convenience, not required: `AsyncFunc<Args, Return, This?>` (`Func` returning a `Promise`) and
+`Action<Args, This?>` / `AsyncAction<Args, This?>` (`Func`/`AsyncFunc` returning `void`). Reach
+for them when they read better; a bare `Func<Args, Promise<Return>>` or `Func<Args, void>` is
+equally correct.
+
+**Scope of "type":** this is about function/constructor *types* — type-alias RHS,
+parameter/return/property type annotations, type arguments. It does NOT touch arrow function
+*values/expressions* (`(x) => x + 1`, `.map(p => …)`), interface/object *method signatures*
+(`foo(x): T`), or arrow syntax inside doc comments / error-message strings.
+
+**Import from `@rhombus-toolkit/types`** — `Func`/`Ctor`/`AbstractCtor` and siblings are being
+consolidated there from `@rhombus-toolkit/func` (migration in flight); import from whichever
+currently resolves in a given project until it lands.
 
 ## Control flow — always braces, always multiline
 
@@ -123,12 +161,12 @@ for (const n of xs) {
 
 **Tooling note:** this is a lint rule, not a formatter transform — dprint/Prettier will keep an already-braced block multiline but won't insert braces. Enforce with ESLint `curly: ["error", "all"]` (plus a brace-position rule) or Biome `useBlockStatements`. When wiring up a project formatter, pair it with this lint rule.
 
-## Private fields — always `#`- or `__`-prefixed
+## Private fields — always `#`- or `_`-prefixed
 
-Every private field's name starts with `#` (hard private, the default) or `__` (soft private). Never an unmarked private field; never reach for the bare `private` modifier.
+Every private field's name starts with `#` (hard private, the default) or `_` (soft private). Never an unmarked private field; never reach for the bare `private` modifier.
 
 - `#field` — true runtime encapsulation, unreachable outside the class. Use by default.
-- `__field` — private by convention, deliberately reachable: use it when a test (or similar) must read the internal, where `#` would make it genuinely unreachable.
+- `_field` — private by convention, deliberately reachable: use it when a test (or similar) must read the internal, where `#` would make it genuinely unreachable.
 
 ```ts
 // NO
@@ -140,13 +178,16 @@ class Cache {
 // YES
 class Cache {
   #store = new Map();
-  __hits = 0; // a test reads this; `#` would hide it
+  _hits = 0; // a test reads this; `#` would hide it
 }
 ```
 
-## Exhaustiveness — `assertNever` at the end of switches
+## Exhaustiveness — `assertNever` at the end of switches and if/elseif chains
 
-Close every exhaustive `switch` over a discriminated union with a `default` that calls `assertNever(x)`. Adding a new union member becomes a compile error instead of a silent fall-through. Apply the same pattern to exhaustive `if`/`else if` chains.
+Close every exhaustive `switch` over a discriminated union with a `default` that calls
+`assertNever(x)`. Adding a new union member becomes a compile error instead of a silent
+fall-through. Apply the same pattern to exhaustive `if`/`else if` chains — `assertNever` in the
+final `else`.
 
 ```ts
 import { assertNever } from "@rhombus-toolkit/type-guards";
@@ -170,6 +211,24 @@ switch (shape.kind) {
   default: {
     return assertNever(shape);
   }
+}
+```
+
+```ts
+// NO
+if (shape.kind === "circle") {
+  return Math.PI * shape.r ** 2;
+} else if (shape.kind === "rect") {
+  return shape.w * shape.h;
+}
+
+// YES
+if (shape.kind === "circle") {
+  return Math.PI * shape.r ** 2;
+} else if (shape.kind === "rect") {
+  return shape.w * shape.h;
+} else {
+  return assertNever(shape);
 }
 ```
 
@@ -203,6 +262,20 @@ return !!result;
 <Comp show={!!value} />
 {!!count && <Badge n={count} />}
 ```
+
+**`.filter(Boolean)` / `.find(Boolean)` are the point-free spelling of a truthiness check inside a chain** — use them over `.filter(x => !!x)` or `.filter(x => x)` when narrowing falsy values out of an iterable.
+
+```ts
+// NO
+items.filter(x => !!x);
+items.filter(x => Boolean(x));
+
+// YES
+items.filter(Boolean);
+```
+
+**Tooling note:** TypeScript 5.5+ infers `.filter(Boolean)` as a type predicate, narrowing
+`(T | null | undefined)[]` down to `T[]` with no manual type guard needed.
 
 **Tooling note:** these play fine with typescript-eslint's `strict-boolean-expressions` at its defaults — `allowNumber`/`allowString` default to `true`, so non-nullable `number`/`string` truthiness (including `.length`) passes clean. The rule only flags truthiness on *nullable* values (`string | undefined`, etc.) and `any` — to keep truthiness there too, set `allowNullableBoolean` / `allowNullableString` / `allowNullableNumber: true`.
 
@@ -363,7 +436,8 @@ interface Func<Args extends readonly any[], Return> {
   (...args: Args): Return;
 }
 
-// YES — the flow direction is declared
+// YES — the flow direction is declared (simplified: omits the optional `This`
+// parameter documented in "No lambda types" above)
 interface Func<in Args extends readonly any[] = any[], out Return = any> {
   (...args: Args): Return;
 }
@@ -379,7 +453,15 @@ style — call sites are unaffected.
 
 ## Iterator chains over loops
 
-Prefer an iterator-helper chain — `Iterator.from(x).map(...).filter(...).find(...)`, `.toArray()`, or a `new Set(...)`/`new Map(...)` wrapping one — over a hand-rolled `for` loop with an accumulator or an early return, whenever the logic maps cleanly onto the chain. Laziness survives the rewrite: `.find` still short-circuits, `.map` over a generator stays unevaluated until something consumes it.
+**Default to an iterator-helper chain; a hand-rolled `for` loop is the exception, not a
+stylistic alternative.** Before writing a `for`, check whether the body is really
+filter/map/find/reduce wearing a loop's clothes — an accumulator that only ever pushes, an early
+`return` that's actually a search, a running total — and reach for
+`Iterator.from(x).map(...).filter(...).find(...)`, `.toArray()`, a `new Set(...)`/`new Map(...)`
+wrapping one, or `.reduce(...)` instead. Laziness survives the rewrite: `.find` still
+short-circuits, `.map` over a generator stays unevaluated until something consumes it. Keep the
+loop only when it earns its place: interleaved mutation, accumulation across multiple
+collections at once, or a body that genuinely doesn't reduce to map/filter/find/reduce shape.
 
 ```ts
 // NO
@@ -403,7 +485,34 @@ function activeIds(items: Iterable<Item>): ReadonlySet<string> {
 }
 ```
 
-A fat per-element body stays inline as a multi-statement arrow, even where it clutters the chain — single-use helpers are rarely justified (see Single-use helpers above). Reach for a named function only when the logic is reused elsewhere, or its name genuinely compresses understanding of an otherwise-opaque block — never merely to keep the chain visually thin. A loop stays the right call where the chain would contort to fit: interleaved mutation, accumulation across multiple collections at once, or a body that doesn't reduce to map/filter/find/reduce shape.
+```ts
+// NO — accumulator loop hiding a find and a reduce
+function firstAdmin(users: User[]): User | undefined {
+  for (const u of users) {
+    if (u.role === "admin") {
+      return u;
+    }
+  }
+  return undefined;
+}
+function totalQty(items: Item[]): number {
+  let sum = 0;
+  for (const item of items) {
+    sum += item.qty;
+  }
+  return sum;
+}
+
+// YES
+function firstAdmin(users: Iterable<User>): User | undefined {
+  return Iterator.from(users).find(u => u.role === "admin");
+}
+function totalQty(items: Iterable<Item>): number {
+  return Iterator.from(items).reduce((sum, item) => sum + item.qty, 0);
+}
+```
+
+A fat per-element body stays inline as a multi-statement arrow, even where it clutters the chain — single-use helpers are rarely justified (see Single-use helpers above). Reach for a named function only when the logic is reused elsewhere, or its name genuinely compresses understanding of an otherwise-opaque block — never merely to keep the chain visually thin.
 
 This composes with the Generators section above: a generator is still the right *producer* for yield-shaped output. This rule governs the *consumer* side — once something is iterable, prefer transforming and consuming it through a chain rather than a loop.
 
