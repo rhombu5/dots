@@ -52,6 +52,21 @@
   "repoSettings": {
     "cloneTemplate": "~/src/{repo}@{owner}",
     "worktreeTemplate": "~/src/{repo}@{owner}+{input}",
-    "branchTemplate": "{input}"
+    "branchTemplate": "{input}",
+    "additionalSrcDirs": [
+      "~/.local/src",
+      "~/code",
+      "~/dev",
+      "~/projects",
+      "~/Projects",
+      "~/workspace",
+      "~/repos",
+      "~/git",
+      "~/go/src/*/*",
+      "/usr/local/src",
+      "/usr/src",
+      "~/.cache/yay",
+      "/opt"
+    ]
   }
 }
