@@ -74,18 +74,12 @@ How to weigh my phrasing when capturing requirements or deciding what's been rul
 - **"i.e."** reads as "in other words" — a restatement of the same content, never additional
   content.
 
-## Terminology
-
-Terms I've coined — resolve them without asking:
-
-- **source libs** — the pnpm-workspace pattern where packages consume each other's raw TypeScript *source*, no build step: the dependency points its entry at source (`"main": "index.ts"`, or `exports` at `.ts`), consumers depend via `workspace:*`, and tsconfig sets `"moduleResolution": "bundler"` so `tsc` / a bundler / bun resolve the `.ts` entry directly. Works on plain pnpm — **not** bun-specific.
-
 ## Context files
 
 These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<context>.local.md` sibling alongside the base file for per-machine overrides that aren't committed to the dotfiles repo.
 
 - [`CLAUDE.linux.md`](CLAUDE.linux.md) — Arch package management, systemd units, FHS/XDG layout, sudo or polkit prompts (use `sudoa` for unattended, `sudonf` for interactive), Bitwarden / `bw` / `secret-tool` / keyring access (you can unlock the vault yourself — never ask the user), anything inside `/etc/` or `/usr/`, or the chezmoi-managed dotfiles workflow that backs `~/.config/`, `~/.local/`, etc.
-- [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
+- [`CLAUDE.git.md`](CLAUDE.git.md) — git operations (clone/push/PR), commit conventions (attribution, discipline, signing), worktree creation/entry/exit, choosing where on disk a repo should live, or picking the GitHub owner for a new project.
 - [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md) — all-languages code style: the reader-frames budget, what-not-how naming, one-sentence doc comments, accept-permissive/return-expressive, single-use-helper and DRY trade rules, ternary/literal shape.
 - [`CLAUDE.codestyle.ts.md`](CLAUDE.codestyle.ts.md) — TypeScript code style — array type syntax, `Func` over lambda types, `#`-fields, truthiness, generators, iterator chains, variance, and more.
 - [`CLAUDE.print.md`](CLAUDE.print.md) — printing: driving the HP network laser (`hp_m252dw`) via `lp`/CUPS, the Canon photo printer (incomplete stub), and booklet printing — including the rule that a markdown prints as a folded booklet by default, the imposition pipeline, duplex/fold settings, and wrap-around cover pages.
@@ -96,7 +90,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 
 | Tool-call trigger | Load |
 |---|---|
-| You're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git`/`gh`/`git worktree`/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
+| You're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git commit`/push/`gh`/worktree/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
 | You're about to touch `/etc/`, `/usr/`, `sudo`, `pacman`/`yay`, `systemctl`, `chezmoi`, Bitwarden/`bw`/`secret-tool`, or do any of the other Arch/Linux-flavored work named in the index above | [`CLAUDE.linux.md`](CLAUDE.linux.md) |
 | You're about to edit source code in ANY language (`Edit`/`Write`/`MultiEdit`/`NotebookEdit` on a code file) | [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md) |
 | You're about to edit a TypeScript/TSX file (`.ts`/`.tsx`) — `Edit`/`Write`/`MultiEdit`/`NotebookEdit` | [`CLAUDE.codestyle.ts.md`](CLAUDE.codestyle.ts.md) (with [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md)) |
@@ -113,24 +107,6 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 **Project `CLAUDE.md` files vs. user prefs.** Project `CLAUDE.md` is for project-specific rules — facts/conventions that only apply *here* and would surprise someone coming from a default setup. **Don't restate or paraphrase rules already in user prefs** — no git/worktree workflows, commit-attribution rules, pre-commit-hook policy, or similar in project files. A global rule belongs in user prefs; a deviation or extension *I* asked for belongs in the project file with the deviation called out. When in doubt, leave the project file alone — duplication drifts, contradicts, and (as observed) actively overrides global rules at the call site.
 
 **When user prefs and a project `CLAUDE.md` conflict, user prefs win.** Update the project file (remove or align the duplicate) rather than silently following the project's local recipe. The exception is when I've explicitly told you the project's behavior should override — say so out loud before acting.
-
-## Don't attribute Claude in commits, issues, or PRs
-
-Anything that ends up in a public artifact under my name — git commits, GitHub issues, GitHub PR titles/bodies/comments, code review comments — should not advertise that Claude wrote it. Specifically:
-
-- **No `Co-Authored-By: Claude …` trailer in commit messages.** Commit as me (`fnrhombus` / Thomas Butler) without the bot trailer.
-- **No `🤖 Generated with [Claude Code]` footer** in PR descriptions or issue bodies.
-- **No "Claude here" / "as an AI" / "happy to" / "I'd love to" filler** in issue or PR text. Write the way I'd write — direct, technical, first-person.
-- **Don't sign work as Claude** anywhere a human reader will see it.
-
-Strip Claude attribution by default whenever you're writing something that'll be public and signed as me — I shouldn't have to repeat the rule.
-
-## Commit discipline
-
-- **Commit on task completion.** Never leave a finished task as uncommitted work.
-- **Atomic commits** — one logical change per commit. If uncommitted changes span multiple tasks, split them (`git add -p` or path-scoped `git add`).
-- **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
-- **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
 
 ## All code edits happen in a worktree — HARD RULE
 
@@ -160,9 +136,9 @@ Concrete commands, branch-naming, and the EnterWorktree workflow live in `CLAUDE
 
 See `[[feedback-loaded-not-applied]]` for the post-mortem on skipping this rule.
 
-## Plan for parallelism — always
+## Plan for parallelism — optimize hard, always, for ASAP
 
-Whenever you're about to do non-trivial work, decompose into parallel tracks and dispatch them concurrently. Default to maximum parallelism — multiple subagents on independent slices in a single message, parallel research/lookup calls, side-work in this thread alongside dispatched subagents.
+**The goal is wall-clock ASAP — optimize parallelism hard for it.** Whenever you're about to do non-trivial work, decompose into parallel tracks and dispatch them concurrently by default: multiple subagents on independent slices in a single message, parallel research/lookup calls, side-work in this thread alongside dispatched subagents. Don't leave independent work sitting serialized when firing it concurrently gets to done sooner.
 
 The single exception: if parallel would make **total wall-clock time slower** — true sequential dependencies, or merge conflicts at integration costlier than serialising. Serialise that pair; parallelise everything else.
 
@@ -231,6 +207,7 @@ Concrete cases:
 - **Prose-shaped work** — rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md`, comparing wordings → **always dispatch a sonnet subagent**, unless I've explicitly told you otherwise this turn. Sonnet's prose is reliably tighter than opus's. Escape hatch: an instruction like "do this on opus" or "don't delegate this one" — not the request merely being addressed to me.
 - **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; escalate if quality drops.
 - **Reasoning effort is a second dial, orthogonal to model.** Turn it down for rote mechanical stages, reserve high/max for genuinely hard verify/judge/design steps — effort multiplies output tokens (the `~5×` kind), so low-effort haiku on a rote task is the cheapest cell in the grid.
+- **Fable is quota-metered, not task-shape-selected.** A tier orthogonal to the three above — reach for `Agent(model: "fable", ...)` for any task shape once quota clearly favors it. The quota check isn't `get_usage` (no Fable bucket there) — see `CLAUDE.workflow.md` § "Fable usage" for the real mechanism and the low/spare-and-resetting decision rule. When I name `@cheap-fable` explicitly, that's always fine regardless of quota — the gate is only on your own autonomous choice to reach for it.
 
 Substance, structure, and tricky design decisions stay on **opus** — only *execution* gets handed off: opus decides *what*, the subagent does the *how*.
 
@@ -258,23 +235,7 @@ Exception: if the subagent surfaced something action-shaped (a blocker, a critic
 
 A bare `#123` in isolation is meaningless to me. In **every response**, the first time you cite an issue or PR number, pair it with a few words of what it *is* (e.g. `#180 — the config.json-agnostic consideration`). After that first identification *within the same response*, the bare number is fine to reuse. The requirement resets each response.
 
-## Suggest VS Code + `--ide` when LSP would save real tokens
-
-Some work shapes burn hundreds of grep/read cycles mapping symbols, references, or types — exactly what `mcp__ide__getDiagnostics` (the VS Code LSP bridge) is built for. **Strongly recommend launching VS Code and restarting with `--ide`** before diving into that shape of work — the restart pays for itself within ~10 cross-file lookups.
-
-Triggers — predict BEFORE the work starts:
-
-- Refactor touching a symbol across many files (rename, signature change, sentinel swap)
-- Chasing type errors where you'd otherwise iterate `bun test` / `tsc` / `cargo check` / `mypy`
-- "Where is X used?" investigations across the codebase
-- Any time you can foresee 20+ grep+read pairs ahead
-
-What to say: *"this work would burn ~N cross-file lookups — the IDE bridge would short-circuit most of them. Want me to launch VS Code and restart with `--ide`?"* On yes:
-
-1. `code <project-root>` to open the window (VS Code must be running BEFORE the restart, or `--ide` has nothing to connect to).
-2. Call `fnc_restart` with the `ide` override — preserves other startup flags, picks up the LSP bridge on relaunch.
-
-Skip for one-off lookups or prose work. Bar: this work *will* burn navigation tokens the LSP could short-circuit, not "the LSP is theoretically available." If unsure, name the predicted lookup count out loud — under 10, skip the suggestion.
+**For a worktree expected to eventually merge, get the PR number up front.** Open the draft PR at worktree creation — per `CLAUDE.git.md`'s "open a draft PR immediately" rule — rather than waiting until the work is done, so there's a real number to cite from the first response that touches the branch.
 
 ## Disruptive testing requires explicit hands-off confirmation
 

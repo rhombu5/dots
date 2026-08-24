@@ -36,6 +36,28 @@ Use `git@host:user/repo.git` URLs, not `https://`. The SSH agent is Bitwarden De
 
 `gh repo clone` (used by fnclaude internally) honors `gh config get git_protocol` — set once to `ssh` and forget.
 
+## Don't attribute Claude in commits, issues, or PRs
+
+Anything that ends up in a public artifact under my name — git commits, GitHub issues, GitHub PR titles/bodies/comments, code review comments — should not advertise that Claude wrote it. Specifically:
+
+- **No `Co-Authored-By: Claude …` trailer in commit messages.** Commit as me (`fnrhombus` / Thomas Butler) without the bot trailer.
+- **No `🤖 Generated with [Claude Code]` footer** in PR descriptions or issue bodies.
+- **No "Claude here" / "as an AI" / "happy to" / "I'd love to" filler** in issue or PR text. Write the way I'd write — direct, technical, first-person.
+- **Don't sign work as Claude** anywhere a human reader will see it.
+
+Strip Claude attribution by default whenever you're writing something that'll be public and signed as me — I shouldn't have to repeat the rule.
+
+## Commit discipline
+
+- **Commit on task completion.** Never leave a finished task as uncommitted work.
+- **Atomic commits** — one logical change per commit. If uncommitted changes span multiple tasks, split them (`git add -p` or path-scoped `git add`).
+- **Hierarchy: task → feature.** A *task* is the smallest unit of work — one commit. A *feature* is one or more task commits that together deliver something coherent.
+- **Push on feature completion.** All task commits for a feature land first, then push. No partial features in the remote unless I ask.
+
+## Commit signing
+
+**Sign commits wherever the repo/machine already has signing configured** — never pass `--no-gpg-sign` or otherwise bypass an available signing setup (also covered by the standing git-safety protocol's ban on bypassing signing without explicit instruction). If a repo has no `commit.gpgsign` configured, that's fine — don't stop to set up signing just to satisfy this rule; commit unsigned and move on.
+
 ## Entering / exiting worktrees — always use the tools
 
 **HARD RULE**: when claude needs to put *itself* into a worktree, use the **`EnterWorktree`** tool to switch in and **`ExitWorktree`** to switch back. Don't `cd <worktree>` via Bash, don't symlink into one. (Direct `git worktree add` to *prepare* a worktree for a subagent to enter is a separate, supported case — see "Creating worktrees" and "Worktree mechanics" below. The prohibition here is on using `git worktree add` as a way to put claude itself into a worktree.) Reasons:

@@ -42,6 +42,33 @@ Each parallel subagent is a fresh window paying its own **base context** (system
 - **Right-size the model** (prose → sonnet, mechanical → haiku) so the duplicated base context is paid at the cheaper tier.
 - **Tier every `agent()` call on both dials — `model` *and* `effort`.** Set them per stage: cheap `model`/`effort: low` on the rote fan-out stages (transform, scan, mechanical migrate), opus/`high`/`max` only on the few genuinely hard stages (verify, judge, design). Omitting `model` inherits the session model (usually opus) — so an unset `model` on a large fan-out silently pays opus × N; set it explicitly to the cheapest tier that clears the bar. Same right-sizing as a hand-dispatched subagent ([`CLAUDE.md`](CLAUDE.md) § "Subagent model selection"), applied inside the script.
 
+## Fable usage — gate by quota, not by task shape
+
+Fable's weekly quota is metered separately and isn't one of the `get_usage` MCP tool's buckets
+(that tool's `limits` only ever covers 5-hour / weekly-all-models / weekly-Sonnet — no Fable
+bucket, ever). Query Fable's real bucket directly before spending it, whether the spend is an
+autonomous `Agent(model: "fable", ...)` or an `agent(..., {model: "fable"})` inside a `Workflow`
+script:
+
+```sh
+token=$(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json)
+curl -sf -H "Authorization: Bearer $token" -H "anthropic-beta: oauth-2025-04-20" \
+        https://api.anthropic.com/api/oauth/usage \
+  | jq '.limits[] | select(.scope.model.display_name == "Fable")'
+# → {"percent":17,"resets_at":"2026-07-30T01:59:59+00:00", ...} — percent is USED, not remaining
+```
+
+Decide from `percent` (used, 0-100) and `resets_at`:
+
+- **High `percent`, little headroom left** → use Fable only when the task is extremely highly
+  justified — savings that clearly outweigh eating into what's left.
+- **Low `percent` (quota to spare) *and* `resets_at` is close** → use Fable freely. Unused
+  quota expires at reset; spending it down beats losing it.
+- **Otherwise** (comfortable headroom, reset not imminent) → no quota pressure either way; pick
+  Fable on task fit like any other tier, same as the tiering below.
+
+This gates the design-debate pattern's fable-tiered stages below, same as any other Fable spend.
+
 ## The design-debate pattern — default for brainstorm/design work
 
 The brainstorm/design instantiation of the standing ultracode default
