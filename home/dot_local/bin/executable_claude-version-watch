@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# Daily trial of newly-published Claude Code versions, with automatic rollback.
+#
+# Claude Code auto-updates itself. On 2026-08-24 it walked onto 2.1.242/2.1.243,
+# both of which segfault at startup -- `claude --version` exits 139 with a core
+# dump. Because every wrapper (fnc, subagent spawns, anything shelling out to
+# claude) launches it as a subprocess, the whole toolchain looked broken while
+# the actual fault was one bad upstream build. The response was to roll back to
+# 2.1.241 and set DISABLE_AUTOUPDATER=1 so the updater couldn't drag the install
+# straight back onto the crashing build.
+#
+# That pin is safe but it rots: left alone it freezes Claude Code forever. This
+# script is the thing that unfreezes it. Once a day it asks whether upstream has
+# published anything NEWER than the newest version known to be broken. If so it
+# installs that version and runs it. Two outcomes:
+#
+#   works   -> the bad patch is over. Record it as the new known-good, delete
+#              DISABLE_AUTOUPDATER from the chezmoi-managed settings, apply, and
+#              hand normal auto-updating back to Claude Code.
+#   broken  -> that version becomes the new baseline, and the watch from here on
+#              is for something newer than IT. Reinstall the known-good build so
+#              the machine is never left sitting on a crashing one.
+#
+# The invariant that matters: this script may leave the system on a version that
+# is newer, or on the known-good one, and never on a version it just watched
+# crash. A failed trial is fully reverted before the script exits.
+#
+# It refuses to run at all while a claude process is alive. Reinstalling the npm
+# package replaces claude.exe on disk; a running process usually survives that
+# (npm unlinks and writes a fresh inode, so the old one stays mapped) but if the
+# file were ever rewritten in place the live session would take SIGBUS and die
+# mid-turn. Skipping is free -- the timer comes back tomorrow.
+
+set -uo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-version-watch"
+STATE_FILE="$STATE_DIR/state.json"
+LOG_FILE="$STATE_DIR/log"
+
+PKG="@anthropic-ai/claude-code"
+NPM="$HOME/.local/share/mise/shims/npm"
+CLAUDE="$HOME/.local/share/mise/shims/claude"
+DOTS_SETTINGS="$HOME/src/dots@rhombu5/home/dot_claude/settings.base.json"
+
+mkdir -p "$STATE_DIR"
+
+log() {
+    printf '%s  %s\n' "$(date -Is)" "$*" >> "$LOG_FILE"
+}
+
+notify() {
+    local urgency=$1 title=$2 body=$3
+    log "NOTIFY [$urgency] $title -- $body"
+    notify-send --urgency="$urgency" --app-name="claude-version-watch" "$title" "$body" 2>/dev/null || true
+}
+
+# True when $1 is a strictly newer version than $2, by version sort.
+newer_than() {
+    local candidate=$1 baseline=$2
+    [ "$candidate" != "$baseline" ] || return 1
+    [ "$(printf '%s\n%s\n' "$candidate" "$baseline" | sort -V | tail -1)" = "$candidate" ]
+}
+
+read_state() {
+    local key=$1 fallback=$2
+    jq -r --arg k "$key" --arg d "$fallback" '.[$k] // $d' "$STATE_FILE" 2>/dev/null || printf '%s' "$fallback"
+}
+
+write_state() {
+    local good=$1 bad=$2
+    jq -n --arg good "$good" --arg bad "$bad" \
+        '{known_good: $good} + (if $bad == "" then {} else {known_bad: $bad} end)' \
+        > "$STATE_FILE.tmp" && mv -f "$STATE_FILE.tmp" "$STATE_FILE"
+}
+
+# Install a specific version. Returns npm's exit status.
+install_version() {
+    "$NPM" install -g "$PKG@$1" >> "$LOG_FILE" 2>&1
+}
+
+# True when the installed binary starts and reports the version we expect.
+# A segfaulting build exits 139 here rather than printing anything.
+probe_installed() {
+    local expected=$1 output status
+    output=$(timeout 60 "$CLAUDE" --version 2>&1)
+    status=$?
+    log "probe: exit=$status output=${output:-<none>}"
+    [ "$status" -eq 0 ] || return 1
+    [[ "$output" == "$expected"* ]]
+}
+
+# Delete DISABLE_AUTOUPDATER from the chezmoi source, apply it, and commit
+# locally. Deliberately does NOT push -- an unattended timer should not be
+# writing to a remote. The notification tells Tom there's a commit waiting.
+reenable_autoupdate() {
+    if [ ! -f "$DOTS_SETTINGS" ]; then
+        log "dots settings not found at $DOTS_SETTINGS; skipping auto-update re-enable"
+        return 1
+    fi
+
+    jq 'del(.env.DISABLE_AUTOUPDATER)' "$DOTS_SETTINGS" > "$DOTS_SETTINGS.tmp" \
+        && mv -f "$DOTS_SETTINGS.tmp" "$DOTS_SETTINGS" || return 1
+
+    # settings.json is produced by a modify_ script that reads the LIVE
+    # settings.base.json, so the base has to land before settings is rebuilt.
+    chezmoi apply "$HOME/.claude/settings.base.json" "$HOME/.claude/settings.json" >> "$LOG_FILE" 2>&1 || return 1
+
+    git -C "$(dirname "$DOTS_SETTINGS")" add "$DOTS_SETTINGS" >> "$LOG_FILE" 2>&1
+    git -C "$(dirname "$DOTS_SETTINGS")" commit -q \
+        -m "claude/settings: lift DISABLE_AUTOUPDATER — upstream is healthy again" \
+        >> "$LOG_FILE" 2>&1
+}
+
+# ---- guards ------------------------------------------------------------------
+
+if pgrep -x 'claude.exe' >/dev/null 2>&1 || pgrep -f 'claude-code/bin/claude' >/dev/null 2>&1; then
+    log "claude is running; deferring trial to the next timer fire"
+    exit 0
+fi
+
+if [ ! -f "$STATE_FILE" ]; then
+    log "no state file at $STATE_FILE; nothing to compare against, exiting"
+    exit 0
+fi
+
+known_good=$(read_state known_good "")
+known_bad=$(read_state known_bad "")
+
+if [ -z "$known_bad" ]; then
+    log "no known_bad recorded — the pin is presumed already lifted; nothing to watch"
+    exit 0
+fi
+
+latest=$("$NPM" view "$PKG" version 2>/dev/null | tr -d '[:space:]')
+if [ -z "$latest" ]; then
+    log "could not reach the registry; will retry tomorrow"
+    exit 0
+fi
+
+if ! newer_than "$latest" "$known_bad"; then
+    log "latest=$latest is not newer than known_bad=$known_bad; nothing to try"
+    exit 0
+fi
+
+# ---- trial -------------------------------------------------------------------
+
+log "trying $latest (known_good=$known_good, known_bad=$known_bad)"
+
+if ! install_version "$latest"; then
+    log "install of $latest failed; leaving $known_good in place"
+    exit 0
+fi
+
+if probe_installed "$latest"; then
+    log "$latest starts cleanly — promoting and re-enabling auto-update"
+    write_state "$latest" ""
+
+    if reenable_autoupdate; then
+        notify normal "Claude Code $latest is healthy" \
+            "Auto-updates re-enabled. A dots commit is waiting to be pushed."
+    else
+        notify critical "Claude Code $latest is healthy, but the pin is still in place" \
+            "Could not edit or apply the dots settings — remove DISABLE_AUTOUPDATER by hand."
+    fi
+    exit 0
+fi
+
+# ---- rollback ----------------------------------------------------------------
+
+log "$latest is broken; rolling back to $known_good"
+write_state "$known_good" "$latest"
+
+if install_version "$known_good" && probe_installed "$known_good"; then
+    notify normal "Claude Code $latest is also broken" \
+        "Rolled back to $known_good. Now watching for something newer than $latest."
+    exit 0
+fi
+
+notify critical "Claude Code rollback FAILED" \
+    "$latest is broken and reinstalling $known_good did not recover. claude is likely unusable — fix by hand."
+exit 1

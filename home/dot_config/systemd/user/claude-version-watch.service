@@ -1,0 +1,16 @@
+[Unit]
+Description=Trial newly-published Claude Code versions and lift the update pin when one works
+# Only meaningful while the pin is actually in place. Once the watcher succeeds
+# it deletes DISABLE_AUTOUPDATER and clears known_bad from its state, and the
+# script exits immediately on the next fire — but skipping the start entirely
+# when there's no state file keeps the journal quiet on machines that never hit
+# the bad-version episode at all.
+ConditionPathExists=%h/.local/state/claude-version-watch/state.json
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/claude-version-watch
+# The script installs npm packages and runs the binary it just installed; it
+# needs longer than the default to survive a slow registry plus two installs
+# (the trial and, on failure, the rollback).
+TimeoutStartSec=15min
