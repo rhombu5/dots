@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Keeps metis.rhombus.rocks pointed at this machine's current global IPv6.
+#
+# The ISP delegates the /64 prefix rather than assigning it permanently, so a
+# rotation would otherwise leave the DNS name resolving to an address that no
+# longer exists — with no local symptom until a remote connection is attempted.
+
+set -euo pipefail
+
+readonly DOMAIN="rhombus.rocks"
+readonly SUBDOMAIN="metis"
+readonly RECORD_TTL=300
+readonly API_BASE="https://api.porkbun.com/api/json/v3"
+readonly PROBE_TARGET="2001:4860:4860::8888"
+
+# The address the kernel picks as the source for outbound traffic is the one
+# remote peers observe, which makes it the correct thing to publish.
+detectCurrentAddress() {
+  ip -6 route get "$PROBE_TARGET" | grep -oP 'src \K[0-9a-f:]+'
+}
+
+# Credentials come from libsecret so the unattended timer never needs the
+# Bitwarden vault to be unlocked. Secrets stay on stdin, never in argv.
+callPorkbun() {
+  local api_path="$1"
+  local extra_json="${2:-}"
+  if [ -z "$extra_json" ]; then
+    extra_json="{}"
+  fi
+
+  local request_body
+  request_body=$(jq -nc \
+    --arg apikey       "$(secret-tool lookup service porkbun type apikey)" \
+    --arg secretapikey "$(secret-tool lookup service porkbun type secret)" \
+    --argjson extra    "$extra_json" \
+    '{apikey: $apikey, secretapikey: $secretapikey} + $extra')
+
+  printf '%s' "$request_body" | curl -s -m 45 --data-binary @- "$API_BASE/$api_path"
+}
+
+readPublishedAddress() {
+  callPorkbun "dns/retrieveByNameType/$DOMAIN/AAAA/$SUBDOMAIN" \
+    | jq -r '.records[0].content // empty'
+}
+
+publishAddress() {
+  local address="$1"
+  callPorkbun "dns/editByNameType/$DOMAIN/AAAA/$SUBDOMAIN" \
+    "$(jq -nc --arg content "$address" --arg ttl "$RECORD_TTL" '{content: $content, ttl: $ttl}')" \
+    | jq -r '.status'
+}
+
+main() {
+  local current
+  current=$(detectCurrentAddress)
+  if [ -z "$current" ]; then
+    echo "no global IPv6 source address; leaving DNS untouched" >&2
+    exit 1
+  fi
+
+  local published
+  published=$(readPublishedAddress)
+
+  if [ "$current" = "$published" ]; then
+    echo "unchanged: $SUBDOMAIN.$DOMAIN -> $current"
+    exit 0
+  fi
+
+  local status
+  status=$(publishAddress "$current")
+  if [ "$status" != "SUCCESS" ]; then
+    echo "update FAILED (was '$published', wanted '$current'): $status" >&2
+    exit 1
+  fi
+  echo "updated: $SUBDOMAIN.$DOMAIN  $published -> $current"
+}
+
+main "$@"

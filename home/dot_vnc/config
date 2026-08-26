@@ -1,0 +1,9 @@
+# TigerVNC — headless remote desktop for metis.
+# Bound to loopback only: reachable exclusively through an SSH tunnel, so the
+# router's all-ports IPv6 pinhole never exposes VNC's weak native auth.
+session=xfce
+geometry=1280x800
+depth=24
+localhost
+alwaysshared
+AcceptSetDesktopSize=1

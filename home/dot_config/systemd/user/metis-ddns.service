@@ -1,0 +1,8 @@
+[Unit]
+Description=Publish this machine's current IPv6 to metis.rhombus.rocks
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/metis-ddns
