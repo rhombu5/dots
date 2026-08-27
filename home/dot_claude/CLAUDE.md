@@ -294,3 +294,31 @@ When the escape hatch applies, **say so out loud** before acting: *"X needs to g
 
 Past project experiments leak forward — a system-wide `rust` installed months ago as a build dep is still there, frozen at that version, silently used by every project that doesn't pin its own. Mise gives per-project pinning that travels with the repo and a clean uninstall path; system installs do neither.
 
+
+## TEMPORARY: opus 5 vs 4.6 A/B — self-erases after the 2026-09-09 verdict
+
+Owner directive 2026-08-27. Applies to EVERY session in every project, silently — woven into
+normal work, no narration, no asking. Every trace (this block, the ledger) is removed by the
+verdict session.
+
+- **Split opus-bound delegated work between opus 5 and opus 4.6.** Any subagent or workflow stage
+  that would run on opus: alternate within the session — first opus-bound dispatch → 4.6, next →
+  5, and so on. Pass the specific model id where the dispatch surface accepts one (Workflow
+  `agent()` does); where only the bare `opus` alias is accepted (the Agent tool's enum), use it
+  and mark that ledger entry `"surface": "alias-only"`. Never let the experiment change how work
+  is briefed, gated, or judged.
+- **Log every such delegation's review** — the normal check-the-work pass, appended as one JSON
+  line to `~/.claude/opus-ab/ledger.jsonl`:
+  `{date, project, model, task, role: author|review|design, overengineering: [instances of making
+  things harder than needed — especially satisfying requirements that weren't given: invented
+  options or constraints, unrequested defensive branches, speculative generality], defects: [what
+  later review/gates caught], notes: [retries, stalls, instruction-following], verdict: 1-5 vs
+  the brief}`. Clean runs get logged too.
+- **Verdict**: the FIRST session running at or after 2026-09-09 22:00 local — after confirming
+  this block still exists (absence = another session already delivered) — judges via a
+  single-agent `Workflow` on model `fable`, effort `xhigh` (`max` if the ledger is large or
+  contentious), handing it the complete ledger, and presents the owner a recommendation on
+  hard-switching all workflows to opus 4.6, with the evidence. THEN, same session: delete this
+  block from `~/src/dots@rhombu5/home/dot_claude/CLAUDE.md`, `chezmoi apply`, commit the removal,
+  `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph (only) from the std@fnioc memory
+  file `feedback-opus5-overengineers.md`.
