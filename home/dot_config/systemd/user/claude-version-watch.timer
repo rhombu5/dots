@@ -3,10 +3,9 @@ Description=Daily trial of new Claude Code versions
 Requires=claude-version-watch.service
 
 [Timer]
-# 05:00 is chosen so the trial normally lands outside working hours — the
-# script refuses to run while a claude process is alive, and a machine that's
-# asleep at 05:00 will fire on the next boot instead (Persistent=true). Boot is
-# a good moment for it: no session has started yet, so the process guard passes.
+# 05:00 keeps the ~350 MB tarball fetch out of working hours. It does NOT need
+# an idle machine: the trial runs entirely out-of-tree, so live Claude Code
+# sessions are unaffected. Persistent=true catches up after a suspend.
 OnCalendar=*-*-* 05:00:00
 Persistent=true
 RandomizedDelaySec=15min

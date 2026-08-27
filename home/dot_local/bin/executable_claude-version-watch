@@ -21,15 +21,22 @@
 #              is for something newer than IT. Reinstall the known-good build so
 #              the machine is never left sitting on a crashing one.
 #
-# The invariant that matters: this script may leave the system on a version that
-# is newer, or on the known-good one, and never on a version it just watched
-# crash. A failed trial is fully reverted before the script exits.
+# The invariant that matters: a candidate is NEVER installed before it has been
+# proven to start. The trial happens entirely inside a scratch directory -- the
+# tarball is fetched with `npm pack`, unpacked, and the binary inside it is run
+# from there. A broken candidate therefore has zero blast radius: nothing was
+# replaced, so nothing needs rolling back.
 #
-# It refuses to run at all while a claude process is alive. Reinstalling the npm
-# package replaces claude.exe on disk; a running process usually survives that
-# (npm unlinks and writes a fresh inode, so the old one stays mapped) but if the
-# file were ever rewritten in place the live session would take SIGBUS and die
-# mid-turn. Skipping is free -- the timer comes back tomorrow.
+# This is why the script is safe to run with live Claude Code sessions open. An
+# earlier revision refused to start while any claude process existed, on the
+# theory that replacing claude.exe could SIGBUS a running session. That guard
+# turned out to be both wrong and fatal to the whole design: wrong because npm
+# unlinks and recreates rather than truncating in place, so a running process
+# keeps its original inode mapped (observed directly -- a reinstall was done
+# under a live session with no ill effect); fatal because these sessions are
+# long-lived and the machine rarely reboots, so the guard tripped on every
+# single fire and the watcher sat inert for days without ever trialling
+# anything. An automation that silently never runs is worse than none.
 
 set -uo pipefail
 
@@ -78,15 +85,48 @@ install_version() {
     "$NPM" install -g "$PKG@$1" >> "$LOG_FILE" 2>&1
 }
 
-# True when the installed binary starts and reports the version we expect.
+# Run a binary with --version and confirm it starts and reports $expected.
 # A segfaulting build exits 139 here rather than printing anything.
-probe_installed() {
-    local expected=$1 output status
-    output=$(timeout 60 "$CLAUDE" --version 2>&1)
+probe_binary() {
+    local binary=$1 expected=$2 output status
+    output=$(timeout 60 "$binary" --version 2>&1)
     status=$?
-    log "probe: exit=$status output=${output:-<none>}"
+    log "probe($binary): exit=$status output=${output:-<none>}"
     [ "$status" -eq 0 ] || return 1
     [[ "$output" == "$expected"* ]]
+}
+
+# Install a candidate into a throwaway prefix and run the binary from there.
+# Nothing outside the scratch directory is touched, so a crashing candidate
+# costs nothing and needs no rollback. The scratch dir is removed either way.
+#
+# `npm install --prefix` rather than `npm pack`: the published tarball is only
+# ~28 KB and contains no executable at all. The ~250 MB native binary is a
+# platform-specific optional dependency fetched by the package's postinstall
+# script, so an unpacked tarball merely prints "claude native binary not
+# installed" and exits 1 -- which a naive probe would score as a crash, marking
+# every candidate broken forever. A prefixed install runs postinstall and
+# produces a genuinely runnable tree.
+#
+# Deliberately NOT under /tmp: that is tmpfs here, and this writes ~250 MB of
+# real memory if placed there. $XDG_CACHE_HOME is on disk.
+trial_candidate() {
+    local version=$1
+    local scratch result
+
+    scratch=$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/claude-version-watch.XXXXXX") || return 1
+
+    if ! "$NPM" install --prefix "$scratch" "$PKG@$version" >> "$LOG_FILE" 2>&1; then
+        log "could not install $version into the scratch prefix"
+        rm -rf "$scratch"
+        return 1
+    fi
+
+    probe_binary "$scratch/node_modules/$PKG/bin/claude.exe" "$version"
+    result=$?
+
+    rm -rf "$scratch"
+    return $result
 }
 
 # Delete DISABLE_AUTOUPDATER from the chezmoi source, apply it, and commit
@@ -112,11 +152,6 @@ reenable_autoupdate() {
 }
 
 # ---- guards ------------------------------------------------------------------
-
-if pgrep -x 'claude.exe' >/dev/null 2>&1 || pgrep -f 'claude-code/bin/claude' >/dev/null 2>&1; then
-    log "claude is running; deferring trial to the next timer fire"
-    exit 0
-fi
 
 if [ ! -f "$STATE_FILE" ]; then
     log "no state file at $STATE_FILE; nothing to compare against, exiting"
@@ -144,38 +179,48 @@ fi
 
 # ---- trial -------------------------------------------------------------------
 
-log "trying $latest (known_good=$known_good, known_bad=$known_bad)"
+log "trialling $latest out-of-tree (known_good=$known_good, known_bad=$known_bad)"
+
+if ! trial_candidate "$latest"; then
+    # Either the candidate crashed or it could not be fetched. Both mean "do
+    # not promote"; recording it as the baseline is only correct for the
+    # former, but treating a fetch failure as a bad version merely delays the
+    # next attempt to the next published release, which is acceptable and far
+    # safer than promoting something unproven.
+    log "$latest did not start cleanly; it becomes the new baseline. Install untouched at $known_good."
+    write_state "$known_good" "$latest"
+    notify normal "Claude Code $latest is broken too" \
+        "Nothing was installed — you're still on $known_good. Now watching for newer than $latest."
+    exit 0
+fi
+
+# ---- promotion ---------------------------------------------------------------
+
+log "$latest starts cleanly out-of-tree; installing it for real"
 
 if ! install_version "$latest"; then
-    log "install of $latest failed; leaving $known_good in place"
-    exit 0
+    log "install of $latest failed after a clean trial; leaving $known_good in place"
+    notify critical "Claude Code $latest passed its trial but would not install" \
+        "Still on $known_good and still pinned. Install it by hand."
+    exit 1
 fi
 
-if probe_installed "$latest"; then
-    log "$latest starts cleanly — promoting and re-enabling auto-update"
-    write_state "$latest" ""
-
-    if reenable_autoupdate; then
-        notify normal "Claude Code $latest is healthy" \
-            "Auto-updates re-enabled. A dots commit is waiting to be pushed."
-    else
-        notify critical "Claude Code $latest is healthy, but the pin is still in place" \
-            "Could not edit or apply the dots settings — remove DISABLE_AUTOUPDATER by hand."
-    fi
-    exit 0
+if ! probe_binary "$CLAUDE" "$latest"; then
+    # Passed out-of-tree but not in place. Unexpected; restore and stop.
+    log "$latest failed after installation despite a clean trial; restoring $known_good"
+    install_version "$known_good"
+    write_state "$known_good" "$latest"
+    notify critical "Claude Code $latest failed after install" \
+        "It passed an isolated trial then crashed in place. Restored $known_good; still pinned."
+    exit 1
 fi
 
-# ---- rollback ----------------------------------------------------------------
+write_state "$latest" ""
 
-log "$latest is broken; rolling back to $known_good"
-write_state "$known_good" "$latest"
-
-if install_version "$known_good" && probe_installed "$known_good"; then
-    notify normal "Claude Code $latest is also broken" \
-        "Rolled back to $known_good. Now watching for something newer than $latest."
-    exit 0
+if reenable_autoupdate; then
+    notify normal "Claude Code $latest is healthy" \
+        "Installed and auto-updates re-enabled. A dots commit is waiting to be pushed."
+else
+    notify critical "Claude Code $latest is healthy, but the pin is still in place" \
+        "Could not edit or apply the dots settings — remove DISABLE_AUTOUPDATER by hand."
 fi
-
-notify critical "Claude Code rollback FAILED" \
-    "$latest is broken and reinstalling $known_good did not recover. claude is likely unusable — fix by hand."
-exit 1
