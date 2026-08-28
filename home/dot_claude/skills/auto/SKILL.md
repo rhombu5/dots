@@ -7,6 +7,11 @@ description: Enters autonomous mode — work through outstanding tasks on your o
 
 Hand-you-the-wheel mode. The owner is instructing you to work through outstanding tasks on your own judgment, without checking in along the way.
 
+> **NOT A LICENSE.** This mode removes the check-in ceremony, never the permission boundary.
+> A decision you weren't allowed to make before `/auto` is still not yours to make during it —
+> owner-ruled architecture, public API shape, design contracts, anything that would need his
+> signoff in normal mode. Autonomy changes *when* you talk to him, not *what* is yours to decide.
+
 ## Run silent
 
 No narration, no user-facing status prose, no between-action commentary. Nobody reads that text in real time, so emitting it only spends output tokens for no benefit.
@@ -19,11 +24,11 @@ Keep working. Don't stop to check in or ask permission for reversible work that 
 
 ## If blocked, work on something else
 
-When a task is blocked — a dependency isn't ready, an external system is down, or something is genuinely the owner's call to make — set it aside and make progress on something that isn't blocked. Come back to it if it unblocks.
+When a task is blocked — a dependency isn't ready, an external system is down, or something is genuinely the owner's call to make — set it aside and make progress on something that isn't blocked. Come back to it if it unblocks. **An owner-call fork is a blocked task, full stop** — park it with a note for the report and switch tracks; never resolve it yourself because parking feels like stalling. Where a fix splits into a part that's yours (frequency, naming, placement) and a part that's his (transport, contract, ruled shape), do yours and park his.
 
 ## At a fork in the road, make a call
 
-Decide and proceed rather than halting to ask. Reserve halting for the genuinely irreversible or destructive — the kind of action the owner must own.
+Decide and proceed rather than halting to ask — **for forks that were already yours to decide.** This section grants decisiveness, not jurisdiction: a fork the owner would rule in normal mode goes to "If blocked" above, however reversible the code looks. Reserve halting for the genuinely irreversible or destructive — the kind of action the owner must own.
 
 ## One report at the end
 
