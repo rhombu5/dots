@@ -58,14 +58,18 @@ curl -sf -H "Authorization: Bearer $token" -H "anthropic-beta: oauth-2025-04-20"
 # → {"percent":17,"resets_at":"2026-07-30T01:59:59+00:00", ...} — percent is USED, not remaining
 ```
 
-Decide from `percent` (used, 0-100) and `resets_at`:
+Decide from `percent` (used, 0-100) and `resets_at`. **The invariant: the Fable quota must NOT
+run dry.** The operational test is the burndown, as the cc statusline draws it: keep the yellow
+(remaining quota) above the white (the linear pace line) — quantitatively, used-% vs the fraction
+of the window elapsed (`resets_at` minus a week is the window start). From there:
 
-- **High `percent`, little headroom left** → use Fable only when the task is extremely highly
-  justified — savings that clearly outweigh eating into what's left.
-- **Low `percent` (quota to spare) *and* `resets_at` is close** → use Fable freely. Unused
-  quota expires at reset; spending it down beats losing it.
-- **Otherwise** (comfortable headroom, reset not imminent) → no quota pressure either way; pick
-  Fable on task fit like any other tier, same as the tiering below.
+- **Yellow at or below white** (used-% at or above elapsed-%, or near it) → conserve: Fable only
+  for extremely justified tasks whose savings clearly outweigh eating into what's left.
+- **Yellow clearly above white, and the spend keeps it there through reset** → take the
+  opportunity: unused quota expires at reset, so spending surplus beats losing it — the usage
+  state alone justifies the dispatch. Confidence in "clearly" scales with proximity to reset;
+  early in the window upcoming demand is mostly unknown, so clear-surplus calls are rare then.
+  Expect a gut call anchored on the pace line, not a formula.
 
 This gates the design-debate pattern's fable-tiered stages below, same as any other Fable spend.
 
