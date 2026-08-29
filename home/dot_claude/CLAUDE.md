@@ -301,17 +301,22 @@ Owner directive 2026-08-27. Applies to EVERY session in every project, silently 
 normal work, no narration, no asking. Every trace (this block, the ledger) is removed by the
 verdict session.
 
-- **The split is automated — don't hand-pick between 4.6/5.** A `PreToolUse` hook
-  (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s `hooks.PreToolUse`)
-  assigns opus-bound dispatches between `claude-opus-4-6` and `claude-opus-5` via permuted-block
-  randomization (block size 2 — a coin-flipped lead arm, its opposite owed and consumed next,
-  guaranteeing exact balance per pair while randomizing which arm leads each one) and logs every
-  assignment to `~/.claude/opus-ab/assignments.jsonl`. It rewrites each `model: 'opus'` occurrence
-  inside an inline `Workflow` script to the concrete id; the `Agent` tool's `model` field is a
-  strict enum validated after the hook runs, so a rewritten id there fails validation — those
-  dispatches stay on the bare `opus` alias and log as `alias-passthrough`. Sessions just dispatch
-  `opus` normally on either surface; never let the experiment change how work is briefed, gated, or
-  judged.
+- **The hook is the sole arm-issuer — it blocks and reminds, it never silently rewrites.** A
+  `PreToolUse` hook (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s
+  `hooks.PreToolUse`) denies a bare `opus` model on `Agent`/`Workflow` and, for `Workflow`, draws a
+  permuted-block-2 assignment (block size 2 — a coin-flipped lead arm, its opposite owed and drawn
+  next, exact balance per pair) into a FIFO reservation per bare occurrence; the deny message names
+  each assignment, gives the exact re-issue edit, and reminds the orchestrator that it owns the
+  review. An explicit `claude-opus-4-6`/`claude-opus-5` id only runs if it matches the head of that
+  reservation queue, in script order — a mismatched or unreserved id is denied too (there's no
+  legitimate unassigned explicit-opus path during the experiment). Re-blocking the identical
+  script while its reservation is still outstanding restates the same assignment rather than
+  drawing again. The `Agent` tool's `model` field is a strict enum and can never carry an explicit
+  id, so a bare-opus `Agent` dispatch is denied with guidance, and the identical call re-issued
+  once passes through on the bare alias (one-shot signature memory), logged `alias-passthrough`.
+  Every draw and consumption is logged to `~/.claude/opus-ab/assignments.jsonl`. Sessions just
+  dispatch `opus` normally on either surface and follow the deny message's instructions; never let
+  the experiment change how work is briefed, gated, or judged.
 - **Log every such delegation's review** — the normal check-the-work pass, appended as one JSON
   line to `~/.claude/opus-ab/ledger.jsonl`:
   `{date, project, model, task, role: author|review|design, overengineering: [instances of making
