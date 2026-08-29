@@ -301,32 +301,30 @@ Owner directive 2026-08-27. Applies to EVERY session in every project, silently 
 normal work, no narration, no asking. Every trace (this block, the ledger) is removed by the
 verdict session.
 
-- **Dispatch protocol: draw an arm, then dispatch with it explicitly.** Run
-  `node ~/.claude/hooks/opus-ab-split.mjs --draw` (or `--draw N` for N dispatches) before an
-  opus-bound `Workflow` call and use the printed `claude-opus-4-6`/`claude-opus-5` id(s) directly —
-  this never blocks and costs nothing. The `PreToolUse` hook wired into `~/.claude/settings.json`'s
-  `hooks.PreToolUse` is the backstop for the FORGOTTEN path only: a bare `opus` model on
-  `Agent`/`Workflow` is denied, with the deny message naming the arm the block itself just drew
-  (same permuted-block-2 pairing as `--draw` — coin-flipped lead, its opposite owed next, exact
-  balance per pair), the exact re-issue edit, and a reminder that the orchestrator owns the
-  post-completion review. An explicit id on `Workflow` always passes, silently — there's no
-  reservation to match, so the happy path never round-trips through a block; the hook still updates
-  the pairing state from whatever id arrives and logs a `matched` audit flag (false when an id
-  overwrote a still-outstanding owed arm with a different one, a discrepancy left for the verdict
-  session to weigh rather than enforced here). The `Agent` tool's `model` field is a strict enum
-  and can never carry an explicit id, so a bare-opus `Agent` dispatch is denied with its drawn arm,
-  and the identical call re-issued once passes through on the bare alias (one-shot signature
-  memory), logged `alias-passthrough`. Every draw and pass is logged to
-  `~/.claude/opus-ab/assignments.jsonl`; `~/.claude/opus-ab/ledger.jsonl` remains the judgment db
-  the orchestrator appends to after each delegation. Never let the experiment change how work is
-  briefed, gated, or judged.
-- **Log every such delegation's review** — the normal check-the-work pass, appended as one JSON
-  line to `~/.claude/opus-ab/ledger.jsonl`:
+- **Self-assign the arm when authoring the dispatch — never dispatch bare `opus`.** Any opus-bound
+  `Agent`/`Workflow` stage gets an explicit `claude-opus-4-6`/`claude-opus-5` id chosen at write
+  time: alternate the two arms, balanced within each consecutive pair of opus dispatches this
+  session makes, coin-flip (shell `$RANDOM`) deciding which arm leads each pair. The `PreToolUse`
+  hook (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s
+  `hooks.PreToolUse`) tracks no arm state of its own — it's a logger plus a forgot-path reminder.
+  An explicit id on `Workflow` always passes, silently, logged as-is. A bare `opus` on `Workflow`
+  BLOCKS once per script signature with a short reminder of the self-assign scheme and the ledger
+  duty; the identical script resubmitted unchanged passes through on the bare alias, logged
+  `alias-passthrough`. A bare `opus` on `Agent` never blocks at all — the tool's `model` field is a
+  fixed enum that can never carry an explicit id, so blocking would be pure friction; it just
+  passes through, logged `alias-passthrough`. Known gap: a `scriptPath`-form `Workflow` call
+  (script on disk, not inline) bypasses the hook entirely, untouched and unlogged — acceptable,
+  since the ledger entry the orchestrator appends carries the model regardless. Every pass and
+  block is logged to `~/.claude/opus-ab/assignments.jsonl`. Never let the experiment change how
+  work is briefed, gated, or judged.
+- **The ledger duty is triggered, not scheduled: log before you act on the result.** The arrival of
+  an opus delegation's result IS the trigger — append its `~/.claude/opus-ab/ledger.jsonl` entry
   `{date, project, model, task, role: author|review|design, overengineering: [instances of making
   things harder than needed — especially satisfying requirements that weren't given: invented
   options or constraints, unrequested defensive branches, speculative generality], defects: [what
   later review/gates caught], notes: [retries, stalls, instruction-following], verdict: 1-5 vs
-  the brief}`. Clean runs get logged too.
+  the brief}` BEFORE consuming or acting on the report. Clean runs get logged too. At session wrap,
+  verify every opus delegation this session made has its line.
 - **Verdict**: the FIRST session running at or after 2026-09-09 22:00 local — after confirming
   this block still exists (absence = another session already delivered) — judges via a
   single-agent `Workflow` on model `fable`, effort `xhigh` (`max` if the ledger is large or
