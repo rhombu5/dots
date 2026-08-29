@@ -48,18 +48,6 @@ Keep the code itself **legible**: one statement per line, never multiple lambdas
 
 ---
 
-## Logging over-explaining corrections — collecting toward a targeted rule
-
-I'm accumulating examples of ONE failure mode — **over-explaining**: verbosity, re-explaining something already understood, dumping unrequested analysis/output, answering yes/no or A-or-B with a treatise. Only this counts; corrections about omissions, ordering, process, or tone are **not** logged here — adjust those inline.
-
-**Trigger.** I critique you for saying too much. Tells: **"a yes would've sufficed"**, "you should have just said X", "too verbose", "you didn't need to Y", "end the word salads". Strict discriminator: too much → log it; too little or anything else → out of scope, don't log.
-
-**Action.** Capture the correction with the `/correction` skill, then apply the fix for the rest of the session — run it yourself if I flag such a correction and you haven't. Only corrected cases get logged, never the justified responses that drew no complaint, so the skill's "why I thought it was warranted" field is load-bearing: it's the contrast with that field that reveals the rule.
-
-Log: `~/.claude/response-corrections.md`. When there are ~3+ examples, I propose a synthesized rule here.
-
----
-
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`), the context-specific `CLAUDE.<context>.md` siblings indexed below, and any `CLAUDE.<context>.local.md` per-machine overrides alongside them.
 
 ## Reading my modality
