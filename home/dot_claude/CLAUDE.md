@@ -301,12 +301,15 @@ Owner directive 2026-08-27. Applies to EVERY session in every project, silently 
 normal work, no narration, no asking. Every trace (this block, the ledger) is removed by the
 verdict session.
 
-- **Split opus-bound delegated work between opus 5 and opus 4.6.** Any subagent or workflow stage
-  that would run on opus: alternate within the session — first opus-bound dispatch → 4.6, next →
-  5, and so on. Pass the specific model id where the dispatch surface accepts one (Workflow
-  `agent()` does); where only the bare `opus` alias is accepted (the Agent tool's enum), use it
-  and mark that ledger entry `"surface": "alias-only"`. Never let the experiment change how work
-  is briefed, gated, or judged.
+- **The split is automated — don't hand-pick between 4.6/5.** A `PreToolUse` hook
+  (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s `hooks.PreToolUse`)
+  round-robins opus-bound dispatches between `claude-opus-4-6` and `claude-opus-5` and logs every
+  assignment to `~/.claude/opus-ab/assignments.jsonl`. It rewrites each `model: 'opus'` occurrence
+  inside an inline `Workflow` script to the concrete id; the `Agent` tool's `model` field is a
+  strict enum validated after the hook runs, so a rewritten id there fails validation — those
+  dispatches stay on the bare `opus` alias and log as `alias-passthrough`. Sessions just dispatch
+  `opus` normally on either surface; never let the experiment change how work is briefed, gated, or
+  judged.
 - **Log every such delegation's review** — the normal check-the-work pass, appended as one JSON
   line to `~/.claude/opus-ab/ledger.jsonl`:
   `{date, project, model, task, role: author|review|design, overengineering: [instances of making
@@ -320,5 +323,6 @@ verdict session.
   contentious), handing it the complete ledger, and presents the owner a recommendation on
   hard-switching all workflows to opus 4.6, with the evidence. THEN, same session: delete this
   block from `~/src/dots@rhombu5/home/dot_claude/CLAUDE.md`, `chezmoi apply`, commit the removal,
-  `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph (only) from the std@fnioc memory
-  file `feedback-opus5-overengineers.md`.
+  remove the hook script (`~/.claude/hooks/opus-ab-split.mjs`) and its `hooks.PreToolUse` entry
+  from `~/.claude/settings.json`, `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph
+  (only) from the std@fnioc memory file `feedback-opus5-overengineers.md`.
