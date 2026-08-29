@@ -301,22 +301,25 @@ Owner directive 2026-08-27. Applies to EVERY session in every project, silently 
 normal work, no narration, no asking. Every trace (this block, the ledger) is removed by the
 verdict session.
 
-- **The hook is the sole arm-issuer — it blocks and reminds, it never silently rewrites.** A
-  `PreToolUse` hook (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s
-  `hooks.PreToolUse`) denies a bare `opus` model on `Agent`/`Workflow` and, for `Workflow`, draws a
-  permuted-block-2 assignment (block size 2 — a coin-flipped lead arm, its opposite owed and drawn
-  next, exact balance per pair) into a FIFO reservation per bare occurrence; the deny message names
-  each assignment, gives the exact re-issue edit, and reminds the orchestrator that it owns the
-  review. An explicit `claude-opus-4-6`/`claude-opus-5` id only runs if it matches the head of that
-  reservation queue, in script order — a mismatched or unreserved id is denied too (there's no
-  legitimate unassigned explicit-opus path during the experiment). Re-blocking the identical
-  script while its reservation is still outstanding restates the same assignment rather than
-  drawing again. The `Agent` tool's `model` field is a strict enum and can never carry an explicit
-  id, so a bare-opus `Agent` dispatch is denied with guidance, and the identical call re-issued
-  once passes through on the bare alias (one-shot signature memory), logged `alias-passthrough`.
-  Every draw and consumption is logged to `~/.claude/opus-ab/assignments.jsonl`. Sessions just
-  dispatch `opus` normally on either surface and follow the deny message's instructions; never let
-  the experiment change how work is briefed, gated, or judged.
+- **Dispatch protocol: draw an arm, then dispatch with it explicitly.** Run
+  `node ~/.claude/hooks/opus-ab-split.mjs --draw` (or `--draw N` for N dispatches) before an
+  opus-bound `Workflow` call and use the printed `claude-opus-4-6`/`claude-opus-5` id(s) directly —
+  this never blocks and costs nothing. The `PreToolUse` hook wired into `~/.claude/settings.json`'s
+  `hooks.PreToolUse` is the backstop for the FORGOTTEN path only: a bare `opus` model on
+  `Agent`/`Workflow` is denied, with the deny message naming the arm the block itself just drew
+  (same permuted-block-2 pairing as `--draw` — coin-flipped lead, its opposite owed next, exact
+  balance per pair), the exact re-issue edit, and a reminder that the orchestrator owns the
+  post-completion review. An explicit id on `Workflow` always passes, silently — there's no
+  reservation to match, so the happy path never round-trips through a block; the hook still updates
+  the pairing state from whatever id arrives and logs a `matched` audit flag (false when an id
+  overwrote a still-outstanding owed arm with a different one, a discrepancy left for the verdict
+  session to weigh rather than enforced here). The `Agent` tool's `model` field is a strict enum
+  and can never carry an explicit id, so a bare-opus `Agent` dispatch is denied with its drawn arm,
+  and the identical call re-issued once passes through on the bare alias (one-shot signature
+  memory), logged `alias-passthrough`. Every draw and pass is logged to
+  `~/.claude/opus-ab/assignments.jsonl`; `~/.claude/opus-ab/ledger.jsonl` remains the judgment db
+  the orchestrator appends to after each delegation. Never let the experiment change how work is
+  briefed, gated, or judged.
 - **Log every such delegation's review** — the normal check-the-work pass, appended as one JSON
   line to `~/.claude/opus-ab/ledger.jsonl`:
   `{date, project, model, task, role: author|review|design, overengineering: [instances of making
