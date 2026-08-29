@@ -303,7 +303,9 @@ verdict session.
 
 - **The split is automated — don't hand-pick between 4.6/5.** A `PreToolUse` hook
   (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s `hooks.PreToolUse`)
-  round-robins opus-bound dispatches between `claude-opus-4-6` and `claude-opus-5` and logs every
+  assigns opus-bound dispatches between `claude-opus-4-6` and `claude-opus-5` via permuted-block
+  randomization (block size 2 — a coin-flipped lead arm, its opposite owed and consumed next,
+  guaranteeing exact balance per pair while randomizing which arm leads each one) and logs every
   assignment to `~/.claude/opus-ab/assignments.jsonl`. It rewrites each `model: 'opus'` occurrence
   inside an inline `Workflow` script to the concrete id; the `Agent` tool's `model` field is a
   strict enum validated after the hook runs, so a rewritten id there fails validation — those
