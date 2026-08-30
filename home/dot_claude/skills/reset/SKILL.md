@@ -121,8 +121,10 @@ so the owner can clear on the verdict line without re-checking anything.
 ## Step 3 — the handoff file
 
 Write a **burn-after-reading** handoff. Path: reuse the session's established handoff file if one
-exists; otherwise `~/<repo>-<branch>-<session-id-prefix>.handoff.md` — never a bare topic name,
-which a peer lane on the same topic clobbers. Match `/compact`-summary
+exists; otherwise `~/<repo>-<branch>-<session-id>.handoff.md`, where `<session-id>` is the first 8
+hex characters of `$CLAUDE_CODE_SESSION_ID` — never `<repo>-<branch>` alone or a bare topic name,
+either of which any other session or lane working the same repo (same or different branch)
+clobbers. Match `/compact`-summary
 density — curated, present-tense, zero padding, nothing the successor can cheaply re-derive from
 the repo or task store. It must carry:
 
