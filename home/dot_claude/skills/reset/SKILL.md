@@ -1,6 +1,6 @@
 ---
 name: reset
-description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, weighed against what is actually loaded — reluctant to clear context the successor would immediately have to rebuild, eager to clear once the topic has moved on even at a low %, and the invocation itself is still a soft nudge toward handing off now) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
+description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, weighed against what is actually loaded — reluctant to clear context the successor would immediately have to rebuild, eager to clear once the topic has moved on even at a low %, and the invocation itself is not a nudge toward handing off sooner) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
 ---
 
 # reset — sweep until clear, judge the timing, then hand off
@@ -50,12 +50,11 @@ A boundary minutes away from a naturally cleaner board (a lane's report or merge
 run finishing, one in-flight review about to close) is worth waiting for — a handoff describing
 "merged" beats one describing "mid-review". The context % is the budget for that patience:
 
-**Read the invocation itself as a soft nudge toward now.** The owner typed `/reset`, so some
-part of him already wants the boundary — let that tip a close call toward composing rather than
-waiting. It is a thumb on the scale, not a veto: a genuinely imminent event that genuinely
-improves the board still wins the argument. What the nudge settles is the ties — a seam that is
-only plausible, a wait that would tidy the handoff's prose more than its substance. And a low
-context % is permission to wait, never by itself a reason to.
+**The invocation is not a vote on timing.** The owner typed `/reset` to start the ritual, not to
+tip the scale toward clearing; defer-vs-now is purely a token-efficiency judgment — re-reading a
+large, mostly-live window every turn against the successor re-reading files and re-deriving
+reasoning after a clear. Ties resolve on that cost, never on the keystroke. And a low context % is
+permission to wait, never by itself a reason to.
 
 **Weigh what is in the window, not just how full it is.** Sort what's loaded by whether it is
 load-bearing for the queue's next item — live: files read, designs reasoned out in-conversation,
@@ -69,13 +68,12 @@ whole history.
   CONTENT SEAM: the point where the live context stops being needed (the feature lands, the
   lane's report is consumed, the design gets written down durably). Name the seam as the concrete
   trigger, same as a board event. Content reluctance is a real argument, weighed like an imminent
-  board event — it can outweigh the nudge; it never extends a deferral past the bands' ceiling;
+  board event; it never extends a deferral past the bands' ceiling;
   the owner's "now" still overrides.
 - **Mostly dead, or the topic has moved on → eager, even at a small %.** Dead context is paid for
   on every turn — the whole history is re-read through the prefix cache each turn — and it
   dilutes attention; a fresh window plus the handoff is cheaper than carrying it. A low % is never
-  by itself a reason to keep going; hand off now. This is the case where the nudge and the
-  content agree.
+  by itself a reason to keep going; hand off now.
 - **Live but no seam in reach** (budget tight, or the thread is long): shrink the rebuild cost
   instead of waiting — write the in-conversation reasoning down durably (a decision note, task
   substance, a design doc in the repo) so "must re-derive" becomes "must read one file". This is
@@ -92,7 +90,7 @@ several percent) plus the delta sweep and compose (~2%), keeping the projected t
   merge), and only ONE such event — and only if its expected consumption keeps the projected
   total under ~97%; when it lands, run the delta sweep and hand off.
 - **< ~90%** — free to wait for a natural seam, still naming a concrete trigger; with no seam
-  worth naming, the nudge carries and you hand off now.
+  worth naming, hand off now.
 
 Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger — a
 board event or a content seam ("after PR #N merges", "when lane X's report arrives", "once the
