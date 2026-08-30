@@ -1,6 +1,6 @@
 ---
 name: reset
-description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, and the invocation itself is a soft nudge toward handing off now) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
+description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, weighed against what is actually loaded — reluctant to clear context the successor would immediately have to rebuild, eager to clear once the topic has moved on even at a low %, and the invocation itself is still a soft nudge toward handing off now) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
 ---
 
 # reset — sweep until clear, judge the timing, then hand off
@@ -19,12 +19,15 @@ moment where the handoff describes the cleanest possible board.
 budget for the timing judgment below. If it is missing, ask for it in one line before anything
 else — do not guess it and do not skip the timing judgment for lack of it.
 
-**Re-invocation during a deferral is a context update, not a restart.** Re-run only the timing
-judgment against the new number, using the same Step-2 bands. Context always grows between
-updates — mere consumption within the same band re-affirms the deferral in one line. The
-deferral cancels (delta sweep → compose → verdict immediately) only when the new number crosses
-into the no-deferral band, or the awaited event's expected remaining cost no longer fits under
-that ceiling. The Step-1 gate does not re-run — the trigger's delta sweep already owns new state.
+**Re-invocation during a deferral is a context update, not a restart.** Re-run the timing
+judgment against the new number on both axes — budget, using the same Step-2 bands, and content.
+Context always grows between updates — mere consumption within the same band re-affirms the
+deferral in one line, provided the content that justified waiting is still live. The deferral
+cancels (delta sweep → compose → verdict immediately) when the new number crosses into the
+no-deferral band, when the awaited event's expected remaining cost no longer fits under that
+ceiling, OR when the content axis flips — the live context the deferral was protecting has gone
+dead (the topic changed, the thread finished) and there is nothing left to wait for. The Step-1
+gate does not re-run — the trigger's delta sweep already owns new state.
 
 ## Step 1 — the gate loop: sweep → autofix → dialog → re-sweep
 
@@ -41,7 +44,7 @@ Run the `/ready` skill's sweep (both questions, verdicts first). Then resolve wh
   loop only exits when a FULL sweep comes back `1: NO GAPS` and `2: DURABLE` with nothing fixed
   or asked that round.
 
-## Step 2 — timing judgment: hand off now, or wait for a cleaner board
+## Step 2 — timing judgment: the board, the content, and the budget
 
 A boundary minutes away from a naturally cleaner board (a lane's report or merge imminent, a gate
 run finishing, one in-flight review about to close) is worth waiting for — a handoff describing
@@ -53,6 +56,31 @@ waiting. It is a thumb on the scale, not a veto: a genuinely imminent event that
 improves the board still wins the argument. What the nudge settles is the ties — a seam that is
 only plausible, a wait that would tidy the handoff's prose more than its substance. And a low
 context % is permission to wait, never by itself a reason to.
+
+**Weigh what is in the window, not just how full it is.** Sort what's loaded by whether it is
+load-bearing for the queue's next item — live: files read, designs reasoned out in-conversation,
+in-flight agent dialog, rulings; dead: finished topics, abandoned explorations, another project's
+files, drafts since superseded. The ratio that matters is against the NEXT item, not the window's
+whole history.
+
+- **Mostly live, next item continues the thread → reluctant.** A handoff carries rulings and
+  board state cheaply; it cannot carry the loaded files or the thinking behind them — the
+  successor pays to re-read and re-derive both the moment it starts. Prefer deferring to a
+  CONTENT SEAM: the point where the live context stops being needed (the feature lands, the
+  lane's report is consumed, the design gets written down durably). Name the seam as the concrete
+  trigger, same as a board event. Content reluctance is a real argument, weighed like an imminent
+  board event — it can outweigh the nudge; it never extends a deferral past the bands' ceiling;
+  the owner's "now" still overrides.
+- **Mostly dead, or the topic has moved on → eager, even at a small %.** Dead context is paid for
+  on every turn — the whole history is re-read through the prefix cache each turn — and it
+  dilutes attention; a fresh window plus the handoff is cheaper than carrying it. A low % is never
+  by itself a reason to keep going; hand off now. This is the case where the nudge and the
+  content agree.
+- **Live but no seam in reach** (budget tight, or the thread is long): shrink the rebuild cost
+  instead of waiting — write the in-conversation reasoning down durably (a decision note, task
+  substance, a design doc in the repo) so "must re-derive" becomes "must read one file". This is
+  an autofix-shaped move; do it, re-sweep, then hand off. The handoff's reload list (Step 3) is
+  what makes a modest live set survivable — a small live set is not itself grounds to defer.
 
 The bands assume a 1M-token window (even 10% is serious headroom) and that auto-compact fires
 around 99–100% — an auto-compact mid-ritual destroys exactly what this ritual protects, so the
@@ -66,8 +94,9 @@ several percent) plus the delta sweep and compose (~2%), keeping the projected t
 - **< ~90%** — free to wait for a natural seam, still naming a concrete trigger; with no seam
   worth naming, the nudge carries and you hand off now.
 
-Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger
-("after PR #N merges", "when lane X's report arrives"). The owner's "now" overrides any deferral.
+Deferring is the skill's decision, announced with the reason and a CONCRETE resume trigger — a
+board event or a content seam ("after PR #N merges", "when lane X's report arrives", "once the
+renderer design is written into docs/…"). The owner's "now" overrides any deferral.
 
 **The deferred event WILL dirty the early sweep — that is expected and planned for.** The Step-1
 sweep still runs up front because its dialog needs the owner AT THE KEYBOARD: harvest his words
@@ -125,6 +154,11 @@ the repo or task store. It must carry:
   them (one line each, task # or record path), plus the task-store id as queue of record, so
   the successor re-surfaces them (`/askme`) instead of rediscovering them. Empty is a valid
   state; say so explicitly rather than omitting the section.
+- **Reload list** — the ORDERED, MINIMAL set of files, docs, and memory entries the successor
+  must read before touching the queue's first item; only what was live at compose time, nothing
+  dead, nothing cheaply re-derivable from the repo or task store. Where the live context is
+  reasoning rather than a file, write it down (into the handoff or a durable note) and list the
+  note — never "re-derive X". Empty is a valid state; say so.
 - **Queue** — what runs next and its go-signal.
 - **Protocol reminders** — only the ones a fresh session gets wrong without them.
 
