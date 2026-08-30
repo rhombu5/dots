@@ -139,11 +139,21 @@ the fnclaude tool is unavailable, say so and print the @path to copy by hand.
 End the invocation with exactly one of these, on its own line, as the LAST line of the message:
 
 - `***CLEAR NOW*** — handoff on clipboard; paste it as your first message after clearing.`
-- `RESET-DEFERRED — do NOT clear yet; waiting for <trigger> (context <n>%, safe). ***CLEAR NOW*** follows when it lands.`
+- `RESET-DEFERRED — do NOT clear yet; waiting for <trigger> (context <n>%, safe). The go-word follows when it lands.`
 
-`***CLEAR NOW***` is reserved: it appears ONLY as the terminal verdict of a clean-sweep compose,
-never in explanation, examples, or partial states — so seeing it means exactly one thing. A
-deferred run ends with the `***CLEAR NOW***` line when the trigger lands and Steps 3–4 complete.
+**The go-word is a physical signal, not a word — never emit it except as the real verdict.** It is
+read by a skimming eye that sees bold capitals and acts. So it must NOT appear anywhere except as
+the terminal line of a clean-sweep compose: not in the deferral line, not in a plan or a promise
+about what you will say later, not when quoting or recapping an earlier verdict, not in an
+explanation of this skill, and not in any partial state. A deferral says **"the go-word"** and
+nothing more — writing the phrase itself inside a "do NOT clear yet" line is the exact failure this
+rule exists to prevent, because the negation is what gets skimmed past.
+
+The same holds outside this skill: if the owner asks what the verdict was, or you need to discuss
+the ritual, refer to it as the go-word. Emitting it is an instruction to clear the session, and it
+is never merely a description of one.
+
+A deferred run ends by emitting the go-word line once the trigger lands and Steps 3–4 complete.
 There is no blocked state: the Step-1 loop holds in dialog until clear. After the verdict, stop —
 no new work.
 
