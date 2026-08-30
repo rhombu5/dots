@@ -1,6 +1,6 @@
 ---
 name: reset
-description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — loop the /ready capture sweep, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, weighed against what is actually loaded — reluctant to clear context the successor would immediately have to rebuild, eager to clear once the topic has moved on even at a low %, and the invocation itself is not a nudge toward handing off sooner) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
+description: Session-boundary ritual before a /clear (or compact), invoked as /reset <context %> — a cheap band check runs first on every call so frequent status-check invocations just report the %; the /ready capture sweep itself runs at most once per stretch, immediately before the actual clear, autofixing every issue with an obvious solution and /explain-ing the rest to the owner one at a time until fully clear; then JUDGE the timing (the context % governs how long deferring for a cleaner board is safe, weighed against what is actually loaded — reluctant to clear context the successor would immediately have to rebuild, eager to clear once the topic has moved on even at a low %, and the invocation itself is not a nudge toward handing off sooner) and either hand off now or announce a deferral trigger; the handoff is burn-after-reading with its @path on the clipboard. Runs ONLY when the user literally types /reset; never self-invoked — when a boundary looks imminent, remind the user to run it, don't run it for them.
 ---
 
 # reset — sweep until clear, judge the timing, then hand off
@@ -19,19 +19,35 @@ moment where the handoff describes the cleanest possible board.
 budget for the timing judgment below. If it is missing, ask for it in one line before anything
 else — do not guess it and do not skip the timing judgment for lack of it.
 
-**Re-invocation during a deferral is a context update, not a restart.** Re-run the timing
-judgment against the new number on both axes — budget, using the same Step-2 bands, and content.
-Context always grows between updates — mere consumption within the same band re-affirms the
-deferral in one line, provided the content that justified waiting is still live. The deferral
-cancels (delta sweep → compose → verdict immediately) when the new number crosses into the
-no-deferral band, when the awaited event's expected remaining cost no longer fits under that
-ceiling, OR when the content axis flips — the live context the deferral was protecting has gone
-dead (the topic changed, the thread finished) and there is nothing left to wait for. The Step-1
-gate does not re-run — the trigger's delta sweep already owns new state.
+**Every call — first or repeat — starts with a cheap band check, not the gate loop.** Place the
+given % into Step 2's bands (budget) AND weigh the content axis from Step 2's "Weigh what is in
+the window" (live vs. dead against the next item) — both apply on the very first `/reset` of a
+stretch, not only on a repeat reaffirming a standing deferral. This is what makes frequent
+invocation free: the owner runs `/reset` often purely to have the level reported, and answering
+that must never cost a sweep — but a "we're moving to a new topic" alongside the call is exactly
+the content axis flipping to dead, and is weighed on that same cheap call, no sweep required to
+see it.
+
+- **Comfortably under the no-deferral band, and the content axis still live (or, on a first call,
+  no reason yet to call it dead)** — answer in one line (the number, "well within budget") and
+  stop: no sweep, no dialog, no handoff composed. The one-liner establishes the deferral on a
+  first call, or reaffirms the standing one on a repeat call, with its prior resume trigger still
+  holding.
+- **Crosses into the no-deferral band, the awaited event's expected remaining cost no longer fits
+  under the ceiling, or the content axis is dead** (mostly dead, or the topic has moved on — eager
+  even at a small %, per Step 2) — the band check ends here: run the gate loop below, then compose
+  and hand off.
+
+**The gate loop runs at most once per stretch, immediately before the compose that ends it** —
+whichever call first crosses into it (per the band check above) is the one that runs it: a full
+sweep if the loop has never run this stretch, delta-scoped to state created since it last ran
+otherwise. Never twice, never skipped when the moment arrives — see the Hard Invariant in Step 2.
 
 ## Step 1 — the gate loop: sweep → autofix → dialog → re-sweep
 
-Run the `/ready` skill's sweep (both questions, verdicts first). Then resolve what it found:
+Reached only via the band check above — a first crossing into gate-loop territory, or the
+mandatory sweep immediately before compose. Run the `/ready` skill's sweep (both questions,
+verdicts first). Then resolve what it found:
 
 - **Autofix anything with an OBVIOUS solution** — not just the mechanical (missing task, missing
   file): any issue whose correct resolution is unambiguous gets fixed on the spot and reported in
@@ -96,12 +112,13 @@ Deferring is the skill's decision, announced with the reason and a CONCRETE resu
 board event or a content seam ("after PR #N merges", "when lane X's report arrives", "once the
 renderer design is written into docs/…"). The owner's "now" overrides any deferral.
 
-**The deferred event WILL dirty the early sweep — that is expected and planned for.** The Step-1
-sweep still runs up front because its dialog needs the owner AT THE KEYBOARD: harvest his words
-while he is present, since the deferred event's own products rarely need new ones (its rulings
-were made before it was dispatched; its defects get fixed, not adjudicated). On the trigger, a
-**delta sweep is mandatory** — both /ready questions, scoped to state created since the early
-sweep (the event's commits, § entries, task motion, anything its report surfaced). Then:
+**The deferred event WILL dirty the sweep — that is expected and planned for.** When the band
+check sends a call into the gate loop while the owner is present, that is the moment to harvest
+his words: the deferred event's own products rarely need new dialog (its rulings were made before
+it was dispatched; its defects get fixed, not adjudicated). On the trigger, the mandatory sweep —
+full if the gate loop has never run this stretch, otherwise **delta-scoped** to state created since
+it last ran (the event's commits, § entries, task motion, anything its report surfaced) — closes
+it out. Then:
 
 - delta clean → proceed to the handoff;
 - delta finds an autofixable → fix it, re-sweep, proceed;
