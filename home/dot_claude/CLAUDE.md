@@ -196,6 +196,7 @@ Concrete cases:
 - **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; escalate if quality drops.
 - **Reasoning effort is a second dial, orthogonal to model.** Turn it down for rote mechanical stages, reserve high/max for genuinely hard verify/judge/design steps — effort multiplies output tokens (the `~5×` kind), so low-effort haiku on a rote task is the cheapest cell in the grid.
 - **Fable is governed by one invariant: the quota must NOT run dry.** A tier orthogonal to the three above. An autonomous dispatch clears in either of two ways: a stated, extremely strong task justification, or clear quota surplus — the burndown test in `CLAUDE.workflow.md` § "Fable usage" (keep the yellow above the white). Clear surplus justifies the spend on its own, since unused quota expires at reset; tight headroom vetoes regardless of task merit. The quota check isn't `get_usage` (no Fable bucket there) — workflow.md has the real mechanism. A Fable *orchestrator's* own window is Fable spend too: on a Fable main thread, delegate reads/code/prose to cheaper tiers and keep the window lean. When I name `@cheap-fable` explicitly, that's always fine regardless of quota — the gate is only on your own autonomous choice to reach for it.
+- **A versioned model id always carries the `[1m]` 1M-context suffix.** Anywhere you write a concrete id rather than an alias — a `Workflow` script's `model`, `--model`, `fnc_set_model`, `settings.json` — spell it `claude-opus-5[1m]`, `claude-opus-4-6[1m]`, `claude-sonnet-5[1m]`, `claude-fable-5[1m]`. Two exceptions, both verified 2026-08-29 by probing them: `claude-haiku-4-5[1m]` is refused (400, long-context beta not on this subscription) and `claude-sonnet-4-6[1m]` needs usage credits — those two stay bare. The `Agent` tool's `model` field is a fixed enum (`opus`/`sonnet`/`haiku`/`fable`) that can't hold a suffix; leave it alone.
 
 Substance, structure, and tricky design decisions stay on **opus** — only *execution* gets handed off: opus decides *what*, the subagent does the *how*.
 
@@ -290,7 +291,7 @@ normal work, no narration, no asking. Every trace (this block, the ledger) is re
 verdict session.
 
 - **Self-assign the arm when authoring the dispatch — never dispatch bare `opus`.** Any opus-bound
-  `Agent`/`Workflow` stage gets an explicit `claude-opus-4-6`/`claude-opus-5` id chosen at write
+  `Agent`/`Workflow` stage gets an explicit `claude-opus-4-6[1m]`/`claude-opus-5[1m]` id chosen at write
   time: alternate the two arms, balanced within each consecutive pair of opus dispatches this
   session makes, coin-flip (shell `$RANDOM`) deciding which arm leads each pair. The `PreToolUse`
   hook (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s
