@@ -191,9 +191,25 @@ mapfile -t added_dirs < <(jq -r '.workspace.added_dirs[]? // empty' <<<"$input")
 # graph back to the text-based "ratio% (used%/elapsed%) day time" rows.
 USAGE_BURNDOWN_GRAPH=1
 
-# Persist a usage data point per invocation. The reset epoch in the filename
-# means a new window naturally rolls into a new file, and any file whose name's
-# epoch is in the past is stale historical data we can ignore (or archive).
+# A quota window does not always run its nominal length. Anthropic sometimes
+# clears a bucket EARLY — usage falls to zero partway through while resets_at
+# keeps pointing at the original boundary — so the live window is whatever
+# stretches from that clearing moment to the reset time the API is advertising
+# right now, and both ends have to be observed rather than derived. These two
+# thresholds are what separates such a clearing from the ordinary sawtooth of a
+# rolling window, where the oldest hour ageing out shaves a few points off the
+# total: the observed noise dips are 7 points (76→69) and 1 point (80→79, 82→81)
+# from a high plateau, so demanding a 20-point fall AND a near-zero landing keeps
+# them out while still catching a genuine 85→0.
+USAGE_RESET_DROP_PCT=20
+USAGE_RESET_FLOOR_PCT=5
+# A window observed to have just reset has near-zero length until the clock
+# moves on, so every derived span is floored here before anything divides by it.
+USAGE_WINDOW_MIN_SEC=60
+
+# Persist a usage data point per invocation. The segment start epoch in the
+# filename means each window gets its own file, and any file whose window has
+# since ended is stale historical data we can ignore (or archive).
 USAGE_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-statusline"
 CACHE_DIR="$HOME/.cache/claude-statusline"
 CACHE_TTL=60
@@ -201,15 +217,52 @@ CACHE_TTL=60
 # costs one fork instead of one per log point.
 mkdir -p "$USAGE_LOG_DIR" "$CACHE_DIR" 2>/dev/null
 
+# Where each scope's current window began, filled in by log_usage_point and read
+# by everything that renders that scope. The window's other end is always the
+# resets_at the API is reporting this render — never a value we computed — so a
+# boundary that moves is followed rather than argued with.
+declare -A USAGE_SEGMENT_START
+
+# log_usage_point <scope> <used%> <resets-epoch> <nominal-window-sec>
+# Appends this render's sample to the scope's window log, deciding first which
+# window it belongs to. The nominal length is only ever an anchor for a window
+# whose start we didn't witness: a first run lands mid-window with no history to
+# reason from, and an ordinary roll (a resets_at we haven't seen before) begins
+# exactly one nominal span before the boundary it announces. An early clearing
+# is the case neither of those covers — resets_at stands still while usage
+# collapses — and there the start is simply now, the moment we saw it happen.
+#
+# One line of state per scope, read with a builtin, so the whole decision costs
+# no forks on a path that runs on every render.
 log_usage_point() {
-    local scope=$1 used=$2 resets_at=$3
+    local scope=$1 used=$2 resets_at=$3 nominal=$4
     [ -z "$used" ] && return
     [ -z "$resets_at" ] && return
     [ -d "$USAGE_LOG_DIR" ] || return
-    printf '%d %s\n' "$NOW" "$used" >> "$USAGE_LOG_DIR/${scope}-${resets_at}.log"
+
+    local state="$USAGE_LOG_DIR/${scope}.state"
+    local prev_start="" prev_used="" prev_resets="" start
+    [ -f "$state" ] && read -r prev_start prev_used prev_resets < "$state"
+
+    local used_int=0 prev_int=0
+    printf -v used_int '%.0f' "$used" 2>/dev/null
+    printf -v prev_int '%.0f' "${prev_used:-0}" 2>/dev/null
+
+    if [ -z "$prev_start" ] || [ "$resets_at" != "$prev_resets" ]; then
+        start=$(( resets_at - nominal ))
+    elif (( prev_int - used_int >= USAGE_RESET_DROP_PCT \
+            && used_int <= USAGE_RESET_FLOOR_PCT )); then
+        start=$NOW
+    else
+        start=$prev_start
+    fi
+
+    USAGE_SEGMENT_START[$scope]=$start
+    printf '%d %s %s\n' "$start" "$used" "$resets_at" > "$state"
+    printf '%d %s\n' "$NOW" "$used" >> "$USAGE_LOG_DIR/${scope}-${start}.log"
 }
-log_usage_point "5hr"  "$rl5_used" "$rl5_resets"
-log_usage_point "7day" "$rl7_used" "$rl7_resets"
+log_usage_point "5hr"  "$rl5_used" "$rl5_resets" 18000
+log_usage_point "7day" "$rl7_used" "$rl7_resets" 604800
 
 # ── Fable weekly limit ───────────────────────────────────────────────────────
 # The statusline payload carries only five_hour and seven_day. The per-model
@@ -261,15 +314,28 @@ async_refresh "$OAUTH_USAGE_CACHE" "$OAUTH_USAGE_TTL" _fetch_oauth
 # 8601, converted here to the epoch seconds every downstream window calculation
 # assumes. Both stay empty until the first async fetch lands, which the rest of
 # the script treats the same as "this window isn't present".
+#
+# The scoped bucket carries a null resets_at whenever it holds no usage — the
+# boundary is only stamped on it once something has been spent — so the weekly_all
+# entry from the same payload supplies it. The two share a boundary (weekly_all's
+# reads as the same instant as seven_day's epoch), which is what makes the
+# substitution exact rather than an approximation.
 rlf_used=""; rlf_resets=""; rlf_iso=""; rlf_epoch=""
 if [ -s "$OAUTH_USAGE_CACHE" ]; then
     read -r rlf_used rlf_iso < <(jq -r '
-        (.limits // [])
-        | map(select(.kind == "weekly_scoped"
-                     and (.scope.model.display_name // "") == "Fable"))
-        | .[0] // empty
-        | "\(.percent) \(.resets_at)"
+        (.limits // []) as $limits
+        | ($limits | map(select(.kind == "weekly_scoped"
+                                and (.scope.model.display_name // "") == "Fable"))
+                   | .[0]) as $fable
+        | ($limits | map(select(.kind == "weekly_all")) | .[0]) as $all
+        | if $fable == null then empty
+          else "\($fable.percent) \($fable.resets_at // $all.resets_at // "")"
+          end
     ' "$OAUTH_USAGE_CACHE" 2>/dev/null)
+    # jq's string interpolation renders a null as the four characters "null", so
+    # a boundary that slipped past the fallback above would otherwise arrive here
+    # looking like a perfectly good ISO timestamp and fail only at `date -d`.
+    [ "$rlf_iso" = "null" ] && rlf_iso=""
     # The endpoint jitters resets_at either side of the boundary second — one
     # call returns ...T01:59:59.99+00:00, the next ...T02:00:00.08+00:00 — and
     # `date -d` floors. A raw conversion therefore yields two different epochs
@@ -283,7 +349,7 @@ if [ -s "$OAUTH_USAGE_CACHE" ]; then
         [ -n "$rlf_epoch" ] && rlf_resets=$(( (rlf_epoch + 30) / 60 * 60 ))
     fi
 fi
-log_usage_point "fable" "$rlf_used" "$rlf_resets"
+log_usage_point "fable" "$rlf_used" "$rlf_resets" 604800
 
 # Does any rate-limit window have a reset time? Adding a fourth window then
 # means adding it here rather than to every disjunction that asks.
@@ -1110,13 +1176,20 @@ fi
 # Segments build their plain (uncolored) text first so the combined width is known
 # for right-alignment, then each one is re-emitted as colored pieces via append.
 SEG_TEXT=""; SEG_USED=0; SEG_ELAPSED=0; SEG_RATIO=0; SEG_COLOR=""
+#
+# The window spans the scope's observed start to the reset moment the API is
+# reporting now, so an early clearing shortens it rather than leaving the elapsed
+# fraction measured from a boundary the quota no longer honours.
 compute_rate_segment() {
-    local label=$1 used=$2 resets_at=$3 window_sec=$4
+    local label=$1 used=$2 resets_at=$3 window_start=$4
     SEG_TEXT=""
     [ -z "$used" ] && return
     [ -z "$resets_at" ] && return
-    local elapsed elapsed_pct used_int divisor ratio_pct color
-    elapsed=$(( NOW - (resets_at - window_sec) ))
+    [ -z "$window_start" ] && return
+    local elapsed elapsed_pct used_int divisor ratio_pct color window_sec
+    window_sec=$(( resets_at - window_start ))
+    (( window_sec < USAGE_WINDOW_MIN_SEC )) && window_sec=$USAGE_WINDOW_MIN_SEC
+    elapsed=$(( NOW - window_start ))
     (( elapsed < 0 ))          && elapsed=0
     (( elapsed > window_sec )) && elapsed=$window_sec
     elapsed_pct=$(( elapsed * 100 / window_sec ))
@@ -1146,8 +1219,8 @@ compute_rate_segment() {
 # 5-7 char content (1:00am .. 12:00pm) so am/pm align.
 RATE_USED=(); RATE_ELAPSED=(); RATE_RATIO=(); RATE_COLOR=(); RATE_DAY=(); RATE_TIME=()
 add_rate_row() {
-    local label=$1 used=$2 resets_at=$3 window_sec=$4
-    compute_rate_segment "$label" "$used" "$resets_at" "$window_sec"
+    local label=$1 used=$2 resets_at=$3 window_start=$4
+    compute_rate_segment "$label" "$used" "$resets_at" "$window_start"
     [ -z "$SEG_TEXT" ] && return
     RATE_USED+=("$SEG_USED")
     RATE_ELAPSED+=("$SEG_ELAPSED")
@@ -1160,9 +1233,9 @@ add_rate_row() {
 # Only the text renderer reads RATE_*, so in graph mode the whole ratio
 # computation (two `date -d` forks per window) is dead work — skip it.
 if (( ! USAGE_BURNDOWN_GRAPH )); then
-    add_rate_row "5hr"   "$rl5_used" "$rl5_resets" 18000
-    add_rate_row "7day"  "$rl7_used" "$rl7_resets" 604800
-    add_rate_row "fable" "$rlf_used" "$rlf_resets" 604800
+    add_rate_row "5hr"   "$rl5_used" "$rl5_resets" "${USAGE_SEGMENT_START[5hr]}"
+    add_rate_row "7day"  "$rl7_used" "$rl7_resets" "${USAGE_SEGMENT_START[7day]}"
+    add_rate_row "fable" "$rlf_used" "$rlf_resets" "${USAGE_SEGMENT_START[fable]}"
 fi
 
 if (( ${#RATE_USED[@]} > 0 )); then
@@ -1289,12 +1362,18 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     # X is offset by BURNDOWN_DATA_X_OFFSET so data starts one cell right of
     # the Y axis; Y stays in [0, BURNDOWN_DATA_H_DOTS-1] so it reaches into
     # the X axis cell row but stops one dot row above the axis dot itself.
+    #
+    # The x axis runs from the window's observed start to the reset moment the
+    # API is reporting now, so a window cleared early redraws from that clearing
+    # rather than trailing the previous window's climb behind a cliff.
     burndown_plot_log() {
-        local layer_name=$1 scope=$2 resets_at=$3 window_sec=$4
+        local layer_name=$1 scope=$2 resets_at=$3 window_start=$4
         [ -z "$resets_at" ] && return
-        local file="$USAGE_LOG_DIR/${scope}-${resets_at}.log"
+        [ -z "$window_start" ] && return
+        local file="$USAGE_LOG_DIR/${scope}-${window_start}.log"
         [ -f "$file" ] || return
-        local window_start=$(( resets_at - window_sec ))
+        local window_sec=$(( resets_at - window_start ))
+        (( window_sec < USAGE_WINDOW_MIN_SEC )) && window_sec=$USAGE_WINDOW_MIN_SEC
         local x y
         while IFS=' ' read -r x y; do
             [ -z "$x" ] && continue
@@ -1336,26 +1415,29 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     burndown_plot_ideal br5_ideal
     burndown_plot_ideal br7_ideal
     burndown_plot_ideal brf_ideal
-    burndown_plot_log   br5_data "5hr"   "$rl5_resets" 18000
-    burndown_plot_log   br7_data "7day"  "$rl7_resets" 604800
-    burndown_plot_log   brf_data "fable" "$rlf_resets" 604800
+    burndown_plot_log   br5_data "5hr"   "$rl5_resets" "${USAGE_SEGMENT_START[5hr]}"
+    burndown_plot_log   br7_data "7day"  "$rl7_resets" "${USAGE_SEGMENT_START[7day]}"
+    burndown_plot_log   brf_data "fable" "$rlf_resets" "${USAGE_SEGMENT_START[fable]}"
 
     # X-axis tick: cell column matching "now" inside this plot's window.
     # Same elapsed→dot-x math as the data plotter, then dot→cell.
     burndown_now_cell() {
-        local resets_at=$1 window_sec=$2
+        local resets_at=$1 window_start=$2
         [ -z "$resets_at" ] && { printf '%s' -1; return; }
-        local elapsed dot_x
-        elapsed=$(( NOW - (resets_at - window_sec) ))
+        [ -z "$window_start" ] && { printf '%s' -1; return; }
+        local elapsed dot_x window_sec
+        window_sec=$(( resets_at - window_start ))
+        (( window_sec < USAGE_WINDOW_MIN_SEC )) && window_sec=$USAGE_WINDOW_MIN_SEC
+        elapsed=$(( NOW - window_start ))
         if (( elapsed < 0 || elapsed >= window_sec )); then
             printf '%s' -1; return
         fi
         dot_x=$(( BURNDOWN_DATA_X_OFFSET + elapsed * (BURNDOWN_DATA_W_DOTS - 1) / window_sec ))
         printf '%s' $(( dot_x / 2 ))
     }
-    br5_now_cell=$(burndown_now_cell "$rl5_resets" 18000)
-    br7_now_cell=$(burndown_now_cell "$rl7_resets" 604800)
-    brf_now_cell=$(burndown_now_cell "$rlf_resets" 604800)
+    br5_now_cell=$(burndown_now_cell "$rl5_resets" "${USAGE_SEGMENT_START[5hr]}")
+    br7_now_cell=$(burndown_now_cell "$rl7_resets" "${USAGE_SEGMENT_START[7day]}")
+    brf_now_cell=$(burndown_now_cell "$rlf_resets" "${USAGE_SEGMENT_START[fable]}")
 
     # Emit one cell. Data and ideal layers stay exclusive of each other (the
     # ideal-under-data merge was tried and rejected: ideal dots in overlapped
