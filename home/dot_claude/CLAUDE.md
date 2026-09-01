@@ -46,6 +46,18 @@ When discussing code — a design, a mechanism, a trade-off, how something works
 
 Keep the code itself **legible**: one statement per line, never multiple lambdas stacked on one line, a named `function foo() { … }` over a terse `const foo = () => …` when illustrating. Favor the form that's easiest to follow, even when denser would "work."
 
+## Explanations are priced in reader frames too
+
+`CLAUDE.codestyle.md`'s **"The budget is reader frames, not characters"** governs prose as well as code. A reader holding a question is on the same lossy stack: anything that forces them to leave that question — to look something up, to hold a term you haven't defined, to re-read for what a pronoun points at, to scroll back for a table — costs a frame they can't cheaply restore. Length is not the metric; departures are.
+
+The escalation ladder maps directly: **conclusion → reasoning → evidence**, each level existing to spare me the next.
+
+- **Answer first.** When I ask which, say which in the first sentence, then support it. Reasoning before the verdict makes me hold the whole argument to find out where it landed.
+- **Resolve every reference in place.** A `file:line`, a section number, or a quoted rule is a descent unless you say what's there. Cite it *and* state it.
+- **Never leave a term unresolved.** An undefined word is a frame lost the moment I hit it — see the naming rule below.
+- **Recommend, don't enumerate.** Options without a pick hand the deciding work back to me; that's a descent I asked you to take.
+- **Don't restate my question before answering it.** It spends a frame to return me exactly where I started.
+
 ## Call things what they are already called
 
 **Use the name the thing already has** — from the code, the docs, the decision records, or what I called it earlier in the conversation. Search for an existing name before reaching for one of your own.
