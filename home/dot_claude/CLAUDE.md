@@ -72,6 +72,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 - [`CLAUDE.codestyle.ts.md`](CLAUDE.codestyle.ts.md) — TypeScript code style — array type syntax, `Func` over lambda types, `#`-fields, truthiness, generators, iterator chains, variance, and more.
 - [`CLAUDE.print.md`](CLAUDE.print.md) — printing: driving the HP network laser (`hp_m252dw`) via `lp`/CUPS, the Canon photo printer (incomplete stub), and booklet printing — including the rule that a markdown prints as a folded booklet by default, the imposition pipeline, duplex/fold settings, and wrap-around cover pages.
 - [`CLAUDE.go.md`](CLAUDE.go.md) — Go toolchain pinning via mise, the ambient-`GOROOT` version-split failure mode, `GOTMPDIR`/`GOCACHE` placement rules, and the fresh-worktree `mise trust` gotcha.
+- [`CLAUDE.agents.md`](CLAUDE.agents.md) — subagent delegation policy for a single dispatch: model/effort selection (including the Fable quota invariant and the `[1m]` id rule), teams-mode `SendMessage` mid-flight, the run-silent directive, and the don't-echo-return-messages rule.
 - [`CLAUDE.workflow.md`](CLAUDE.workflow.md) — cache/token economy of orchestration: the prefix-cache model (per-turn `0.1×` read of the whole growing history, `1.25×` write of the new delta, TTL expiry), cache-hygiene levers (don't churn model/effort/prefix mid-task, compact at boundaries, rewind-not-compact), fan-out cost structure (base context duplicated per agent, thinking conserved only if partitioned), front-load-shared-diverge-late subagent prompt structure, and the design-debate pattern (research → frame slate → propose → iterated attack/rebut → judge) — the default shape for brainstorm/design workflows.
 
 **Loading is just-in-time and deterministic, not heuristic.** When your next tool call matches a trigger row below, `Read` the file before making the call. Once loaded for a session, it stays loaded — the same trigger won't re-fire. The table itself is part of *this* file, so it's already in your context — checking it costs nothing.
@@ -84,6 +85,7 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 | You're about to edit a TypeScript/TSX file (`.ts`/`.tsx`) — `Edit`/`Write`/`MultiEdit`/`NotebookEdit` | [`CLAUDE.codestyle.ts.md`](CLAUDE.codestyle.ts.md) (with [`CLAUDE.codestyle.md`](CLAUDE.codestyle.md)) |
 | You're about to print or drive CUPS (`lp`/`lpr`/`lpstat`/`lpoptions`/`cancel`), or the user asks to print a document — especially a markdown or PDF (which prints as a folded booklet by default) | [`CLAUDE.print.md`](CLAUDE.print.md) |
 | You're about to edit a `.go` file, run any `go` command (`build`/`test`/`vet`/`mod`), pin Go in a project's `mise.toml`, or debug a Go toolchain/version/cache error | [`CLAUDE.go.md`](CLAUDE.go.md) |
+| You're about to dispatch ANY subagent (`Agent`), or you're choosing the model/effort a delegation runs on | [`CLAUDE.agents.md`](CLAUDE.agents.md) |
 | You're about to dispatch a parallel subagent fan-out or a `Workflow`, OR switch model/effort mid-session (`fnc_set_model`/`fnc_set_effort`/`/fast`) — anything that multiplies base context or busts a cache layer | [`CLAUDE.workflow.md`](CLAUDE.workflow.md) |
 
 **The trigger is the tool call's *shape*, not how you're framing the task.** "I'm writing some Go code" feels like one job; the moment the next call is going to `Edit` a file inside a git repo, the code-change work has started — load `CLAUDE.git.md` BEFORE that call, not after the PR is open.
@@ -184,41 +186,7 @@ Concrete: "rename a function across 30 files" is an hour solo, ~5 turns + 10 min
 
 **A standing default, not a per-request ask.** The biggest lever: delegate work you'd otherwise do inline on the main (opus) thread to a subagent, so it runs on a cheaper model/lower effort and its context stays out of the main window. The trigger isn't only "this is big" or "this parallelizes" — it's also **"a cheaper tier could do this slice at equal quality."** Hand it off even if you weren't otherwise going to; the saving is itself the reason to delegate. Don't pay opus rates for work sonnet/haiku clears. (Cost structure and per-stage tiering: [`CLAUDE.workflow.md`](CLAUDE.workflow.md).)
 
-Tiering mechanics are in the next section.
-
-## Subagent model selection
-
-**Right-size the model to the task.** Opus is the default for the main thread; if a smaller model does the work at equal-or-better quality for less, dispatch it there instead.
-
-Concrete cases:
-
-- **Prose-shaped work** — rewriting, summarizing, drafting docs / issues / PR bodies / commit messages / runbook entries / sections of `CLAUDE.md`, comparing wordings → **always dispatch a sonnet subagent**, unless I've explicitly told you otherwise this turn. Sonnet's prose is reliably tighter than opus's. Escape hatch: an instruction like "do this on opus" or "don't delegate this one" — not the request merely being addressed to me.
-- **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; escalate if quality drops.
-- **Reasoning effort is a second dial, orthogonal to model.** Turn it down for rote mechanical stages, reserve high/max for genuinely hard verify/judge/design steps — effort multiplies output tokens (the `~5×` kind), so low-effort haiku on a rote task is the cheapest cell in the grid.
-- **Fable is governed by one invariant: the quota must NOT run dry.** A tier orthogonal to the three above. An autonomous dispatch clears in either of two ways: a stated, extremely strong task justification, or clear quota surplus — the burndown test in `CLAUDE.workflow.md` § "Fable usage" (keep the yellow above the white). Clear surplus justifies the spend on its own, since unused quota expires at reset; tight headroom vetoes regardless of task merit. The quota check isn't `get_usage` (no Fable bucket there) — workflow.md has the real mechanism. A Fable *orchestrator's* own window is Fable spend too: on a Fable main thread, delegate reads/code/prose to cheaper tiers and keep the window lean. When I name `@cheap-fable` explicitly, that's always fine regardless of quota — the gate is only on your own autonomous choice to reach for it.
-- **A versioned model id always carries the `[1m]` 1M-context suffix.** Anywhere you write a concrete id rather than an alias — a `Workflow` script's `model`, `--model`, `fnc_set_model`, `settings.json` — spell it `claude-opus-5[1m]`, `claude-opus-4-8[1m]`, `claude-opus-4-6[1m]`, `claude-sonnet-5[1m]`, `claude-fable-5[1m]`. Two exceptions, both verified 2026-08-29 by probing them: `claude-haiku-4-5[1m]` is refused (400, long-context beta not on this subscription) and `claude-sonnet-4-6[1m]` needs usage credits — those two stay bare. The `Agent` tool's `model` field is a fixed enum (`opus`/`sonnet`/`haiku`/`fable`) that can't hold a suffix; leave it alone.
-
-Substance, structure, and tricky design decisions stay on **opus** — only *execution* gets handed off: opus decides *what*, the subagent does the *how*.
-
-Subagent prompts should include the substance, style/format constraints, and pointers to sibling docs/files to mirror tone from. Return ready-to-drop-in output.
-
-## Teams mode is on — `SendMessage` works mid-flight
-
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set in my env and in `~/.claude/settings.json`. Subagents you spawn are teammates: `SendMessage(to: <agentId>, message: …)` delivers to a *running* agent at its next turn boundary, not only after it completes.
-
-**To extend or correct a running agent's scope, try `SendMessage` before `TaskStop` + redispatch.** Killing throws away work-in-progress (context built, files read, code drafted); kill-and-redispatch is the fallback only when the scope change is incompatible with what's already written.
-
-The `SendMessage` tool's docstring still leans on "resume a completed background agent" framing — that's the non-teams default. With teams mode on, mid-flight delivery works; the tooling description hasn't caught up.
-
-## Subagents always run silent
-
-**Every subagent prompt must include a run-silent directive** — no narration, no progress prose, no explanations between tool calls; tools and a terse final report only. This goes in the dispatch prompt itself (e.g. a first line like "RUN SILENT: no narration; terse final report only"), every time, for every agent type and model. Narrating agents burn tokens describing work instead of doing it.
-
-## Don't echo subagent return messages
-
-A subagent's final message is delivered to me directly as a task notification — I can read it. **Don't re-summarize it.** Echo-summaries are pure duplication, billed twice. Acknowledge in one line ("PR #42 in flight" / "rejected — schema cost too high") and move on.
-
-Exception: if the subagent surfaced something action-shaped (a blocker, a critical finding, a request for direction), call it out explicitly so I don't miss it inside a routine-looking notification.
+Tiering mechanics, and the rest of the per-dispatch policy, live in [`CLAUDE.agents.md`](CLAUDE.agents.md).
 
 ## Say what an issue/PR number *is* on first mention
 
