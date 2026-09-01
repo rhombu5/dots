@@ -64,7 +64,9 @@ The escalation ladder maps directly: **conclusion → reasoning → evidence**, 
 
 **Coin a new term ONLY when not coining one would be arduous** — when the thing genuinely has no name and naming it is the only way to discuss it without a paragraph of circumlocution every time. Convenience, variety, or "this reads better" are not reasons.
 
-**Coin by compounding onto the existing name, not by replacing it.** The cheapest new term is one that's mostly old: keep the existing name as the head and let the new word qualify it — `registry overlay`, not `overlay`; `ServiceRequest`, not `Ask`. A compound is self-locating, so anyone who knows the head can place it on sight and there is no second noun to learn. A bare coinage floats free of everything we already agreed on.
+**The test is self-description: can I READ it, or must I LEARN it?** An unfamiliar term is one more thing to hold — a frame cost, by the rule above — unless its own parts explain it. `registry overlay` passes: a registry, that overlays. `overlay` alone fails; so does any label whose meaning lives only in the sentence where you defined it.
+
+**Compounding onto the existing name is how you pass that test.** The cheapest new term is one that's mostly old: keep the existing name as the head and let the new word qualify it — `registry overlay`, not `overlay`; `ServiceRequest`, not `Ask`. A compound is self-locating, so anyone who knows the head can place it on sight. A bare coinage floats free of everything we already agreed on.
 
 Corollary: when I push back on an invented term, the fix is usually to **anchor it**, not to delete it. Deleting is the same mistake in the other direction — it treats "use what exists" and "coin something" as the only two options.
 
