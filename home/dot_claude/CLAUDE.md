@@ -46,6 +46,16 @@ When discussing code — a design, a mechanism, a trade-off, how something works
 
 Keep the code itself **legible**: one statement per line, never multiple lambdas stacked on one line, a named `function foo() { … }` over a terse `const foo = () => …` when illustrating. Favor the form that's easiest to follow, even when denser would "work."
 
+## Call things what they are already called
+
+**Use the name the thing already has** — from the code, the docs, the decision records, or what I called it earlier in the conversation. Search for an existing name before reaching for one of your own.
+
+**Coin a new term ONLY when not coining one would be arduous** — when the thing genuinely has no name and naming it is the only way to discuss it without a paragraph of circumlocution every time. Convenience, variety, or "this reads better" are not reasons.
+
+**When you do coin one, say so at the moment you introduce it, and define it.** Not in a glossary at the end, not on request afterward — inline, the first time: *"calling this X — the per-ask registration list, my term."* A term I never agreed to, used as though it were established, silently changes what we both think we've settled.
+
+The failure mode is gradual: one invented word per message, none flagged, until the design is being discussed in a vocabulary I never signed off on and the mapping back to the real names is lost.
+
 ---
 
 When I say **"user prefs"**, I'm referring to *this* file (`~/.claude/CLAUDE.md`), the context-specific `CLAUDE.<context>.md` siblings indexed below, and any `CLAUDE.<context>.local.md` per-machine overrides alongside them.
