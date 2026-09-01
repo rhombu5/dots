@@ -283,6 +283,10 @@ the ledger) is removed by the verdict session.
   transcript rather than trusting a self-report. It covers what the `PreToolUse` sibling cannot:
   each agent inside a `Workflow` fan-out individually, `Agent` dispatches whose model enum can't
   carry an arm id, and `scriptPath`-form workflows. Arm attribution therefore cannot be lost.
+  `agents.jsonl` is the AUTHORITATIVE record of which arm ran, and the model it names is the one
+  the API actually resolved. `assignments.jsonl` is lossy by comparison: its `PreToolUse` regex
+  only matches a literal `model: '<id>'` in the script text, so arms held in a variable or array
+  — the natural way to write the split fan-out described below — never reach it at all.
 - **The ledger duty is triggered, not scheduled: log before you act on the result.** The arrival of
   an opus delegation's result IS the trigger — append its `~/.claude/opus-ab/ledger.jsonl` entry
   `{date, project, agent_id (joins to agents.jsonl), model, task, role: author|review|design, overengineering: [instances of making
