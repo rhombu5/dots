@@ -277,23 +277,38 @@ the ledger) is removed by the verdict session.
   since the ledger entry the orchestrator appends carries the model regardless. Every pass and
   block is logged to `~/.claude/opus-ab/assignments.jsonl`. Never let the experiment change how
   work is briefed, gated, or judged.
+- **Every finished opus subagent records itself — you supply only the judgment.** A `SubagentStop`
+  hook (`~/.claude/hooks/opus-ab-agents.mjs`, wired into `hooks.SubagentStop`) appends one row per
+  opus agent to `~/.claude/opus-ab/agents.jsonl`, reading the RESOLVED model out of the agent's own
+  transcript rather than trusting a self-report. It covers what the `PreToolUse` sibling cannot:
+  each agent inside a `Workflow` fan-out individually, `Agent` dispatches whose model enum can't
+  carry an arm id, and `scriptPath`-form workflows. Arm attribution therefore cannot be lost.
 - **The ledger duty is triggered, not scheduled: log before you act on the result.** The arrival of
   an opus delegation's result IS the trigger — append its `~/.claude/opus-ab/ledger.jsonl` entry
-  `{date, project, model, task, role: author|review|design, overengineering: [instances of making
+  `{date, project, agent_id (joins to agents.jsonl), model, task, role: author|review|design, overengineering: [instances of making
   things harder than needed — especially satisfying requirements that weren't given: invented
   options or constraints, unrequested defensive branches, speculative generality], defects: [what
   later review/gates caught], failure_mode: "loud"|"silent" (loud = breaks the build/gates;
   silent = compiles and passes but does more than asked — requires manual review to catch),
   notes: [retries, stalls, instruction-following], verdict: 1-5 vs the brief}` BEFORE consuming
   or acting on the report. Clean runs get logged too. At session wrap, verify every opus
-  delegation this session made has its line.
+  delegation this session made has its line — `agents.jsonl` rows with no matching `agent_id` in
+  `ledger.jsonl` are exactly the ungraded ones.
+- **In a `Workflow`, prefer splitting the arms across stages over running the script on one arm.**
+  Handing the SAME prompt to all three arms in one `parallel()` is the only matched-pair comparison
+  the experiment can make — same task, same minute, model the lone variable — where every other
+  entry compares different tasks on different days. Valid ONLY where the stages are genuinely
+  independent (a finder fan-out, a judge panel, an N-way refuter vote). Where stage N consumes
+  stage N-1, split arms contaminate each other: run those stages on one arm and record which.
 - **Verdict**: the FIRST session running at or after 2026-09-22 22:00 local — after confirming
   this block still exists (absence = another session already delivered) — judges via a
   single-agent `Workflow` on model `fable`, effort `xhigh` (`max` if the ledger is large or
-  contentious), handing it the complete ledger, and presents the owner a recommendation on
+  contentious), handing it BOTH `ledger.jsonl` (judgment) and `agents.jsonl` (mechanically recorded
+  arms, joined on `agent_id`), and presents the owner a recommendation on
   which opus version(s) to use for which roles (author/review/design), with the evidence —
   including the loud-vs-silent failure-mode axis. THEN, same session: delete this block from
   `~/src/dots@rhombu5/home/dot_claude/CLAUDE.md`, `chezmoi apply`, commit the removal, remove
-  the hook script (`~/.claude/hooks/opus-ab-split.mjs`) and its `hooks.PreToolUse` entry from
-  `~/.claude/settings.json`, `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph
+  both hook scripts (`~/.claude/hooks/opus-ab-split.mjs`, `~/.claude/hooks/opus-ab-agents.mjs`) and
+  their `hooks.PreToolUse` / `hooks.SubagentStop` entries from `~/.claude/settings.json`,
+  `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph
   (only) from the std@fnioc memory file `feedback-opus5-overengineers.md`.
