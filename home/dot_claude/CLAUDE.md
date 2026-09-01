@@ -196,7 +196,7 @@ Concrete cases:
 - **Mechanical / scripted work** — bulk renaming, simple refactors with a clear pattern, format conversion, straightforward file scans → **haiku** is often enough. Try it; escalate if quality drops.
 - **Reasoning effort is a second dial, orthogonal to model.** Turn it down for rote mechanical stages, reserve high/max for genuinely hard verify/judge/design steps — effort multiplies output tokens (the `~5×` kind), so low-effort haiku on a rote task is the cheapest cell in the grid.
 - **Fable is governed by one invariant: the quota must NOT run dry.** A tier orthogonal to the three above. An autonomous dispatch clears in either of two ways: a stated, extremely strong task justification, or clear quota surplus — the burndown test in `CLAUDE.workflow.md` § "Fable usage" (keep the yellow above the white). Clear surplus justifies the spend on its own, since unused quota expires at reset; tight headroom vetoes regardless of task merit. The quota check isn't `get_usage` (no Fable bucket there) — workflow.md has the real mechanism. A Fable *orchestrator's* own window is Fable spend too: on a Fable main thread, delegate reads/code/prose to cheaper tiers and keep the window lean. When I name `@cheap-fable` explicitly, that's always fine regardless of quota — the gate is only on your own autonomous choice to reach for it.
-- **A versioned model id always carries the `[1m]` 1M-context suffix.** Anywhere you write a concrete id rather than an alias — a `Workflow` script's `model`, `--model`, `fnc_set_model`, `settings.json` — spell it `claude-opus-5[1m]`, `claude-opus-4-6[1m]`, `claude-sonnet-5[1m]`, `claude-fable-5[1m]`. Two exceptions, both verified 2026-08-29 by probing them: `claude-haiku-4-5[1m]` is refused (400, long-context beta not on this subscription) and `claude-sonnet-4-6[1m]` needs usage credits — those two stay bare. The `Agent` tool's `model` field is a fixed enum (`opus`/`sonnet`/`haiku`/`fable`) that can't hold a suffix; leave it alone.
+- **A versioned model id always carries the `[1m]` 1M-context suffix.** Anywhere you write a concrete id rather than an alias — a `Workflow` script's `model`, `--model`, `fnc_set_model`, `settings.json` — spell it `claude-opus-5[1m]`, `claude-opus-4-8[1m]`, `claude-opus-4-6[1m]`, `claude-sonnet-5[1m]`, `claude-fable-5[1m]`. Two exceptions, both verified 2026-08-29 by probing them: `claude-haiku-4-5[1m]` is refused (400, long-context beta not on this subscription) and `claude-sonnet-4-6[1m]` needs usage credits — those two stay bare. The `Agent` tool's `model` field is a fixed enum (`opus`/`sonnet`/`haiku`/`fable`) that can't hold a suffix; leave it alone.
 
 Substance, structure, and tricky design decisions stay on **opus** — only *execution* gets handed off: opus decides *what*, the subagent does the *how*.
 
@@ -284,24 +284,27 @@ When the escape hatch applies, **say so out loud** before acting: *"X needs to g
 Past project experiments leak forward — a system-wide `rust` installed months ago as a build dep is still there, frozen at that version, silently used by every project that doesn't pin its own. Mise gives per-project pinning that travels with the repo and a clean uninstall path; system installs do neither.
 
 
-## TEMPORARY: opus 5 vs 4.6 A/B — self-erases after the 2026-09-09 verdict
+## TEMPORARY: opus 5 vs 4.8 vs 4.6 A/B/C — self-erases after the 2026-09-22 verdict
 
-Owner directive 2026-08-27. Applies to EVERY session in every project, silently — woven into
-normal work, no narration, no asking. Every trace (this block, the ledger) is removed by the
-verdict session.
+Owner directive 2026-08-27, expanded to A/B/C 2026-08-30. Applies to EVERY session in every
+project, silently — woven into normal work, no narration, no asking. Every trace (this block,
+the ledger) is removed by the verdict session.
 
 - **Self-assign the arm when authoring the dispatch — never dispatch bare `opus`.** Any opus-bound
-  `Agent`/`Workflow` stage gets an explicit `claude-opus-4-6[1m]`/`claude-opus-5[1m]` id chosen at write
-  time: alternate the two arms, balanced within each consecutive pair of opus dispatches this
-  session makes, coin-flip (shell `$RANDOM`) deciding which arm leads each pair. The `PreToolUse`
+  `Agent`/`Workflow` stage gets an explicit `claude-opus-4-6[1m]`/`claude-opus-4-8[1m]`/`claude-opus-5[1m]`
+  id chosen at write time: rotate through groups of 3 — one dispatch per arm per group — with a
+  random permutation (shell `$RANDOM`) deciding the order within each group. The `PreToolUse`
   hook (`~/.claude/hooks/opus-ab-split.mjs`, wired into `~/.claude/settings.json`'s
   `hooks.PreToolUse`) tracks no arm state of its own — it's a logger plus a forgot-path reminder.
-  An explicit id on `Workflow` always passes, silently, logged as-is. A bare `opus` on `Workflow`
+  An explicit id on `Workflow` always passes, silently, logged as-is. An explicit id on `Agent`
+  cannot be carried (fixed enum), but the orchestrator's ledger entry records the chosen arm. A
+  bare `opus` on `Workflow`
   BLOCKS once per script signature with a short reminder of the self-assign scheme and the ledger
   duty; the identical script resubmitted unchanged passes through on the bare alias, logged
-  `alias-passthrough`. A bare `opus` on `Agent` never blocks at all — the tool's `model` field is a
-  fixed enum that can never carry an explicit id, so blocking would be pure friction; it just
-  passes through, logged `alias-passthrough`. Known gap: a `scriptPath`-form `Workflow` call
+  `alias-passthrough`. A bare `opus` on `Agent` BLOCKS once per prompt signature with the same
+  reminder; the identical retry passes through, logged `alias-passthrough`. The Agent model enum
+  can't carry an explicit id, but the block forces the orchestrator to decide which arm the
+  dispatch belongs to before resubmitting. Known gap: a `scriptPath`-form `Workflow` call
   (script on disk, not inline) bypasses the hook entirely, untouched and unlogged — acceptable,
   since the ledger entry the orchestrator appends carries the model regardless. Every pass and
   block is logged to `~/.claude/opus-ab/assignments.jsonl`. Never let the experiment change how
@@ -311,15 +314,18 @@ verdict session.
   `{date, project, model, task, role: author|review|design, overengineering: [instances of making
   things harder than needed — especially satisfying requirements that weren't given: invented
   options or constraints, unrequested defensive branches, speculative generality], defects: [what
-  later review/gates caught], notes: [retries, stalls, instruction-following], verdict: 1-5 vs
-  the brief}` BEFORE consuming or acting on the report. Clean runs get logged too. At session wrap,
-  verify every opus delegation this session made has its line.
-- **Verdict**: the FIRST session running at or after 2026-09-09 22:00 local — after confirming
+  later review/gates caught], failure_mode: "loud"|"silent" (loud = breaks the build/gates;
+  silent = compiles and passes but does more than asked — requires manual review to catch),
+  notes: [retries, stalls, instruction-following], verdict: 1-5 vs the brief}` BEFORE consuming
+  or acting on the report. Clean runs get logged too. At session wrap, verify every opus
+  delegation this session made has its line.
+- **Verdict**: the FIRST session running at or after 2026-09-22 22:00 local — after confirming
   this block still exists (absence = another session already delivered) — judges via a
   single-agent `Workflow` on model `fable`, effort `xhigh` (`max` if the ledger is large or
   contentious), handing it the complete ledger, and presents the owner a recommendation on
-  hard-switching all workflows to opus 4.6, with the evidence. THEN, same session: delete this
-  block from `~/src/dots@rhombu5/home/dot_claude/CLAUDE.md`, `chezmoi apply`, commit the removal,
-  remove the hook script (`~/.claude/hooks/opus-ab-split.mjs`) and its `hooks.PreToolUse` entry
-  from `~/.claude/settings.json`, `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph
+  which opus version(s) to use for which roles (author/review/design), with the evidence —
+  including the loud-vs-silent failure-mode axis. THEN, same session: delete this block from
+  `~/src/dots@rhombu5/home/dot_claude/CLAUDE.md`, `chezmoi apply`, commit the removal, remove
+  the hook script (`~/.claude/hooks/opus-ab-split.mjs`) and its `hooks.PreToolUse` entry from
+  `~/.claude/settings.json`, `rm -rf ~/.claude/opus-ab/`, and trim the experiment paragraph
   (only) from the std@fnioc memory file `feedback-opus5-overengineers.md`.
