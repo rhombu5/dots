@@ -46,22 +46,39 @@ Each parallel subagent is a fresh window paying its own **base context** (system
 
 Fable's weekly quota is metered separately and isn't one of the `get_usage` MCP tool's buckets
 (that tool's `limits` only ever covers 5-hour / weekly-all-models / weekly-Sonnet — no Fable
-bucket, ever). Query Fable's real bucket directly before spending it, whether the spend is an
-autonomous `Agent(model: "fable", ...)` or an `agent(..., {model: "fable"})` inside a `Workflow`
-script:
+bucket, ever). Check the real bucket before spending it, whether the spend is an autonomous
+`Agent(model: "fable", ...)` or an `agent(..., {model: "fable"})` inside a `Workflow` script.
+
+The primary source is the cc statusline's own usage log — `~/.claude/statusline-command.sh` appends
+one sample per render to `${XDG_STATE_HOME:-$HOME/.local/state}/claude-statusline/fable.log`, each
+line `<epoch> <used%> <resets_epoch>`, freshest line last, the window always the nominal 7 days
+(window start is `resets_epoch` minus 604800):
+
+```sh
+d="${XDG_STATE_HOME:-$HOME/.local/state}/claude-statusline"
+read -r ts used reset < <(tail -1 "$d/fable.log")
+now=$(date +%s)
+echo "used ${used}%  vs elapsed $(( (now - (reset - 604800)) * 100 / 604800 ))% of window"
+```
+
+Fall back to the OAuth endpoint directly only when the log is missing or stale:
 
 ```sh
 token=$(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json)
 curl -sf -H "Authorization: Bearer $token" -H "anthropic-beta: oauth-2025-04-20" \
         https://api.anthropic.com/api/oauth/usage \
-  | jq '.limits[] | select(.scope.model.display_name == "Fable")'
+  | jq '.limits[] | select(.kind == "weekly_scoped" and .scope.model.display_name == "Fable")'
 # → {"percent":17,"resets_at":"2026-07-30T01:59:59+00:00", ...} — percent is USED, not remaining
 ```
 
-Decide from `percent` (used, 0-100) and `resets_at`. **The invariant: the Fable quota must NOT
-run dry.** The operational test is the burndown, as the cc statusline draws it: keep the yellow
-(remaining quota) above the white (the linear pace line) — quantitatively, used-% vs the fraction
-of the window elapsed (`resets_at` minus a week is the window start). From there:
+The Fable entry's `resets_at` is null whenever the bucket holds no usage — the boundary is only
+stamped once something has actually been spent. When it's null, take `percent` from the Fable
+entry and `resets_at` from the same payload's `weekly_all` entry instead; the two share a boundary.
+
+Decide from used-% and elapsed-%. **The invariant: the Fable quota must NOT run dry.** The
+operational test is the burndown, as the cc statusline draws it: keep the yellow (remaining quota)
+above the white (the linear pace line) — quantitatively, used-% vs the fraction of the window
+elapsed. From there:
 
 - **Yellow at or below white** (used-% at or above elapsed-%, or near it) → conserve: Fable only
   for extremely justified tasks whose savings clearly outweigh eating into what's left.
