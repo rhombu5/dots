@@ -1,0 +1,11 @@
+[Unit]
+Description=Check whether the upstream waybar taskbar-leak fix has shipped
+# Network-dependent: the script exits cleanly when gh is unreachable rather than
+# misreading an outage as a state change, so no hard ordering is needed here.
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/waybar-leak-pr-watch
+# Two GitHub API calls plus an occasional search; generous but bounded so a
+# hung request can never leave the unit activating forever.
+TimeoutStartSec=2min

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Weekly watch on the upstream fix for waybar's taskbar memory leak.
+#
+# Background
+# ----------
+# Waybar leaks ~143KB every time hyprland/workspaces' `workspace-taskbar`
+# rebuilds its per-window widget tree, because each rebuild strands a
+# GtkCssStaticStyle that GTK never frees. Upstream issue Alexays/Waybar#5186,
+# root-caused with heaptrack in PR #5194 (unmerged as of 2026-09-03).
+#
+# On this machine the leak was CONTAINED, never fixed: waybar.service.d/
+# memory-cap.conf caps the unit at MemoryMax=512M so the kernel OOM-kills it
+# in its own cgroup, and restart.conf respawns it ~3s later. That turns the
+# leak into a brief bar blink a few times a day, which is why it went unnoticed.
+#
+# The local mitigation is in .config/waybar/config.jsonc: workspace-taskbar's
+# format is "{icon}" with NO {title} token. A {title} makes waybar subscribe to
+# Hyprland's windowtitlev2 event, so the leaking rebuild fires on every window
+# title change — thousands of times a day in an editor. Dropping it removes the
+# dominant trigger but not the bug: rebuilds still happen on window open/close
+# and focus moves, just orders of magnitude less often.
+#
+# What this watch is for
+# ----------------------
+# When the real fix ships, the {title:.12} format can come back. Nothing will
+# announce that, so this checks weekly and says so.
+#
+# It tracks the ISSUE as the durable anchor and the PR as the current candidate,
+# because a PR is a guess about how the fix lands and the issue is the fact that
+# it hasn't. If #5194 is closed WITHOUT merging, the fix hasn't disappeared —
+# it has moved, so the script searches for open PRs referencing #5186 and names
+# the successor rather than going quiet. Silence must never be the output when
+# the thing being tracked stops existing.
+#
+# Notifies only on CHANGE. A watch that fires weekly regardless is one the owner
+# learns to dismiss, and the one week it matters gets dismissed with the rest.
+
+set -uo pipefail
+
+REPO="Alexays/Waybar"
+ISSUE=5186
+PR=5194
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/waybar-leak-pr-watch"
+STATE_FILE="$STATE_DIR/state"
+LOG_FILE="$STATE_DIR/log"
+mkdir -p "$STATE_DIR"
+
+log() { printf '%s  %s\n' "$(date -Is)" "$*" >>"$LOG_FILE"; }
+
+notify() {
+  local urgency="$1" title="$2" body="$3"
+  notify-send -u "$urgency" -a "waybar-leak-watch" "$title" "$body" || true
+  log "NOTIFY [$urgency] $title — $body"
+}
+
+# gh exits non-zero on network failure; a transient outage must not be read as
+# a state change, so bail without touching the state file.
+pr_state=$(gh api "repos/$REPO/pulls/$PR" --jq '"\(.state)/\(.merged)"' 2>/dev/null) || {
+  log "gh unreachable, skipping this run"
+  exit 0
+}
+issue_state=$(gh api "repos/$REPO/issues/$ISSUE" --jq '.state' 2>/dev/null) || {
+  log "gh unreachable, skipping this run"
+  exit 0
+}
+
+current="pr=$pr_state issue=$issue_state"
+previous=$(cat "$STATE_FILE" 2>/dev/null || echo "")
+
+if [ "$current" = "$previous" ]; then
+  log "no change ($current)"
+  exit 0
+fi
+
+log "CHANGE: '$previous' -> '$current'"
+printf '%s\n' "$current" >"$STATE_FILE"
+
+# First run records the baseline without claiming anything happened.
+if [ -z "$previous" ]; then
+  log "baseline recorded, no notification"
+  exit 0
+fi
+
+case "$pr_state" in
+  closed/true)
+    notify critical "Waybar leak fix MERGED" \
+      "PR #$PR merged upstream. Once waybar-git rebuilds past that commit, restore \"format\": \"{icon}{title:.12}\" in ~/.config/waybar/config.jsonc (chezmoi source in dots)."
+    ;;
+  closed/false)
+    # The candidate died. Name its replacement rather than leaving a dead pointer.
+    successors=$(gh api "search/issues?q=repo:$REPO+is:pr+is:open+$ISSUE" \
+      --jq '.items[] | "#\(.number) \(.title)"' 2>/dev/null | head -3)
+    notify critical "Waybar leak fix PR CLOSED unmerged" \
+      "PR #$PR was closed without merging. Issue #$ISSUE is $issue_state. Open PRs referencing it: ${successors:-none found — re-check manually}. Update PR=$PR in $0."
+    ;;
+  open/*)
+    if [ "$issue_state" = "closed" ]; then
+      notify critical "Waybar leak issue CLOSED" \
+        "Issue #$ISSUE closed while PR #$PR is still open — fixed another way. Verify, then restore the {title:.12} taskbar format."
+    else
+      log "PR still open, issue still open — state string changed but nothing actionable"
+    fi
+    ;;
+esac

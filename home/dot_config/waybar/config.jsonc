@@ -40,7 +40,14 @@
         },
         "workspace-taskbar": {
             "enable": true,
-            "format": "{icon}{title:.12}",
+            // NO {title} HERE — deliberate. A {title} token makes waybar subscribe to
+            // Hyprland's windowtitlev2 event, so updateTaskbar() tears down and rebuilds
+            // the whole per-window widget tree on EVERY title change. Each rebuild strands
+            // a GtkCssStaticStyle GTK never frees (~143KB), which in an editor session is
+            // thousands of times a day — that is the waybar memory leak this machine hits.
+            // Upstream: Alexays/Waybar#5186, fix in PR #5194 (unmerged as of 2026-09-03).
+            // Restore {title:.12} once that lands and the local build carries it.
+            "format": "{icon}",
             "icon-size": 20,
             "on-click-window": "hyprctl dispatch focuswindow address:{address}"
         },
