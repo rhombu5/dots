@@ -234,7 +234,7 @@ if (shape.kind === "circle") {
 
 ## Boolean expressions — truthiness, coerce only when required
 
-**Prefer truthiness over explicit comparison** wherever the falsy set is acceptable — including `.length`:
+**Use truthiness whenever it achieves the same result as being explicit** — including `.length`:
 
 ```ts
 // NO
