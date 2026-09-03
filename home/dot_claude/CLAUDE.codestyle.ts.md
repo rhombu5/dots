@@ -133,9 +133,41 @@ parameter/return/property type annotations, type arguments. It does NOT touch ar
 *values/expressions* (`(x) => x + 1`, `.map(p => …)`), interface/object *method signatures*
 (`foo(x): T`), or arrow syntax inside doc comments / error-message strings.
 
-**Import from `@rhombus-toolkit/types`** — `Func`/`Ctor`/`AbstractCtor` and siblings are being
-consolidated there from `@rhombus-toolkit/func` (migration in flight); import from whichever
-currently resolves in a given project until it lands.
+**Import from `@rhombus-toolkit/types`** — `Func`/`Ctor`/`AbstractCtor` and siblings live there
+(a type-only package, no runtime). Not from `@rhombus-toolkit/func`, and never re-declared
+locally.
+
+## `@rhombus-toolkit/*` — reach for it before writing a local utility
+
+Make good use of the `@rhombus-toolkit/*` packages. The two that come up in every project:
+
+- **`@rhombus-toolkit/types`** — `Func`, `Ctor`, `AbstractCtor` and their `AsyncFunc` /
+  `Action` / `AsyncAction` siblings, per "No lambda types" above.
+- **`@rhombus-toolkit/type-guards`** — `assertNever` for exhaustiveness (see "Exhaustiveness"
+  below), and the `is*` guards: `isDefined`, `isObject`, `isFunction`, `isIterable`, `isPromise`, …
+
+**The `is*` guards are for passing directly, in place of a lambda** — `.filter(isDefined)`,
+`.find(isFunction)`, `.every(isIterable)`. That is the only place to use them. Inside an ordinary
+conditional, write the check inline; a guard call there is a hop the reader has to resolve for
+nothing.
+
+```ts
+import { isDefined } from "@rhombus-toolkit/type-guards";
+
+// NO — lambda where a guard reference fits
+items.filter(x => x !== undefined);
+items.filter(x => isDefined(x));
+
+// NO — guard call inside an ordinary conditional
+if (isDefined(value)) { … }
+
+// YES
+items.filter(isDefined);
+if (value !== undefined) { … }
+```
+
+`.filter(isDefined)` drops only `undefined` and keeps `0`/`""`; when every falsy value should go,
+`.filter(Boolean)` (see "Boolean expressions" below) is the right spelling.
 
 ## Control flow — always braces, always multiline
 
