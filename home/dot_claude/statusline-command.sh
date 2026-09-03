@@ -1605,6 +1605,46 @@ if (( USAGE_BURNDOWN_GRAPH )) && (( have_rl )); then
     done
 fi
 
+# ── Width ruler (diagnostic; emitted only while ~/.claude/.statusline-ruler
+# exists). Two extra rows above the status line that make the TUI's REAL usable
+# width readable straight off a screenshot:
+#
+#   row 1  a column ruler run deliberately 20 columns PAST our computed
+#          TERM_WIDTH, with `#` planted at column TERM_WIDTH. Each decade label
+#          ENDS on its own column, so "...12" means that `2` sits on column 120.
+#          Where the TUI cuts the row is the real width; where the `#` sits is
+#          the width we assumed. The gap between them is the bug.
+#   row 2  the numbers behind this frame's layout — computed vs raw width, the
+#          per-row visible widths we padded against, and the burndown gates.
+#          Leftmost fields matter most; the row is expected to be cut too.
+if [ -f "$HOME/.claude/.statusline-ruler" ]; then
+    dbg_len=$(( TERM_WIDTH + 20 ))
+    dbg_ruler=""
+    for ((dbg_d=1; dbg_d*10<=dbg_len; dbg_d++)); do
+        printf -v dbg_pad '%*s' $(( 10 - ${#dbg_d} )) ''
+        dbg_ruler+="${dbg_pad// /.}$dbg_d"
+    done
+    printf -v dbg_pad '%*s' $(( dbg_len - ${#dbg_ruler} )) ''
+    dbg_ruler+="${dbg_pad// /.}"
+    dbg_ruler="${dbg_ruler:0:TERM_WIDTH-1}#${dbg_ruler:TERM_WIDTH}"
+
+    # Re-derive the raw terminal size the same way detect_term_width did, so the
+    # info row can show what it saw before the 4-column gutter came off. That
+    # runs in a subshell up top, so its locals never made it out here.
+    dbg_tty=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d ' ')
+    dbg_stty=$(stty -F "/dev/$dbg_tty" size 2>/dev/null | awk '{print $2}')
+
+    dbg_vw=""
+    for ((dbg_i=0; dbg_i<rows; dbg_i++)); do dbg_vw+="${row_vw[$dbg_i]:-0},"; done
+
+    printf '%s\n' "$dbg_ruler"
+    printf 'W=%s raw=%s tty=%s vw=[%s] rows=%s rr=%s plot=%s bands=%s blk=%s haverl=%s rl5=%s rl7=%s rlf=%s\n' \
+        "$TERM_WIDTH" "${dbg_stty:-none}" "${dbg_tty:-none}" "${dbg_vw%,}" \
+        "$rows" "$right_rows" "$rr_plot" "${burndown_bands:--}" "${burndown_total_w:--}" \
+        "$have_rl" \
+        "${rl5_used:+u}${rl5_resets:+r}-" "${rl7_used:+u}${rl7_resets:+r}-" "${rlf_used:+u}${rlf_resets:+r}-"
+fi
+
 for ((i=0; i<rows; i++)); do
     (( i > 0 )) && printf "\n"
     printf '%s' "${row_str[$i]}"
