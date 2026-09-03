@@ -166,8 +166,9 @@ items.filter(isDefined);
 if (value !== undefined) { … }
 ```
 
-`.filter(isDefined)` drops only `undefined` and keeps `0`/`""`; when every falsy value should go,
-`.filter(Boolean)` (see "Boolean expressions" below) is the right spelling.
+`.filter(isDefined)` drops only `undefined` — `null`, `0` and `""` pass; `.filter(hasValue)` drops
+`null` too. When every falsy value should go, `.filter(Boolean)` (see "Boolean expressions"
+below) is the right spelling.
 
 ## Control flow — always braces, always multiline
 
