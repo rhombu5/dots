@@ -14,7 +14,14 @@ set -euo pipefail
 
 base="${HOME}/.claude/settings.base.json"
 live_json="$(cat)"
-[[ -n "$live_json" ]] || live_json='{}'
+# Distinguish "first apply on a fresh machine" (empty stdin) from "existing file
+# that simply lacks a key". A volatile key is seeded from base only in the
+# former case. Deciding that per-key instead conflated the two: when the TUI
+# dropped `model` from settings.json during a model switch, the fallback below
+# re-injected base's value, so `chezmoi verify` reported drift on every run and
+# wedged the pre-commit hook until someone noticed. Volatile means live wins —
+# including when live says nothing.
+if [[ -n "$live_json" ]]; then fresh=false; else fresh=true; live_json='{}'; fi
 
 unstable_keys='["model","effortLevel","modelSettings","verbose","autoScrollEnabled","askUserQuestionTimeout","awaySummaryEnabled"]'
 
@@ -32,14 +39,18 @@ jq -n --indent 2 \
   --slurpfile base "$base" \
   --argjson live "$live_json" \
   --argjson unstable "$unstable_keys" \
+  --argjson fresh "$fresh" \
   '
     ($base[0]) as $b
     | $live as $l
     | reduce ($b | keys_unsorted[]) as $k (
         $l;
         if ($unstable | index($k)) then
-          # volatile: keep whatever live holds; fall back to base only if live lacks it
-          (if ($l | has($k)) and ($l[$k] != null) then . else .[$k] = $b[$k] end)
+          # volatile: live wins, including when live omits the key entirely.
+          # Base seeds a value only on a genuine first apply (empty stdin).
+          (if ($l | has($k)) and ($l[$k] != null) then .
+           elif $fresh then .[$k] = $b[$k]
+           else . end)
         else
           # stable: base is authoritative for the value, live keeps the position
           .[$k] = $b[$k]
