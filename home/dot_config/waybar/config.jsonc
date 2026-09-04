@@ -25,16 +25,28 @@
     ],
 
     "hyprland/workspaces": {
-        // Persistent 1–9 on every monitor: makes #workspaces button:nth-child(N)
-        // a stable proxy for workspace N. The per-workspace pill colors
+        // Persistent on every monitor: makes #workspaces button:nth-child(N)
+        // a stable proxy for slot N. The per-workspace pill colors
         // (workspace-accents.css + pill-mode.css) depend on stable DOM order.
+        //
+        // There is no numeric 8 or 9 — Super+8/9/0 summon the special
+        // (overlay) workspaces ws8/ws9/scratch (see hypr/workspaces.conf),
+        // so those are what claim the 8/9/0 pills. Listing them here is
+        // what makes them permanent instead of appearing only once summoned.
+        // Waybar strips the "special:" prefix, so format-icons keys on the
+        // bare name.
+        //
+        // Slot order is waybar's DEFAULT sort: normal workspaces by id
+        // first, then specials by name — 1..7, scratch, ws8, ws9. That is
+        // what pill-mode.css's :nth-child(n+8) special-pill rule keys on.
         "persistent-workspaces": {
-            "*": [1, 2, 3, 4, 5, 6, 7, 8, 9]
+            "*": [1, 2, 3, 4, 5, 6, 7, "special:scratch", "special:ws8", "special:ws9"]
         },
         "format": "<span size='x-large' weight='bold'>{icon}</span>  {windows}",
         "format-icons": {
             "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
-            "6": "6", "7": "7", "8": "8", "9": "9",
+            "6": "6", "7": "7",
+            "scratch": "0", "ws8": "8", "ws9": "9",
             "default": "○",
             "urgent": ""
         },
@@ -52,7 +64,11 @@
             "on-click-window": "hyprctl dispatch focuswindow address:{address}"
         },
         "on-click": "activate",
-        "sort-by-number": true,
+        // "sort-by-number" is gone from waybar 0.15 — the only key read is
+        // "sort-by", and it has no number method that survives a special
+        // workspace (std::stoi on the name throws). "default" orders
+        // normals by id then specials by name, which is what we want.
+        "sort-by": "default",
         "show-special": true,
         "all-outputs": false
     },

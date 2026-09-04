@@ -11,8 +11,14 @@
 #workspaces button:nth-child(5) { color: @ws5_on; background-color: @ws5_vibrant; border-color: @ws5_vibrant; }
 #workspaces button:nth-child(6) { color: @ws6_on; background-color: @ws6_vibrant; border-color: @ws6_vibrant; }
 #workspaces button:nth-child(7) { color: @ws7_on; background-color: @ws7_vibrant; border-color: @ws7_vibrant; }
-#workspaces button:nth-child(8) { color: @ws8_on; background-color: @ws8_vibrant; border-color: @ws8_vibrant; }
-#workspaces button:nth-child(9) { color: @ws9_on; background-color: @ws9_vibrant; border-color: @ws9_vibrant; }
+
+/* Slots 8+ are the special (overlay) workspaces — scratch (pill "0"), ws8,
+ * ws9 — in waybar's default sort order. An overlay paints on top of
+ * whatever workspace is beneath it, so it has no wallpaper of its own and
+ * no Vibrant swatch to derive from: these wear the matugen palette
+ * instead. :nth-child(n+8) rather than three fixed slots, so adding a
+ * fourth special workspace needs no change here. */
+#workspaces button:nth-child(n+8) { color: @on-primary; background-color: @primary; border-color: @primary; }
 
 #workspaces button:nth-child(1).active { box-shadow: inset 0 0 0 2px @ws1_dark_vibrant; }
 #workspaces button:nth-child(2).active { box-shadow: inset 0 0 0 2px @ws2_dark_vibrant; }
@@ -21,5 +27,4 @@
 #workspaces button:nth-child(5).active { box-shadow: inset 0 0 0 2px @ws5_dark_vibrant; }
 #workspaces button:nth-child(6).active { box-shadow: inset 0 0 0 2px @ws6_dark_vibrant; }
 #workspaces button:nth-child(7).active { box-shadow: inset 0 0 0 2px @ws7_dark_vibrant; }
-#workspaces button:nth-child(8).active { box-shadow: inset 0 0 0 2px @ws8_dark_vibrant; }
-#workspaces button:nth-child(9).active { box-shadow: inset 0 0 0 2px @ws9_dark_vibrant; }
+#workspaces button:nth-child(n+8).active { box-shadow: inset 0 0 0 2px @on-primary; }

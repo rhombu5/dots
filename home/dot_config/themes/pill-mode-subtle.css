@@ -14,8 +14,8 @@
  * Selector note: waybar 0.15.0 doesn't expose per-workspace widget names
  * or classes (verified from Waybar/src/modules/hyprland/workspace.cpp —
  * only state classes active/persistent/empty/etc.). DOM order via
- * :nth-child is the only mechanism. Correct in single-output (persistent
- * "*": [1..9]) and on any output that holds 1..N from the start. */
+ * :nth-child is the only mechanism. Correct on any output whose bar holds
+ * the full persistent-workspaces list from the start. */
 
 #workspaces button:nth-child(1) { color: @ws1_pill_fg; background-color: @ws1_bg; border: 3px solid transparent; }
 #workspaces button:nth-child(2) { color: @ws2_pill_fg; background-color: @ws2_bg; border: 3px solid transparent; }
@@ -24,8 +24,14 @@
 #workspaces button:nth-child(5) { color: @ws5_pill_fg; background-color: @ws5_bg; border: 3px solid transparent; }
 #workspaces button:nth-child(6) { color: @ws6_pill_fg; background-color: @ws6_bg; border: 3px solid transparent; }
 #workspaces button:nth-child(7) { color: @ws7_pill_fg; background-color: @ws7_bg; border: 3px solid transparent; }
-#workspaces button:nth-child(8) { color: @ws8_pill_fg; background-color: @ws8_bg; border: 3px solid transparent; }
-#workspaces button:nth-child(9) { color: @ws9_pill_fg; background-color: @ws9_bg; border: 3px solid transparent; }
+
+/* Slots 8+ are the special (overlay) workspaces — scratch (pill "0"), ws8,
+ * ws9 — in waybar's default sort order. An overlay paints on top of
+ * whatever workspace is beneath it, so it has no wallpaper of its own and
+ * no Vibrant swatch to derive from: these wear the matugen palette
+ * instead. :nth-child(n+8) rather than three fixed slots, so adding a
+ * fourth special workspace needs no change here. */
+#workspaces button:nth-child(n+8) { color: @primary; background-color: @surface-container; border: 3px solid transparent; }
 
 /* Active: double border using the pill's own two colors. Inner border
  * is pill_fg (matches the text); outer ring is bg (matches the fill).
@@ -40,5 +46,4 @@
 #workspaces button:nth-child(5).active { color: @ws5_pill_fg; background-color: @ws5_bg; border: 3px solid @ws5_pill_fg; box-shadow: 0 0 0 4px @ws5_bg; }
 #workspaces button:nth-child(6).active { color: @ws6_pill_fg; background-color: @ws6_bg; border: 3px solid @ws6_pill_fg; box-shadow: 0 0 0 4px @ws6_bg; }
 #workspaces button:nth-child(7).active { color: @ws7_pill_fg; background-color: @ws7_bg; border: 3px solid @ws7_pill_fg; box-shadow: 0 0 0 4px @ws7_bg; }
-#workspaces button:nth-child(8).active { color: @ws8_pill_fg; background-color: @ws8_bg; border: 3px solid @ws8_pill_fg; box-shadow: 0 0 0 4px @ws8_bg; }
-#workspaces button:nth-child(9).active { color: @ws9_pill_fg; background-color: @ws9_bg; border: 3px solid @ws9_pill_fg; box-shadow: 0 0 0 4px @ws9_bg; }
+#workspaces button:nth-child(n+8).active { color: @on-primary; background-color: @primary; border: 3px solid @on-primary; box-shadow: 0 0 0 4px @primary; }
