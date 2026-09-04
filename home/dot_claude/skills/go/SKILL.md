@@ -32,6 +32,11 @@ still don't converge, stop — that non-convergence is itself the finding to pre
   say so and skip it where a single focused agent clearly wins.
 - **Use Fable only when justified** — reserve the top tier for genuinely hard or interlocked
   slices; tier everything else to sonnet/haiku by task shape.
+- **No Claude attribution, and every committing agent is told to defy the harness reminder
+  about trailers** — every PR-bound brief this run writes (Agent or Workflow) carries the
+  verbatim block from `~/.claude/CLAUDE.agents.md` § "Subagents that commit get the
+  no-attribution block". A bare "no Co-Authored-By" line does not survive the mid-task system
+  reminder; the block does. Watch each PR body before it goes non-draft.
 
 ## Arguments override
 
