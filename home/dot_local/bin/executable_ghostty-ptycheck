@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Flag Ghostty windows whose pty size no longer matches the window's real size.
+#
+# Ghostty sometimes misses a compositor-driven resize and leaves the pty at its
+# previous dimensions. Every TUI in that window then draws to a width the window
+# does not have: right-aligned content lands past the edge and the terminal
+# truncates it away, while flush-left content still looks correct. Comparing each
+# window's pixel width against the column count its pty reports catches it.
+#
+# Reports only. Windows cannot be joined to ptys reliably — Ghostty runs every
+# window in one process, so there is no pid to match on — and writing a size to
+# the wrong pty breaks a window that was fine. Re-sync by resizing the window
+# instead, which makes Ghostty set the size itself:
+#     hyprctl dispatch resizeactive 1 0 && hyprctl dispatch resizeactive -1 0
+
+set -uo pipefail
+
+# Logical pixels per cell, times 100, for the configured font — measured across
+# windows sharing it. Changing font-size or window-padding-x invalidates these.
+readonly CELL_WIDTH_X100=955
+readonly PADDING_X=16
+
+# Columns a window of the given logical pixel width should have, rounded.
+compute_expected_cols() {   # <window-px-width>
+    printf '%s' $(( (($1 - PADDING_X) * 200 + CELL_WIDTH_X100) / (CELL_WIDTH_X100 * 2) ))
+}
+
+expected_cols=()
+
+printf '── ghostty windows ──\n'
+while read -r px workspace title; do
+    cols=$(compute_expected_cols "$px")
+    expected_cols+=("$cols")
+    printf '%6spx  ws=%-4s exp=%4s  %s\n' "$px" "$workspace" "$cols" "$title"
+done < <(hyprctl clients -j |
+    jq -r '.[] | select(.class | test("ghostty"; "i")) | "\(.size[0]) \(.workspace.name) \(.title)"')
+
+if (( ${#expected_cols[@]} == 0 )); then
+    printf 'no ghostty windows found — is hyprctl reachable?\n' >&2
+    exit 1
+fi
+
+printf '\n── claude ptys ──\n'
+stale=0
+skipped=0
+for pid in $(pgrep -x claude); do
+    # Only Ghostty windows are comparable against hyprctl geometry; an editor's
+    # integrated terminal sizes its own pty. GHOSTTY_* leaks into anything
+    # launched from a Ghostty shell, so TERM_PROGRAM is the honest marker.
+    if ! grep -qz '^TERM_PROGRAM=ghostty$' "/proc/$pid/environ" 2>/dev/null; then
+        skipped=$(( skipped + 1 ))
+        continue
+    fi
+
+    tty=$(ps -o tty= -p "$pid" | tr -d ' ')
+    [ -e "/dev/$tty" ] || continue
+    actual=$(stty -F "/dev/$tty" size 2>/dev/null | awk '{print $2}')
+    [ -n "$actual" ] || continue
+
+    # Nearest window width, since which window owns this pty is unknowable here.
+    nearest=${expected_cols[0]}
+    for cols in "${expected_cols[@]}"; do
+        if (( (actual > cols ? actual - cols : cols - actual) <
+              (actual > nearest ? actual - nearest : nearest - actual) )); then
+            nearest=$cols
+        fi
+    done
+
+    drift=$(( actual > nearest ? actual - nearest : nearest - actual ))
+    if (( drift > 2 )); then
+        stale=1
+        printf '%-8s act=%-4s STALE — nearest window wants %s (off by %s)  %s\n' \
+            "$tty" "$actual" "$nearest" "$drift" "$(readlink "/proc/$pid/cwd")"
+    else
+        printf '%-8s act=%-4s ok                                          %s\n' \
+            "$tty" "$actual" "$(readlink "/proc/$pid/cwd")"
+    fi
+done
+
+printf '\n'
+(( skipped )) && printf '%s session(s) not in a ghostty window, skipped\n' "$skipped"
+if (( stale )); then
+    printf 'STALE pty found — focus that window and re-sync:\n'
+    printf '  hyprctl dispatch resizeactive 1 0 && hyprctl dispatch resizeactive -1 0\n'
+else
+    printf 'every pty matches a window width\n'
+fi
