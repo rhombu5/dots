@@ -117,7 +117,7 @@ categorize() {
                 *theme-toggle*|*wallpaper-rotate*)    echo "Theme" ;;
                 *hyprctl*reload*|*hyprpicker*)        echo "Hyprland" ;;
                 *hypr-cheatsheet*)                    echo "Help" ;;
-                *control-panel*|*pkill*waybar*)       echo "System" ;;
+                *control-panel*|*pkill*waybar*|*pkill*claude*) echo "System" ;;
                 *cliphist*|*fuzzel*emoji*)            echo "Pickers" ;;
                 *swaync-client*)                      echo "Notifications" ;;
                 *)                                    echo "Apps" ;;
