@@ -105,12 +105,28 @@ if [ "${1:-}" != '--watch' ]; then
     exit $status
 fi
 
+# A compact fingerprint of every ghostty window's workspace and width.
+read_geometry_signature() {
+    hyprctl clients -j |
+        jq -r '[.[] | select(.class | test("ghostty"; "i")) | "ws\(.workspace.name):\(.size[0])"] | sort | join(" ")'
+}
+
 # Watch mode records the sample at the moment the fault appears, so the window
-# can be re-synced immediately without destroying the evidence.
+# can be re-synced immediately without destroying the evidence. Window geometry
+# is logged on every change as well as on a stale pty: a renderer fault leaves
+# the pty correct, so the stale check alone would record nothing at all, and the
+# compositor event just before the corruption is the only clue to the trigger.
 mkdir -p "$(dirname "$LOG_FILE")"
 printf 'watching every %ss — logging to %s\n' "$POLL_SECONDS" "$LOG_FILE"
 was_stale=0
+last_geometry=''
 while true; do
+    geometry=$(read_geometry_signature)
+    if [ "$geometry" != "$last_geometry" ]; then
+        printf '%s  geometry: %s\n' "$(date -Iseconds)" "$geometry" | tee -a "$LOG_FILE"
+        last_geometry=$geometry
+    fi
+
     report=$(build_report)
     status=$?
     if (( status == 1 && was_stale == 0 )); then
