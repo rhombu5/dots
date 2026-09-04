@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Minimal lockscreen: physlock's blank VT plus a password prompt.
+#
+# Replaced btop-lock on 2026-09-04. That design ran kmscon on a spare VT so it
+# could render btop at full panel resolution. On this clamshell setup — lid
+# closed, eDP-1 gone, only DP-1 at 4K — kmscon's redraw loop failed on every
+# frame with EINVAL ("cannot swap display [DP] -22", kmscon_terminal.c:307):
+# 372,754 failures in 24 hours, ~10/sec for the entire duration of every lock,
+# amounting to 98.6% of all journal traffic on the machine. Spinning that hard
+# behind a lockscreen is not worth at-a-distance system stats.
+#
+# physlock is setuid root, so this wrapper needs no sudo and no sudoers entry —
+# physlock takes a free VT itself, blanks it, and prompts for the password.
+set -u
+
+TARGET_USER=${SUDO_USER:-${USER:-tom}}
+
+physlock
+
+# Tell logind the session is unlocked. hypridle's unlock_cmd fires off this
+# dbus Unlock signal, and it is what turns the outputs back on and health-checks
+# waybar. Without the signal the session stays LockedHint=yes and the display
+# stays DPMS-off until a stray keypress happens to wake it — the "extra press to
+# wake" symptom the old wrapper's comments recorded hitting.
+session_id=$(loginctl show-user "$TARGET_USER" -p Display --value 2>/dev/null)
+[ -n "$session_id" ] && loginctl unlock-session "$session_id" 2>/dev/null || true
