@@ -58,6 +58,12 @@ Strip Claude attribution by default whenever you're writing something that'll be
 
 **Sign commits wherever the repo/machine already has signing configured** — never pass `--no-gpg-sign` or otherwise bypass an available signing setup (also covered by the standing git-safety protocol's ban on bypassing signing without explicit instruction). If a repo has no `commit.gpgsign` configured, that's fine — don't stop to set up signing just to satisfy this rule; commit unsigned and move on.
 
+**A branch protected by `required_signatures` accepts only commits signed with a key registered on MY GitHub account — check before opening the PR.** The rule is evaluated on the PR's commits, so a squash-merge at the end rescues nothing: one unsigned or unknown-key commit leaves the PR `BLOCKED` with every check green and never queued. Two producers make such commits and neither can be fixed by registering a key: Claude Code **cloud sessions** sign through Anthropic's signing proxy with a key that belongs to Anthropic's service account (GitHub refuses to add it: "key is already in use"); and **auto-merge squashes into an unprotected branch** are not signed by GitHub at all. So:
+
+- Before any PR to a protected branch: `git log --format='%G?' origin/<base>..HEAD | sort | uniq -c` must be all `G`.
+- If it is not, land the work through a locally signed commit instead of the branch as it stands — `git commit-tree -S -p origin/<base> -F <msg> <tip-tree>` on a fresh branch, push, PR (identical to the squash the queue would have made), or `git rebase --exec 'git commit --amend --no-edit -S' origin/<base>` when the history must survive.
+- Cloud lanes (`--cloud`, `/goweb`, remote) therefore never target a protected branch directly; their branch is re-signed locally on the way in.
+
 ## Entering / exiting worktrees — always use the tools
 
 **HARD RULE**: when claude needs to put *itself* into a worktree, use the **`EnterWorktree`** tool to switch in and **`ExitWorktree`** to switch back. Don't `cd <worktree>` via Bash, don't symlink into one. (Direct `git worktree add` to *prepare* a worktree for a subagent to enter is a separate, supported case — see "Creating worktrees" and "Worktree mechanics" below. The prohibition here is on using `git worktree add` as a way to put claude itself into a worktree.) Reasons:
