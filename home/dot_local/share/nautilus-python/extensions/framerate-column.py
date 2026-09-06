@@ -11,6 +11,7 @@ from gi.repository import GLib, GObject, Nautilus
 PROBE_WORKERS = 4
 PROBE_TIMEOUT_SECONDS = 5
 FILE_URI_PREFIX = "file://"
+ATTRIBUTE = "framerate"
 
 
 def read_frame_rate(path):
@@ -32,14 +33,12 @@ def read_frame_rate(path):
     except (OSError, subprocess.SubprocessError):
         return ""
 
-    rational = probed.stdout.strip().splitlines()
-    if not rational:
-        return ""
+    reported = probed.stdout.strip().splitlines()
     # Cover art and audio-only containers report "0/0".
-    if rational[0].startswith("0/"):
+    if not reported or reported[0].startswith("0/"):
         return ""
     try:
-        rate = float(Fraction(rational[0]))
+        rate = float(Fraction(reported[0]))
     except (ValueError, ZeroDivisionError):
         return ""
     # 24000/1001 -> "23.976";  30000/1001 -> "29.97";  25/1 -> "25".
@@ -47,68 +46,63 @@ def read_frame_rate(path):
 
 
 class FrameRateColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.InfoProvider):
-    """Adds a "Frame rate" column, populated off the main loop so folders don't freeze."""
+    """Adds a "Frame rate" column, probed off the main loop so folders don't freeze."""
 
     def __init__(self):
         super().__init__()
-        # ffprobe has to open and parse the container, which is far too slow to
-        # run on Nautilus's main loop — a folder of videos would freeze the
-        # window while it walked them.
+        # ffprobe has to open and parse the container, far too slow for the main
+        # loop — a folder of videos would freeze the window while it walked them.
         self.probe_pool = ThreadPoolExecutor(max_workers=PROBE_WORKERS)
-        # Keyed on identity plus mtime and size, so a re-encoded file re-probes
-        # instead of showing its old rate forever.
+        # Keyed on identity plus mtime and size, so a re-encode re-probes instead
+        # of showing its old rate forever. Failures cache as "" too, which is what
+        # stops a re-query loop.
         self.rate_cache = {}
-        self.pending_probes = {}
+        self.probing = set()
 
     def get_columns(self):
         return [
             Nautilus.Column(
                 name="NautilusPython::framerate_column",
-                attribute="framerate",
+                attribute=ATTRIBUTE,
                 label="Frame rate",
                 description="Frames per second of the first video stream",
             ),
         ]
 
-    def update_file_info_full(self, provider, handle, closure, file):
+    def update_file_info(self, file):
         mime_type = file.get_mime_type() or ""
         if file.get_uri_scheme() != "file" or not mime_type.startswith("video/"):
-            return Nautilus.OperationResult.COMPLETE
+            return
 
         path = unquote(file.get_uri()[len(FILE_URI_PREFIX):])
         try:
             stat = os.stat(path)
         except OSError:
-            return Nautilus.OperationResult.COMPLETE
-
+            return
         cache_key = (path, stat.st_mtime_ns, stat.st_size)
+
         if cache_key in self.rate_cache:
-            file.add_string_attribute("framerate", self.rate_cache[cache_key])
-            return Nautilus.OperationResult.COMPLETE
+            file.add_string_attribute(ATTRIBUTE, self.rate_cache[cache_key])
+            return
 
-        probe = self.probe_pool.submit(read_frame_rate, path)
-        probe.add_done_callback(
-            lambda done: GLib.idle_add(
-                self.publish_frame_rate, provider, handle, closure, file, cache_key, done.result()
-            )
-        )
-        self.pending_probes[handle] = probe
-        return Nautilus.OperationResult.IN_PROGRESS
+        # Nothing to show on this pass. The probe below calls
+        # invalidate_extension_info() when it lands, which makes Nautilus ask
+        # again — and that second call takes the cache branch above.
+        file.add_string_attribute(ATTRIBUTE, "")
+        if cache_key in self.probing:
+            return
+        self.probing.add(cache_key)
+        self.probe_pool.submit(self.probe_then_refresh, file, cache_key, path)
 
-    def publish_frame_rate(self, provider, handle, closure, file, cache_key, rate):
-        """Hands a finished probe back on the main loop, where touching GTK is safe."""
-        self.pending_probes.pop(handle, None)
-        self.rate_cache[cache_key] = rate
-        file.add_string_attribute("framerate", rate)
-        Nautilus.info_provider_update_complete_invoke(
-            closure,
-            provider,
-            handle,
-            Nautilus.OperationResult.COMPLETE,
-        )
-        return GLib.SOURCE_REMOVE
+    def probe_then_refresh(self, file, cache_key, path):
+        """Runs one probe on a worker thread and re-queries the row from the main loop."""
+        rate = read_frame_rate(path)
 
-    def cancel_update(self, provider, handle):
-        probe = self.pending_probes.pop(handle, None)
-        if probe is not None:
-            probe.cancel()
+        def publish():
+            self.rate_cache[cache_key] = rate
+            self.probing.discard(cache_key)
+            # Touching GTK is only safe here, on the main loop.
+            file.invalidate_extension_info()
+            return GLib.SOURCE_REMOVE
+
+        GLib.idle_add(publish)
