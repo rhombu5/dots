@@ -81,6 +81,7 @@ window#waybar.empty {
 #wireplumber,
 #battery,
 #custom-network,
+#custom-refresh-rate,
 #custom-notifications,
 #custom-theme-toggle,
 #custom-power {
@@ -100,6 +101,10 @@ window#waybar.empty {
 #battery.warning  { color: @secondary; }
 #battery.critical { color: @error; }
 #battery.charging { color: @tertiary; }
+
+/* 23.98 Hz is fine for film and awful for everything else — make a
+   forgotten film mode visible at a glance. */
+#custom-refresh-rate.film { color: @tertiary; }
 
 #custom-power {
     color: @error;

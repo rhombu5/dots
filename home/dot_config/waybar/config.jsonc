@@ -16,6 +16,7 @@
     "modules-right":  [
         "tray",
         "custom/network",
+        "custom/refresh-rate",
         "pulseaudio",
         "battery",
         "custom/theme-toggle",
@@ -149,6 +150,16 @@
         "format-plugged":  "  AC",
         "format-icons":    ["", "", "", "", ""],
         "tooltip-format":  "{timeTo}, {power}W"
+    },
+
+    "custom/refresh-rate": {
+        // Display refresh rate. 24p film needs 23.98 Hz to avoid 3:2 judder;
+        // everything else wants 60. Signal 9 is raised by hypr-refresh-rate.
+        "exec":        "~/.config/waybar/modules/refresh-rate.sh",
+        "return-type": "json",
+        "interval":    30,
+        "signal":      9,
+        "on-click":    "~/.local/bin/hypr-refresh-rate --toggle"
     },
 
     "custom/theme-toggle": {
