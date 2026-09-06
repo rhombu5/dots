@@ -1,3 +1,8 @@
+# Python bytecode. A stray __pycache__ next to a run-script is not just noise —
+# chezmoi would treat the .pyc as another script and try to execute it.
+**/__pycache__
+**/*.pyc
+
 # Per-machine override files: CLAUDE.<context>.local.md (and any other
 # *.local.md). Never apply to destination — these only ever live on the
 # live system, never in source. This entry is defensive in case one is
