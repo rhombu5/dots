@@ -13,6 +13,14 @@ PROBE_TIMEOUT_SECONDS = 5
 FILE_URI_PREFIX = "file://"
 ATTRIBUTE = "framerate"
 
+# Nautilus calls update_file_info before it has necessarily sniffed a file's MIME
+# type, and which files have resolved theirs differs on every visit to a folder.
+# Gating on MIME alone therefore probes a random subset and leaves the rest
+# permanently blank, so the extension falls back to the name.
+VIDEO_SUFFIXES = frozenset(
+    ".mkv .mp4 .m4v .avi .mov .webm .mpg .mpeg .wmv .flv .ts .m2ts .mts .ogv .3gp .divx .vob".split()
+)
+
 
 def read_frame_rate(path):
     """Returns the first video stream's frame rate as a display string, or "" if unreadable."""
@@ -57,7 +65,11 @@ class FrameRateColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.InfoPro
         # of showing its old rate forever. Failures cache as "" too, which is what
         # stops a re-query loop.
         self.rate_cache = {}
-        self.probing = set()
+        # Maps an in-flight cache key to the FileInfo it belongs to. This is a
+        # strong reference on purpose: without one the object can be finalized
+        # before the probe lands, and invalidate_extension_info() on a dead file
+        # silently does nothing.
+        self.probing = {}
 
     def get_columns(self):
         return [
@@ -70,11 +82,14 @@ class FrameRateColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.InfoPro
         ]
 
     def update_file_info(self, file):
-        mime_type = file.get_mime_type() or ""
-        if file.get_uri_scheme() != "file" or not mime_type.startswith("video/"):
+        if file.get_uri_scheme() != "file":
             return
 
         path = unquote(file.get_uri()[len(FILE_URI_PREFIX):])
+        mime_type = file.get_mime_type() or ""
+        is_video = mime_type.startswith("video/") or os.path.splitext(path)[1].lower() in VIDEO_SUFFIXES
+        if not is_video:
+            return
         try:
             stat = os.stat(path)
         except OSError:
@@ -91,7 +106,7 @@ class FrameRateColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.InfoPro
         file.add_string_attribute(ATTRIBUTE, "")
         if cache_key in self.probing:
             return
-        self.probing.add(cache_key)
+        self.probing[cache_key] = file
         self.probe_pool.submit(self.probe_then_refresh, file, cache_key, path)
 
     def probe_then_refresh(self, file, cache_key, path):
@@ -100,7 +115,7 @@ class FrameRateColumn(GObject.GObject, Nautilus.ColumnProvider, Nautilus.InfoPro
 
         def publish():
             self.rate_cache[cache_key] = rate
-            self.probing.discard(cache_key)
+            self.probing.pop(cache_key, None)
             # Touching GTK is only safe here, on the main loop.
             file.invalidate_extension_info()
             return GLib.SOURCE_REMOVE
