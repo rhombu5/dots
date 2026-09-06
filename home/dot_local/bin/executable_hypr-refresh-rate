@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# hypr-refresh-rate — retune DP-1's refresh rate for the content being watched.
+# Bound to Super+Shift+1 (23.98 Hz) and Super+Shift+2 (60 Hz); the waybar
+# refresh-rate cell calls it with --toggle on click.
+#
+# 24p film is 24000/1001 = 23.976 fps, which doesn't divide into 60 Hz: frames
+# alternate between being held 2 and 3 refreshes, and the resulting 3:2 judder
+# shows up as a rhythmic hitch on slow pans. Matching the panel to the content
+# removes it. 23.98 Hz is miserable for desktop use, so this is a manual flip
+# rather than anything automatic.
+#
+# Mode, position, scale and bitdepth mirror the DP-1 line in hypr/monitors.conf.
+# This only sets a runtime keyword, so `hyprctl reload` (Super+Ctrl+R) discards
+# it and restores whatever that file says.
+set -euo pipefail
+
+readonly OUTPUT=DP-1
+readonly MODE=3840x2160
+readonly POSITION=0x0
+readonly SCALE=1.6666666666666667
+readonly FILM=23.98
+readonly DESKTOP=60
+
+current_rate() {
+    hyprctl monitors -j 2>/dev/null \
+        | jq -r --arg o "$OUTPUT" '.[] | select(.name == $o) | .refreshRate' 2>/dev/null
+}
+
+arg=${1:?usage: hypr-refresh-rate <rate|--toggle>   # rate e.g. 23.98, 24, 50, 60}
+
+if [[ $arg == --toggle ]]; then
+    # Under 30 Hz means we're in film mode; anything else (including an absent
+    # monitor, which reads as empty) flips to film.
+    if awk -v r="$(current_rate)" 'BEGIN { exit !(r < 30) }'; then
+        rate=$DESKTOP
+    else
+        rate=$FILM
+    fi
+else
+    rate=$arg
+fi
+
+hyprctl keyword monitor \
+    "$OUTPUT, $MODE@$rate, $POSITION, $SCALE, bitdepth, 10" >/dev/null
+
+# Update the waybar cell now rather than on its next poll.
+pkill -SIGRTMIN+9 -x waybar 2>/dev/null || true
+hyprctl notify 5 1500 0 "$OUTPUT: $rate Hz" 2>/dev/null || true
