@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/rhombus-rocks-fnclaude-config.json",
+  "auto": {
+    "tmux": "worktree",
+    "handoff": "3",
+    "spawnCommand": "uwsm app -a ghostty -- ghostty -e {bin} {dest} --name {name} @{summary}"
+  },
+  "context": {
+    "noticeTiers": []
+  }
+}

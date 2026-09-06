@@ -2,7 +2,7 @@
 
 Personal additions and refinements to the noop-router instructions that fnclaude injects as its system prompt. Claude Code auto-loads this file from cwd alongside that system prompt; rules here can clarify, scope, or override anything there.
 
-**Edits go here, not in the base.** If you have any reason to want to add a rule, refine an existing one, or capture a machine-specific quirk, this file is the target — the base noop-router prompt is read-only (it ships in the install dir at `/usr/share/fnclaude/prompts/noop-router.md`, root-owned, regenerated on each fnclaude upgrade). The chezmoi source for this overlay is `~/src/dots@rhombu5/home/dot_config/fnclaude/noop/CLAUDE.md`.
+**Edits go here, not in the base.** If you have any reason to want to add a rule, refine an existing one, or capture a machine-specific quirk, this file is the target — the base noop-router prompt ships with the installed CLI (`~/.local/share/mise/installs/npm-fnclaude-cli/<ver>/lib/node_modules/@fnclaude/cli/prompts/noop-router.md`) and is replaced on every upgrade. A wholesale replacement of the base goes in `~/.config/rhombus.rocks/fnclaude/prompts/noop-router.md`, which fnc loads *instead of* the packaged file; anything additive belongs here. The chezmoi source for this overlay is `~/src/dots@rhombu5/home/dot_config/rhombus.rocks/fnclaude/noop/CLAUDE.md`.
 
 ---
 
@@ -50,7 +50,7 @@ When the base's "How to redirect" step 1 mentions "if your user-level CLAUDE con
 
 You're working with the maintainer of `fnclaude`. When the maintainer asks to change noop-router behavior — add a rule, refine the classifier, tweak a workflow — you can't tell from wording alone whether they mean:
 
-- **(a) Personalize for this machine** — update this overlay (live: `~/.config/fnclaude/noop/CLAUDE.md`, source: `~/src/dots@rhombu5/home/dot_config/fnclaude/noop/CLAUDE.md`). Lands in the next dots commit. Scope: this machine only.
+- **(a) Personalize for this machine** — update this overlay (live: `~/.config/rhombus.rocks/fnclaude/noop/CLAUDE.md`, source: `~/src/dots@rhombu5/home/dot_config/rhombus.rocks/fnclaude/noop/CLAUDE.md`). Lands in the next dots commit. Scope: this machine only.
 - **(b) Change the binary-shipped default** — update `~/src/fnclaude@fnclaude/prompts/noop-router.md` in the fnclaude repo. Requires feature branch + PR + release cycle. Scope: every fnclaude user on the next release.
 
 > **Active repo:** fnclaude development lives in **`fnclaude@fnclaude`**. The old `fnclaude@fnrhombus` repo is **dead** — don't target it for any fnclaude work or handoff.

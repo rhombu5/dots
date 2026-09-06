@@ -1,9 +1,0 @@
-[auto]
-tmux = "worktree"
-handoff = "3"
-spawn_command = "uwsm app -a ghostty -- ghostty -e {bin} {dest} --name {name} @{summary}"
-
-# Context/compact notices disabled: an explicitly-empty tier list with no
-# repeat turns the monitor off (see fnclaude config/load.ts).
-[context]
-notice_tiers = []
