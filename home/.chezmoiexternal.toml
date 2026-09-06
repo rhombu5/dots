@@ -1,0 +1,19 @@
+# Files fetched at apply time instead of vendored into this repo.
+#
+# refreshPeriod bounds how often chezmoi re-checks the URL; `chezmoi apply
+# --refresh-externals` forces it immediately. Because the URL is the "latest"
+# alias rather than a pinned tag, a new upstream release is picked up on the
+# next refresh without editing this file.
+
+# Nautilus media metadata columns. Source lives at
+# https://github.com/rhombus-rocks/nautilus-media-info -- published from
+# ~/src/nautilus-media-info@rhombus-rocks, so this repo consumes the release
+# rather than carrying a second copy that would drift.
+#
+# Requires nautilus-python and ffmpeg (declared in arch-setup postinstall), and
+# the columns must be switched on -- .chezmoiscripts/run_onchange_after_50-gsettings.sh
+# does that.
+[".local/share/nautilus-python/extensions/nautilus-media-info.py"]
+    type = "file"
+    url = "https://github.com/rhombus-rocks/nautilus-media-info/releases/latest/download/nautilus-media-info.py"
+    refreshPeriod = "168h"

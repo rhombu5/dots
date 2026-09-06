@@ -44,13 +44,15 @@ set_gsetting() {
     echo "set $schema $key"
 }
 
-# Surfaces the Frame rate column provided by the nautilus-python extension in
-# dot_local/share/nautilus-python/extensions/framerate-column.py. Nautilus shows
-# an extension column only when it is named in BOTH lists — visible-columns
-# decides what is on, column-order decides where it sits.
-readonly FRAMERATE_COLUMN="NautilusPython::framerate_column"
+# Media columns in Nautilus's list view, provided by the nautilus-media-info
+# extension (fetched by .chezmoiexternal.toml). Nautilus shows an extension
+# column only when it is named in BOTH lists: visible-columns decides what is
+# on, column-order decides where it sits.
+#
+# All 24 are enabled; prune from the view menu's Visible Columns dialog and
+# re-capture here with `gsettings get org.gnome.nautilus.list-view <key>`.
 
 set_gsetting org.gnome.nautilus.list-view default-visible-columns \
-    "['name', 'size', '${FRAMERATE_COLUMN}', 'date_modified']"
+    "['name', 'size', 'NautilusPython::media_duration', 'NautilusPython::media_dimensions', 'NautilusPython::media_framerate', 'NautilusPython::media_depth', 'NautilusPython::media_video', 'NautilusPython::media_audio', 'NautilusPython::media_audio_bitrate', 'NautilusPython::media_sample_rate', 'NautilusPython::media_audio_depth', 'NautilusPython::media_audio_lang', 'NautilusPython::media_subtitles', 'NautilusPython::media_video_bitrate', 'NautilusPython::media_chroma', 'NautilusPython::media_color_range', 'NautilusPython::media_scan', 'NautilusPython::media_frames', 'NautilusPython::media_level', 'NautilusPython::media_hdr', 'NautilusPython::media_aspect', 'NautilusPython::media_bitrate', 'NautilusPython::media_container', 'NautilusPython::media_chapters', 'NautilusPython::media_encoder', 'NautilusPython::media_created', 'date_modified']"
 set_gsetting org.gnome.nautilus.list-view default-column-order \
-    "['name', 'size', '${FRAMERATE_COLUMN}', 'type', 'owner', 'group', 'permissions', 'mime_type', 'where', 'date_modified', 'date_modified_with_time', 'date_accessed', 'date_created', 'recency', 'starred']"
+    "['name', 'size', 'NautilusPython::media_duration', 'NautilusPython::media_dimensions', 'NautilusPython::media_framerate', 'NautilusPython::media_depth', 'NautilusPython::media_video', 'NautilusPython::media_audio', 'NautilusPython::media_audio_bitrate', 'NautilusPython::media_sample_rate', 'NautilusPython::media_audio_depth', 'NautilusPython::media_audio_lang', 'NautilusPython::media_subtitles', 'NautilusPython::media_video_bitrate', 'NautilusPython::media_chroma', 'NautilusPython::media_color_range', 'NautilusPython::media_scan', 'NautilusPython::media_frames', 'NautilusPython::media_level', 'NautilusPython::media_hdr', 'NautilusPython::media_aspect', 'NautilusPython::media_bitrate', 'NautilusPython::media_container', 'NautilusPython::media_chapters', 'NautilusPython::media_encoder', 'NautilusPython::media_created', 'type', 'owner', 'group', 'permissions', 'mime_type', 'where', 'date_modified', 'date_modified_with_time', 'date_accessed', 'date_created', 'recency', 'starred']"
