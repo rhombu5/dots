@@ -2,12 +2,22 @@
 
 ## Repo paths
 
-Where things land on disk comes from `~/.claude/settings.json`'s `repoSettings` block:
+Where things land on disk comes from the SHARED rhombus.rocks config —
+`$XDG_CONFIG_HOME/rhombus.rocks/config.json` (default `~/.config/rhombus.rocks/config.json`) —
+under its `repos` key. `config.jsonc`, `config.toml` and `config.yaml` are also
+accepted, in that precedence order, first one found winning. It is NOT in
+`~/.claude/settings.json`: that file's `repoSettings` block is gone, and nothing
+reads it any more.
 
-- `cloneTemplate` — destination for fresh clones. `fnc <ref>` reads this when resolving a repo reference to a path.
-- `worktreeTemplate` — destination for worktrees. Claude Code's `--worktree` (via the claude-code-worktree-paths plugin) reads this when creating a worktree.
+- `repos.cloneTemplate` — destination for fresh clones. Read by `fnc`, not by the plugin.
+- `repos.worktreeTemplate` — destination for worktrees. Read by the `worktree-paths` plugin when Claude Code's `--worktree` creates one.
+- `repos.branchTemplate` — the worktree's branch name. Also the plugin's.
+- `repos.hostAliases` — per-host overrides for `{host-short}`.
 
-The schema is documented in the plugin's README. **Don't restate the folder-name pattern** in chat, in commit messages, or in CLAUDE files — point at the templates. The `@owner+workspace` shape is part of the configured templates; if you find yourself spelling it out somewhere else, you're duplicating.
+One file, three consumers — `fnc`, `fngit`, and the plugin — which is why they
+share an org (see `rhombus-rocks` in the owners table below). A missing or
+wrong-shaped field degrades that one field to vanilla behaviour rather than
+failing the load, so a typo is silent. The schema is documented in the plugin's README. **Don't restate the folder-name pattern** in chat, in commit messages, or in CLAUDE files — point at the templates. The `@owner+workspace` shape is part of the configured templates; if you find yourself spelling it out somewhere else, you're duplicating.
 
 **Per-category placement** (what `cloneTemplate` can't express — it's one default for all clones):
 
@@ -69,7 +79,7 @@ Strip Claude attribution by default whenever you're writing something that'll be
 **HARD RULE**: when claude needs to put *itself* into a worktree, use the **`EnterWorktree`** tool to switch in and **`ExitWorktree`** to switch back. Don't `cd <worktree>` via Bash, don't symlink into one. (Direct `git worktree add` to *prepare* a worktree for a subagent to enter is a separate, supported case — see "Creating worktrees" and "Worktree mechanics" below. The prohibition here is on using `git worktree add` as a way to put claude itself into a worktree.) Reasons:
 
 - `EnterWorktree` updates the session's cwd, so subsequent tool calls, the statusbar, and anything else that reads `workspace.current_dir` reflect that claude is now working in the worktree. A bare `git worktree add` creates the directory but leaves cwd unchanged — the statusbar won't light up the worktree, and downstream code keeps targeting the main checkout.
-- `EnterWorktree` creates the worktree at the `repoSettings.worktreeTemplate` path if it doesn't already exist, so the rules from the "Creating worktrees" section below apply automatically — no path math needed at the call site.
+- `EnterWorktree` creates the worktree at the `repos.worktreeTemplate` path if it doesn't already exist, so the rules from the "Creating worktrees" section below apply automatically — no path math needed at the call site.
 - `ExitWorktree` restores the prior cwd cleanly; no manual `cd -` needed.
 
 **Exit as soon as the work in the worktree is done.** Don't linger after the task that needed the worktree completes — call `ExitWorktree` immediately so the statusbar and any tool reading `workspace.current_dir` snap back to the main checkout. Staying parked in a worktree past the task that justified it is a stale cwd waiting to mislead the next thing you do.
@@ -78,7 +88,7 @@ Strip Claude attribution by default whenever you're writing something that'll be
 
 ## Creating worktrees — always via the templated path
 
-**HARD RULE**: when you need a worktree, its path follows `repoSettings.worktreeTemplate` (typically `{clone-path}+{workspace-name}`). Two mechanisms get you a conforming path:
+**HARD RULE**: when you need a worktree, its path follows `repos.worktreeTemplate` (typically `{clone-path}+{workspace-name}`). Two mechanisms get you a conforming path:
 
 - **Hook-fired (auto-named workspace).** The claude-code-worktree-paths plugin's `WorktreeCreate` hook computes the path and picks the workspace name itself. Fires from:
   - `claude --worktree <name>` — workspace name is `<name>`.
@@ -177,7 +187,8 @@ Everything else applies: `repository:` scalars, `labels:`, and `rulesets:` (all 
 | Owner | Use for | Notes |
 |---|---|---|
 | **`fnrhombus`** | My current personal username. Published or anticipated-published projects. | Default for "I expect this to have value to other people" — *except* Claude-related work, which goes under `fnclaude`. |
-| **`fnclaude`** | My Claude-related work and publisher persona — the fnclaude CLI, its plugins, and the plugin marketplace (`fnclaude/marketplace`, identity `@fnclaude`). | **Default home for anything Claude Code / plugin / marketplace.** The older `claude-*` repos have migrated here: `pathfix`, `hooks`, `worktree-paths`, `token-tracker`, `sessionsave`, `winforms-mcp-plugin`. (`completion` was a fork — handled via an upstream PR, not migrated.) |
+| **`fnclaude`** | My Claude-related work and publisher persona — the fnclaude CLI, its plugins, and the plugin marketplace (`fnclaude/marketplace`, marketplace name `fnclaude`, identity `@fnclaude`). | **Default home for anything Claude Code / plugin / marketplace**, EXCEPT the rhombus.rocks toolset — see the next row. Holds `pathfix`, `hooks`, `token-tracker`, `sessionsave`, `winforms-mcp-plugin`, `done`. (`completion` was a fork — handled via an upstream PR, not migrated.) |
+| **`rhombus-rocks`** | The rhombus.rocks toolset — the tools that share `$XDG_CONFIG_HOME/rhombus.rocks/config.json`: `fngit`, `worktree-paths`, and the marketplace `rhombus-rocks/claude-plugins` (marketplace name `rhombus-rocks-claude-plugins`). | A plugin belongs here rather than under `fnclaude` when it READS the shared config — that shared file is the membership test. `worktree-paths` reads `repos.worktreeTemplate`/`repos.branchTemplate` from it, which is why it sits beside `fngit` and not with the claude-only plugins. Enabled as `worktree-paths@rhombus-rocks-claude-plugins`. |
 | **`rhombu5`** | Personal projects not intended to be useful to anyone else. | Default for dotfiles, machine-specific scripts, throwaways. |
 | **`rhom6us`** | An old username turned org. Holds projects I'm undecided about, kept so old links keep resolving. | **Never place anything new here.** |
 | **`rhombus-redux`** | React/Flux tooling. | Don't use unless I tell you to. |

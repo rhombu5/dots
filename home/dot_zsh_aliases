@@ -138,22 +138,18 @@ md() {
     rm -rf "$tmp"
 }
 
-# --- ffnc: fnclaude from LOCAL working-tree source, renderer always-on (dev) ---
-# Live `fnc` is the stable npm release (installed via `mise use -g
-# npm:@fnclaude/cli`); `ffnc` runs the working-tree source at
-# ~/src/fnclaude@fnclaude with the in-process renderer forced on
-# (FNC_RENDERER=1), so renderer/CLI dev churn never destabilises the
-# daily-driver `fnc`. Invoked through the fnc.js node→bun preflight shim
-# (NOT `bun` directly — that skips the `--` argv preservation; the shim
-# forwards process.env to the bun child, so FNC_RENDERER propagates).
-alias ffnc="FNC_RENDERER=1 $HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
+# --- fnc: fnclaude from LOCAL working-tree source ---
+# Shadows the mise shim so the daily-driver `fnc` runs the working-tree
+# source at ~/src/fnclaude@fnclaude. Invoked through the fnc.js node→bun
+# preflight shim (NOT `bun` directly — that skips the `--` argv
+# preservation).
+alias fnc="$HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
 
-# --- fnc-dev: same working-tree source as ffnc, but renderer OFF ---
-# Runs the ~/src/fnclaude@fnclaude working tree WITHOUT FNC_RENDERER, so it
-# takes the plain PTY/inherit launch path (renderer dormant). Use to exercise
-# the on-disk source as the stable `fnc` would behave — e.g. validating
-# non-renderer hotfixes before publishing — without touching the npm install.
-alias fnc-dev="$HOME/src/fnclaude@fnclaude/packages/cli/bin/fnc.js"
+# --- ffnc: stable npm release (fallback) ---
+# Runs the pinned npm release via the mise shim (installed via `mise use -g
+# npm:@fnclaude/cli`). Use when the working-tree source is broken or you
+# need the last-known-good published behaviour.
+alias ffnc="$HOME/.local/share/mise/shims/fnc"
 
 # --- fncodex: open a repo in VS Code via `fncode`, then close this terminal ---
 # Forwards its exact args to `fncode` (resolve repo ref -> exec into `code`),

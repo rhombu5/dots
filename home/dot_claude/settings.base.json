@@ -15,13 +15,13 @@
     "command": "bash /home/tom/.claude/statusline-command.sh"
   },
   "enabledPlugins": {
-    "claude-code-worktree-paths@fnrhombus-plugins": true
+    "worktree-paths@rhombus-rocks-claude-plugins": true
   },
   "extraKnownMarketplaces": {
-    "fnrhombus-plugins": {
+    "rhombus-rocks-claude-plugins": {
       "source": {
         "source": "github",
-        "repo": "fnrhombus/claude-plugins"
+        "repo": "rhombus-rocks/claude-plugins"
       },
       "autoUpdate": true
     }
@@ -48,25 +48,5 @@
   "agentPushNotifEnabled": false,
   "preferredNotifChannel": "ghostty",
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "repoSettings": {
-    "cloneTemplate": "~/src/{repo}@{owner}",
-    "worktreeTemplate": "~/src/{repo}@{owner}+{input}",
-    "branchTemplate": "{input}",
-    "additionalSrcDirs": [
-      "~/.local/src",
-      "~/code",
-      "~/dev",
-      "~/projects",
-      "~/Projects",
-      "~/workspace",
-      "~/repos",
-      "~/git",
-      "~/go/src/*/*",
-      "/usr/local/src",
-      "/usr/src",
-      "~/.cache/yay",
-      "/opt"
-    ]
-  }
+  "voiceEnabled": true
 }
