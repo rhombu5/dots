@@ -246,11 +246,11 @@ Things that build, lint, format, type-check, test, package, or run **your code**
 
 AUR packages frequently declare `rust`, `go`, `npm`, `electron`, `gradle`, etc. as `makedepends`. **`yay -S <pkg>` will pacman-install those system-wide as a side effect and leave them after the build completes** — silently violating this rule.
 
-**Always pass `--rmdeps` to `yay -S`.** It tells makepkg to uninstall build deps once the package itself is installed, leaving only the actual runtime dependencies. Without it, the global rule is broken every time an AUR package needs a compiler.
+**Always pass `--removemake yes` to `yay -S`.** It makes yay uninstall build deps once the package itself is installed, leaving only the actual runtime dependencies. Without it, the global rule is broken every time an AUR package needs a compiler. (`--rmdeps` is makepkg's spelling; yay rejects it outright with `invalid option 'rmdeps'`.)
 
 ```sh
-yay -S --rmdeps <pkg>     # good — orphans cleaned up automatically
-yay -S <pkg>              # forbidden — leaves the compiler globally installed
+yay -S --removemake yes <pkg>   # good — build deps removed automatically
+yay -S <pkg>                    # forbidden — leaves the compiler globally installed
 ```
 
 Equivalent at the makepkg level: `makepkg -src` (`-r` removes build deps).
