@@ -37,6 +37,9 @@ still don't converge, stop — that non-convergence is itself the finding to pre
   verbatim block from `~/.claude/CLAUDE.agents.md` § "Subagents that commit get the
   no-attribution block". A bare "no Co-Authored-By" line does not survive the mid-task system
   reminder; the block does. Watch each PR body before it goes non-draft.
+- **Run fully in the background** — dispatch the queue's execution (subagent, Workflow, or
+  forked task) rather than working it on the main thread, so the main thread stays responsive
+  for continuing discussion with the user while the work runs.
 
 ## Arguments override
 
