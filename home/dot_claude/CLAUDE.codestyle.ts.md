@@ -1,15 +1,38 @@
 # TypeScript style
 
+## Project lint and format config outranks this file — look it up before the first edit
+
+Before the first code edit in a project, find its lint and format configuration and read the
+rules, not just the file names: `eslint.config.*` / `.eslintrc*`, `biome.json`, `dprint.json`,
+`.prettierrc*`, `.oxlintrc*`, `.editorconfig`, and the `lint` / `format` scripts in
+`package.json`. Where that config takes a stance, it wins over every default in this file; this
+file only fills the gaps a project leaves open. Then run the project's linter and formatter on
+the files you touched before calling the work done. A lint the project only surfaces in the IDE
+still counts: when the `lint` script does not run it, run it directly (`bun x eslint <files>` /
+`npx eslint <files>`).
+
+Observed 2026-09-12 in ts@rhombus-toolkit: `eslint.config.mjs` sets
+`@typescript-eslint/array-type` to `array-simple` while this file said "bracket form, always";
+`bun run lint` runs only tsc, so `(readonly object[])[]` shipped and the IDE flagged it after the
+fact. The config was there; nothing looked.
+
 ## Array type syntax
 
-Prefer the bracket form over the generic form:
+Default, for a project with no configured opinion: the bracket form — `T[]`, `readonly T[]` —
+never `Array<T>` / `ReadonlyArray<T>`.
 
-- `readonly any[]` not `ReadonlyArray<any>`
-- `T[]` not `Array<T>`
+Under typescript-eslint's `array-type` rule, obey its option. The common one in my projects is
+`array-simple`: a *simple* element type takes the bracket form, a *non-simple* one takes the
+generic form, and `readonly` follows the same split.
 
-The bracket form is house style for both readonly and mutable arrays. Apply it consistently — new code, edits, and reviews.
+- Simple — keywords, bare identifiers, qualified names, and arrays of those: `string[]`,
+  `readonly Node[]`, `Item[][]`, `Foo.Bar[]`.
+- Non-simple — anything carrying a type operator, a union, a literal, or type arguments:
+  `Array<readonly object[]>`, `Array<string | number>`, `Array<{ value: Value }>`,
+  `Array<Func<Keys, Value>>`, `ReadonlyArray<Node<Value>>`.
 
-**Project config wins when it disagrees.** This is a default for projects with no configured opinion. Where a project's own style tooling (e.g. dprint, an ESLint `array-type` rule) takes a stance on array-type syntax, follow that config instead.
+The rule's message is `Array type using 'T[]' is forbidden for non-simple types. Use 'Array<T>'
+instead.` — when it appears, the fix is the generic form, not a `// eslint-disable`.
 
 ## File naming — dominant-export files take the export's name
 
