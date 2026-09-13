@@ -105,6 +105,8 @@ These files live alongside this one at `~/.claude/`. Pull in any `CLAUDE.<contex
 
 **Loading is just-in-time and deterministic, not heuristic.** When your next tool call matches a trigger row below, `Read` the file before making the call. Once loaded for a session, it stays loaded — the same trigger won't re-fire. The table itself is part of *this* file, so it's already in your context — checking it costs nothing.
 
+**Load context files with the Read tool, never `cat`, and re-read one whenever it changes.** Only a file read through the Read tool produces a "changed on disk" notice when it is edited mid-session; a `cat` leaves the harness blind to the change. When such a notice arrives for any `CLAUDE*.md`, re-read that file in full before the next tool call it governs — even if the notice shows the diff, and even if the diff looks unrelated. "Once loaded, stays loaded" holds only while the file is unchanged. Observed 2026-09-12 in ts@rhombus-toolkit: the comment-prose rules (banned words, no personification) were added to `CLAUDE.codestyle.md` mid-session; the file had been loaded with `cat`, no notice fired, and a banned word shipped into a draft.
+
 | Tool-call trigger | Load |
 |---|---|
 | You're about to edit a file inside a git repo (`Edit`/`Write`/`MultiEdit`/`NotebookEdit`), OR a `git commit`/push/`gh`/worktree/branch-create/PR-open call is coming up | [`CLAUDE.git.md`](CLAUDE.git.md) |
